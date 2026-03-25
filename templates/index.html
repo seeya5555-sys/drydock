@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fleet Dry Dock Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo" onclick="goFleet()">
+    <div class="logo-icon">⚓</div>
+    <div>
+      <div class="logo-name">FLEET DD MANAGER</div>
+      <div class="logo-sub">DRY DOCK PROGRESS SYSTEM</div>
+    </div>
+  </div>
+  <div class="breadcrumb" id="breadcrumb">
+    <span class="bc-item active">FLEET OVERVIEW</span>
+  </div>
+  <div class="header-r">
+    <div class="save-pill synced" id="savePill">● SYNCED</div>
+    <div class="live-pill"><div class="live-dot"></div>LIVE</div>
+    <div class="today-label" id="todayLbl"></div>
+  </div>
+</header>
+
+<!-- ══ FLEET HOME ════════════════════════════════════════════════ -->
+<div id="page-fleet" class="page active"><main>
+  <div class="fleet-hero">
+    <div>
+      <div class="fleet-hero-title">FLEET OVERVIEW</div>
+      <div class="fleet-hero-sub">DRY DOCK PROGRESS MANAGEMENT SYSTEM</div>
+    </div>
+    <div class="fleet-hero-date" id="heroDate"></div>
+  </div>
+
+  <div class="fleet-kpis">
+    <div class="kpi-card"><div class="kpi-label">Total Vessels</div><div class="kpi-value" id="fk-v">0</div><div class="kpi-sub">Registered</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">In Dock</div><div class="kpi-value" id="fk-a">0</div><div class="kpi-sub">Currently docking</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Completed</div><div class="kpi-value" id="fk-d">0</div><div class="kpi-sub">This cycle</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Open Class Items</div><div class="kpi-value" id="fk-c">0</div><div class="kpi-sub">Fleet-wide pending</div></div>
+  </div>
+
+  <div class="sec-hdr">
+    <div class="sec-title">Vessels</div>
+    <button class="btn-add" onclick="openAddVesselModal()">+ Add Vessel</button>
+  </div>
+  <div class="vessels-grid" id="vesselsGrid"></div>
+</main></div>
+
+<!-- ══ VESSEL DETAIL ════════════════════════════════════════════ -->
+<div id="page-vessel" class="page">
+  <div class="vessel-nav">
+    <button class="vnav-btn active" onclick="showTab('dashboard',this)">Dashboard</button>
+    <button class="vnav-btn" onclick="showTab('jobs',this)">Job Progress</button>
+    <button class="vnav-btn" onclick="showTab('gantt',this)">Gantt Chart</button>
+    <button class="vnav-btn" onclick="showTab('class',this)">Class Items</button>
+    <button class="vnav-btn" onclick="showTab('daily',this)">Daily Log</button>
+    <div class="vnav-actions">
+      <button class="btn-edit" onclick="openVesselEditModal()">✎ Edit Info</button>
+      <button class="btn-back" onclick="goFleet()">← Fleet</button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="vt-dashboard" class="page active"><main>
+    <div class="vessel-banner">
+      <div>
+        <div class="vb-name" id="vb-name">—</div>
+        <div class="vb-meta" id="vb-meta"></div>
+      </div>
+      <div>
+        <div class="vb-status-lbl">DOCK STATUS</div>
+        <div class="vb-status-val" id="vb-status">PLANNED</div>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-lbl">Total Jobs</div><div class="stat-val" id="vs-total">0</div><div class="stat-sub">Work items</div></div>
+      <div class="stat-card green"><div class="stat-lbl">Completed</div><div class="stat-val" id="vs-done">0</div><div class="stat-sub">100% done</div></div>
+      <div class="stat-card amber"><div class="stat-lbl">In Progress</div><div class="stat-val" id="vs-prog">0</div><div class="stat-sub">Ongoing</div></div>
+      <div class="stat-card gold"><div class="stat-lbl">Total Budget</div><div class="stat-val" id="vs-bud">$0</div><div class="stat-sub" id="vs-bud-s">USD</div></div>
+      <div class="stat-card"><div class="stat-lbl">Consumed</div><div class="stat-val" id="vs-con">$0</div><div class="stat-sub" id="vs-con-s">0%</div></div>
+      <div class="stat-card red"><div class="stat-lbl">Class Open</div><div class="stat-val" id="vs-cls">0</div><div class="stat-sub">Pending</div></div>
+    </div>
+    <div class="budget-section">
+      <div class="sec-hdr" style="margin-bottom:0"><div class="sec-title">Budget Consumption</div></div>
+      <div class="big-bar-track"><div class="big-bar-fill" id="v-bar" style="width:0%"><span id="v-bar-lbl">0%</span></div></div>
+      <div id="v-sec-buds" class="sec-budgets-grid"></div>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-card-title">Budget by Section</div><div id="v-bud-rows"></div></div>
+      <div class="dash-card"><div class="dash-card-title">Open Class Items</div><div id="v-open-cls"></div></div>
+    </div>
+  </main></div>
+
+  <!-- Jobs -->
+  <div id="vt-jobs" class="page"><main>
+    <div class="sec-hdr"><div class="sec-title">Job Progress</div><button class="btn-add" onclick="openJobModal(null)">+ Add Job</button></div>
+    <div class="filter-bar">
+      <input type="text" class="fi" id="j-q" placeholder="Search job description or number…" oninput="renderJobs()">
+      <select class="fi" id="j-sf" onchange="renderJobs()"><option value="">All Sections</option></select>
+      <select class="fi" id="j-cf" onchange="renderJobs()"><option value="">All Categories</option></select>
+      <select class="fi" id="j-vf" onchange="renderJobs()"><option value="">All Vendors</option></select>
+      <select class="fi" id="j-pf" onchange="renderJobs()">
+        <option value="">All Status</option><option value="ns">Not Started</option>
+        <option value="ip">In Progress</option><option value="done">Completed</option>
+      </select>
+      <span class="filter-count" id="j-cnt"></span>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th onclick="sortJ('number')" style="width:70px">No.</th>
+        <th onclick="sortJ('section')" style="width:110px">Section</th>
+        <th onclick="sortJ('category')" style="width:110px">Category</th>
+        <th onclick="sortJ('description')">Description</th>
+        <th style="width:140px">Vendor</th>
+        <th onclick="sortJ('budget')" style="text-align:right;width:110px">Budget (USD)</th>
+        <th onclick="sortJ('consumption')" style="text-align:right;width:110px">Consumed</th>
+        <th onclick="sortJ('completion')" style="width:140px">Progress</th>
+        <th>Remark</th>
+        <th style="width:60px"></th>
+      </tr></thead>
+      <tbody id="j-body"></tbody>
+      </table>
+      <button class="new-row-btn" onclick="addInlineRow()">
+        <span class="plus">＋</span> Add row directly in table
+      </button>
+    </div>
+  </main></div>
+
+  <!-- Gantt -->
+  <div id="vt-gantt" class="page"><main>
+    <div class="sec-hdr"><div class="sec-title">Gantt Chart</div><span style="font-size:13px;color:var(--txt-m)">Set start/end dates in Job Progress to display bars</span></div>
+    <div class="g-chips" id="g-chips"></div>
+    <div class="gantt-outer" id="g-wrap"></div>
+  </main></div>
+
+  <!-- Class -->
+  <div id="vt-class" class="page"><main>
+    <div class="sec-hdr"><div class="sec-title">Class Items</div><button class="btn-add" onclick="openClassModal(null)">+ Add Item</button></div>
+    <div class="filter-bar">
+      <input type="text" class="fi" id="c-q" placeholder="Search findings…" oninput="renderClass()">
+      <select class="fi" id="c-sf" onchange="renderClass()"><option value="">All Status</option><option>Open</option><option>Closed</option></select>
+      <select class="fi" id="c-bf" onchange="renderClass()"><option value="">All Responsible</option><option>Crew</option><option>Shipyard</option></select>
+      <select class="fi" id="c-pf" onchange="renderClass()"><option value="">All Priority</option><option>Normal</option><option>Urgent</option><option>Critical</option><option>On Hold</option></select>
+      <span class="filter-count" id="c-cnt"></span>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:60px">No.</th>
+        <th style="width:100px">Status</th>
+        <th style="width:100px">Priority</th>
+        <th style="width:110px">Responsible</th>
+        <th>Finding</th>
+        <th>Description</th>
+        <th>Action Plan</th>
+        <th style="width:110px">Open Date</th>
+        <th style="width:110px">Close Date</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="c-body"></tbody>
+      </table>
+      <button class="new-row-btn" onclick="addClassRow()">
+        <span class="plus">＋</span> Add row directly in table
+      </button>
+    </div>
+  </main></div>
+
+  <!-- Daily -->
+  <div id="vt-daily" class="page"><main>
+    <div class="sec-hdr"><div class="sec-title">Daily Log</div><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div>
+    <div class="filter-bar">
+      <input type="text" class="fi" id="d-q" placeholder="Search items…" oninput="renderDisc()">
+      <select class="fi" id="d-df" onchange="renderDisc()"><option value="">All Dates</option></select>
+      <select class="fi" id="d-sf" onchange="renderDisc()"><option value="">All Status</option><option value="Open">Open</option><option value="Close">Closed</option></select>
+      <select class="fi" id="d-pf" onchange="renderDisc()"><option value="">All Priority</option><option>Normal</option><option>Urgent</option><option>Critical</option><option>On Hold</option></select>
+      <span class="filter-count" id="d-cnt"></span>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:52px">No.</th>
+        <th style="width:120px">Date</th>
+        <th style="width:110px">Session</th>
+        <th>Item / Topic</th>
+        <th>Description</th>
+        <th>Action Plan</th>
+        <th style="width:100px">Priority</th>
+        <th style="width:90px">Status</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="d-body"></tbody>
+      </table>
+      <button class="new-row-btn" onclick="addDiscRow()">
+        <span class="plus">＋</span> Add row directly in table
+      </button>
+    </div>
+  </main></div>
+</div>
+
+
+<!-- ══ MODALS ════════════════════════════════════════════════════ -->
+
+<!-- Vessel Modal -->
+<div class="modal-overlay" id="m-vessel">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="mv-title">ADD VESSEL</div><button class="modal-x" onclick="closeM('m-vessel')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-lbl">Vessel Name *</label><input class="form-ctrl" id="mv-name" placeholder="e.g. KUWAIT PROSPERITY"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Vessel Type</label><input class="form-ctrl" id="mv-type" placeholder="Container Carrier"></div>
+        <div class="form-group"><label class="form-lbl">IMO Number</label><input class="form-ctrl" id="mv-imo" placeholder="IMO XXXXXXX"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Shipyard</label><input class="form-ctrl" id="mv-yard" placeholder="e.g. Hyundai HI"></div>
+        <div class="form-group"><label class="form-lbl">Class Society</label><input class="form-ctrl" id="mv-class" placeholder="BV, DNV, KR…"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-lbl">Dock In Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mv-in-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-in-txt','mv-in')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mv-in" onchange="document.getElementById('mv-in-txt').value=this.value;">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Dock Out Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mv-out-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-out-txt','mv-out')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mv-out" onchange="document.getElementById('mv-out-txt').value=this.value;">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Duration (days)</label><input class="form-ctrl" id="mv-dur" type="number" placeholder="22"></div>
+        <div class="form-group"><label class="form-lbl">GRT / DWT</label><input class="form-ctrl" id="mv-grt" placeholder="e.g. 7170 MT / 8487 MT"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-del" id="mv-del" onclick="deleteVessel()" style="display:none">Delete Vessel</button>
+      <button class="btn-sec" onclick="closeM('m-vessel')">Cancel</button>
+      <button class="btn-pri" onclick="saveVessel()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Job Modal -->
+<div class="modal-overlay" id="m-job">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="mj-title">EDIT JOB</div><button class="modal-x" onclick="closeM('m-job')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row3">
+        <div class="form-group"><label class="form-lbl">Job No. *</label><input class="form-ctrl" id="mj-num" placeholder="e.g. 2.5"></div>
+        <div class="form-group"><label class="form-lbl">Section</label>
+          <select class="form-ctrl" id="mj-sec"><option>GENERAL</option><option>PAINT</option><option>STEEL</option><option>DECK</option><option>ENGINE</option><option>ELECTRIC</option><option>ETC</option></select>
+        </div>
+        <div class="form-group"><label class="form-lbl">Category</label>
+          <select class="form-ctrl" id="mj-cat"><option>Shipyard</option><option>Shore Repair</option><option>Crew</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-lbl">Job Description *</label><input class="form-ctrl" id="mj-desc" placeholder="Enter job description"></div>
+      <div class="form-group"><label class="form-lbl">Vendor / Contractor</label><input class="form-ctrl" id="mj-vend" placeholder="Company name"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Budget (USD)</label><input class="form-ctrl" id="mj-bud" type="number" placeholder="0"></div>
+        <div class="form-group"><label class="form-lbl">Consumed (USD)</label><input class="form-ctrl" id="mj-con" type="number" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-lbl">Start Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mj-st-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mj-st-txt','mj-st')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mj-st" onchange="document.getElementById('mj-st-txt').value=this.value;updateProgPreview();">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">End Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mj-en-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mj-en-txt','mj-en')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mj-en" onchange="document.getElementById('mj-en-txt').value=this.value;updateProgPreview();">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Schedule Progress (Auto)</label>
+        <div id="mj-prog-preview" style="background:var(--bg-panel);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--txt-s)">
+          Start/End 날짜를 입력하면 오늘 기준 진행률이 자동 계산됩니다.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Daily Remark / Progress Update</label>
+        <table class="remarks-table">
+          <thead>
+            <tr>
+              <th style="width:128px">Date</th>
+              <th>Progress / Remark</th>
+              <th style="width:44px;text-align:center">❗</th>
+              <th style="width:32px"></th>
+            </tr>
+          </thead>
+          <tbody id="mj-remarks-body"></tbody>
+        </table>
+        <button type="button" class="rm-add-row-btn" onclick="addRemarkRow()">
+          ＋ Add daily entry
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-del" id="mj-del" onclick="deleteJob()">Delete Job</button>
+      <button class="btn-sec" onclick="closeM('m-job')">Cancel</button>
+      <button class="btn-pri" onclick="saveJob()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Class Modal -->
+<div class="modal-overlay" id="m-class">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="mc-title">CLASS ITEM</div><button class="modal-x" onclick="closeM('m-class')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Item No.</label><input class="form-ctrl" id="mc-no" placeholder="1"></div>
+        <div class="form-group"><label class="form-lbl">Responsible By</label>
+          <select class="form-ctrl" id="mc-by"><option>Crew</option><option>Shipyard</option><option>Crew / Shipyard</option><option>3rd Party</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Priority</label>
+        <div class="priority-select-wrap">
+          <input type="radio" name="mc-priority" class="pri-radio" id="mc-pri-normal"   value="Normal"   checked>
+          <label class="pri-label" for="mc-pri-normal">Normal</label>
+          <input type="radio" name="mc-priority" class="pri-radio" id="mc-pri-urgent"   value="Urgent">
+          <label class="pri-label" for="mc-pri-urgent">🔶 Urgent</label>
+          <input type="radio" name="mc-priority" class="pri-radio" id="mc-pri-critical" value="Critical">
+          <label class="pri-label" for="mc-pri-critical">🔴 Critical</label>
+          <input type="radio" name="mc-priority" class="pri-radio" id="mc-pri-onhold"   value="On Hold">
+          <label class="pri-label" for="mc-pri-onhold">⏸ On Hold</label>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-lbl">Finding *</label><input class="form-ctrl" id="mc-find" placeholder="Short title of finding"></div>
+      <div class="form-group"><label class="form-lbl">Description</label><textarea class="form-ctrl" id="mc-desc" placeholder="Detailed description"></textarea></div>
+      <div class="form-group">
+        <label class="form-lbl">Action Plan / Result</label>
+        <table class="remarks-table">
+          <thead><tr>
+            <th style="width:128px">Date</th>
+            <th>Action / Result</th>
+            <th style="width:44px;text-align:center">❗</th>
+            <th style="width:32px"></th>
+          </tr></thead>
+          <tbody id="mc-act-body"></tbody>
+        </table>
+        <button type="button" class="rm-add-row-btn" onclick="addRemarkRowTo('mc-act-body')">＋ Add entry</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-lbl">Open Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mc-open" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mc-open','mc-open-pick')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mc-open-pick" onchange="document.getElementById('mc-open').value=this.value;">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Close Date (blank = open)</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mc-close" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mc-close','mc-close-pick')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mc-close-pick" onchange="document.getElementById('mc-close').value=this.value;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-del" id="mc-del" onclick="deleteClass()">Delete</button>
+      <button class="btn-sec" onclick="closeM('m-class')">Cancel</button>
+      <button class="btn-pri" onclick="saveClass()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Disc Modal -->
+<div class="modal-overlay" id="m-disc">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="md-title">DISCUSSION LOG</div><button class="modal-x" onclick="closeM('m-disc')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-lbl">Date</label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="md-date" placeholder="YYYY-MM-DD" oninput="syncDatePicker('md-date','md-date-pick')">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="md-date-pick" onchange="document.getElementById('md-date').value=this.value;">
+            </div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-lbl">Session</label>
+          <select class="form-ctrl" id="md-time"><option value="">—</option><option>Morning</option><option>Afternoon</option><option>Evening</option><option>Close meeting</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-lbl">Item / Topic *</label><input class="form-ctrl" id="md-item" placeholder="Short topic title"></div>
+      <div class="form-group"><label class="form-lbl">Description</label><textarea class="form-ctrl" id="md-desc" placeholder="Details of discussion"></textarea></div>
+      <div class="form-group">
+        <label class="form-lbl">Action Plan</label>
+        <table class="remarks-table">
+          <thead><tr>
+            <th style="width:128px">Date</th>
+            <th>Action Plan</th>
+            <th style="width:44px;text-align:center">❗</th>
+            <th style="width:32px"></th>
+          </tr></thead>
+          <tbody id="md-act-body"></tbody>
+        </table>
+        <button type="button" class="rm-add-row-btn" onclick="addRemarkRowTo('md-act-body')">＋ Add entry</button>
+      </div>
+      <div class="form-group"><label class="form-lbl">Status</label>
+        <select class="form-ctrl" id="md-stat"><option value="Open">Open</option><option value="Close">Closed</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Priority</label>
+        <div class="priority-select-wrap">
+          <input type="radio" name="md-priority" class="pri-radio" id="md-pri-normal"   value="Normal"   checked>
+          <label class="pri-label" for="md-pri-normal">Normal</label>
+          <input type="radio" name="md-priority" class="pri-radio" id="md-pri-urgent"   value="Urgent">
+          <label class="pri-label" for="md-pri-urgent">🔶 Urgent</label>
+          <input type="radio" name="md-priority" class="pri-radio" id="md-pri-critical" value="Critical">
+          <label class="pri-label" for="md-pri-critical">🔴 Critical</label>
+          <input type="radio" name="md-priority" class="pri-radio" id="md-pri-onhold"   value="On Hold">
+          <label class="pri-label" for="md-pri-onhold">⏸ On Hold</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-del" id="md-del" onclick="deleteDisc()">Delete</button>
+      <button class="btn-sec" onclick="closeM('m-disc')">Cancel</button>
+      <button class="btn-pri" onclick="saveDisc()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
