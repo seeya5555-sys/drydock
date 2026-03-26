@@ -716,9 +716,9 @@ function buildGantt(sf,btn){
     const barCol=pct>=100?'var(--green)':pct>0?'linear-gradient(90deg,var(--navy),var(--blue))':'#cbd5e1';
     const rowBg=ji%2===0?'var(--bg-white)':'var(--bg-panel)';
     html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:36px;background:${rowBg}" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='${rowBg}'">
-      <div style="min-width:280px;padding:6px 14px;border-right:2px solid var(--border);display:flex;align-items:center;gap:8px;">
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600;min-width:32px">${j.number}</span>
-        <span style="font-size:12px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${j.description}</span>
+      <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px;border-right:2px solid var(--border);display:flex;align-items:center;gap:8px;overflow:hidden;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600;flex-shrink:0;min-width:32px">${j.number}</span>
+        <span style="font-size:12px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;flex:1" title="${j.description}">${j.description}</span>
       </div>
       <div style="display:flex;align-items:center;flex:1;position:relative;">`;
     dates.forEach((d,i)=>{
