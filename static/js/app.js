@@ -661,10 +661,15 @@ function deleteJob(){
 function renderGantt(){
   if(!VID)return;
   const secs=[...new Set((FLEET[VID].jobs||[]).map(j=>j.section))];
-  document.getElementById('g-chips').innerHTML=`<button class="g-chip active" onclick="buildGantt(null,this)">All Sections</button>`+secs.map(s=>`<button class="g-chip" onclick="buildGantt('${s}',this)">${s}</button>`).join('');
-  buildGantt(null,null);
+  document.getElementById('g-chips').innerHTML=
+    `<button class="g-chip active" onclick="buildGantt(null,null,this)">All Sections</button>`+
+    secs.map(s=>`<button class="g-chip" onclick="buildGantt('${s}',null,this)">${s}</button>`).join('')+
+    `<span style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;display:inline-block"></span>`+
+    `<button class="g-chip" onclick="buildGantt(null,'Shipyard',this)">Shipyard</button>`+
+    `<button class="g-chip" onclick="buildGantt(null,'Shore Repair',this)">Shore Repair</button>`;
+  buildGantt(null,null,null);
 }
-function buildGantt(sf,btn){
+function buildGantt(sf,cf,btn){
   document.querySelectorAll('.g-chip').forEach(c=>c.classList.remove('active'));
   if(btn)btn.classList.add('active');else document.querySelector('.g-chip')?.classList.add('active');
   if(!VID)return;
@@ -674,7 +679,11 @@ function buildGantt(sf,btn){
   const nd=Math.max(28,Math.ceil((de-ds)/86400000)+4);
   const dates=Array.from({length:nd},(_,i)=>new Date(ds.getTime()+i*86400000));
   const today=new Date();const DW=38;
-  const jobs=sf?(FLEET[VID].jobs||[]).filter(j=>j.section===sf):(FLEET[VID].jobs||[]);
+  const jobs=(FLEET[VID].jobs||[]).filter(j=>{
+    if(sf && j.section!==sf) return false;
+    if(cf && j.category!==cf) return false;
+    return true;
+  });
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // Find today's column index for absolute line overlay
