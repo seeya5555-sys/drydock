@@ -99,7 +99,16 @@
 
   <!-- Jobs -->
   <div id="vt-jobs" class="page"><main>
-    <div class="sec-hdr"><div class="sec-title">Job Progress</div><button class="btn-add" onclick="openJobModal(null)">+ Add Job</button></div>
+    <div class="sec-hdr">
+      <div class="sec-title">Job Progress</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-sec" onclick="document.getElementById('csv-upload-input').click()" title="CSV로 Job 일괄 등록">📂 CSV 업로드</button>
+        <input type="file" id="csv-upload-input" accept=".csv" style="display:none" onchange="uploadJobsCSV(this)">
+        <a id="csv-template-download" style="display:none"></a>
+        <button class="btn-sec" onclick="downloadCSVTemplate()" title="CSV 양식 다운로드">⬇ 양식 다운로드</button>
+        <button class="btn-add" onclick="openJobModal(null)">+ Add Job</button>
+      </div>
+    </div>
     <div class="filter-bar">
       <input type="text" class="fi" id="j-q" placeholder="Search job description or number…" oninput="renderJobs()">
       <select class="fi" id="j-sf" onchange="renderJobs()"><option value="">All Sections</option></select>
