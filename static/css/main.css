@@ -572,3 +572,236 @@ textarea.form-ctrl { min-height:80px; resize:vertical; line-height:1.5; }
 ::-webkit-scrollbar-track { background:var(--bg); }
 ::-webkit-scrollbar-thumb { background:var(--border-dark); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:var(--txt-m); }
+/* ══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE  (max-width: 768px)
+   PC/태블릿은 기존 스타일 그대로, 스마트폰에서만 적용
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── HEADER ──────────────────────────────────── */
+  header {
+    padding: 0 14px;
+    height: 52px;
+  }
+  .logo-name { font-size: 16px; letter-spacing: 1.5px; }
+  .logo-sub  { display: none; }
+  .logo-icon { width: 30px; height: 30px; font-size: 15px; }
+  .breadcrumb { display: none; }           /* 헤더 breadcrumb 숨김 */
+  .today-label { display: none; }
+  .live-pill { display: none; }
+  .save-pill { font-size: 9px; }
+
+  /* ── VESSEL NAV ───────────────────────────────── */
+  .vessel-nav {
+    top: 52px;
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .vessel-nav::-webkit-scrollbar { display: none; }
+  .vnav-btn { padding: 12px 12px; font-size: 12px; white-space: nowrap; }
+
+  /* ── MAIN PADDING ─────────────────────────────── */
+  main { padding: 14px 12px; }
+
+  /* ── FLEET HERO ───────────────────────────────── */
+  .fleet-hero {
+    padding: 20px 18px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .fleet-hero::after { display: none; }
+  .fleet-hero-title { font-size: 30px; letter-spacing: 2px; }
+  .fleet-hero-date  { font-size: 11px; }
+
+  /* ── FLEET KPI CARDS ──────────────────────────── */
+  .fleet-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .kpi-value { font-size: 30px; }
+
+  /* ── VESSEL CARDS ─────────────────────────────── */
+  .vessels-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* ── SEC HEADER ───────────────────────────────── */
+  .sec-hdr {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .sec-hdr > div { width: 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+  .sec-hdr .btn-add,
+  .sec-hdr .btn-sec { flex: 1; text-align: center; justify-content: center; padding: 10px 8px; font-size: 12px; }
+
+  /* ── VESSEL BANNER ────────────────────────────── */
+  .vessel-banner {
+    padding: 16px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .vessel-banner::after { display: none; }
+  .vb-name { font-size: 24px; letter-spacing: 2px; }
+  .vb-meta { gap: 10px; }
+  .vb-status-lbl, .vb-status-val { text-align: left; }
+
+  /* ── STAT CARDS (Dashboard) ───────────────────── */
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat-val { font-size: 26px; }
+
+  /* ── BUDGET SECTION ───────────────────────────── */
+  .sec-budgets-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* ── DASH GRID (Open Jobs / Class Items) ──────── */
+  .dash-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* ── FILTER BAR ───────────────────────────────── */
+  .filter-bar {
+    gap: 8px;
+  }
+  .filter-bar input.fi  { width: 100%; }
+  .filter-bar select.fi { flex: 1; min-width: 0; font-size: 12px; }
+  .filter-count { width: 100%; margin-left: 0; }
+
+  /* ── TABLE → 카드형 변환 ──────────────────────── */
+  /* Job Progress, Class Items, Daily Log 테이블 */
+  .table-wrap { border-radius: var(--radius); overflow: visible; }
+
+  /* 테이블 헤더 숨기기 */
+  #j-body ~ * thead,
+  thead { display: none; }
+
+  /* 각 행을 카드로 변환 */
+  tbody tr {
+    display: block;
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+  }
+  tbody tr:hover { background: var(--bg-white); }
+
+  /* 각 셀을 블록으로 */
+  tbody td {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    border: none;
+    font-size: 13px;
+    min-height: 28px;
+  }
+  tbody td:empty { display: none; }
+
+  /* 데이터 라벨 (data-label 속성 사용) */
+  tbody td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--txt-m);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  /* Edit 버튼 행 */
+  tbody td:last-child {
+    justify-content: flex-end;
+    padding-top: 8px;
+    border-top: 1px solid var(--bg);
+    margin-top: 4px;
+  }
+  tbody td:last-child::before { display: none; }
+
+  .edit-btn { padding: 6px 16px; font-size: 12px; }
+  .new-row-btn { font-size: 13px; padding: 12px; }
+
+  /* Progress bar 모바일 */
+  .prog-wrap { flex: 1; }
+
+  /* ── MODAL 모바일 최적화 ───────────────────────── */
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .modal-overlay { align-items: flex-end; }
+  .modal-hdr { padding: 16px 18px 12px; }
+  .modal-body { padding: 16px 18px; }
+  .modal-footer { padding: 12px 18px; flex-wrap: wrap; }
+  .modal-footer button { flex: 1; }
+
+  .form-row  { grid-template-columns: 1fr; gap: 10px; }
+  .form-row3 { grid-template-columns: 1fr; gap: 10px; }
+
+  /* ── PRIORITY LABELS ──────────────────────────── */
+  .priority-select-wrap { gap: 6px; }
+  .pri-label { padding: 6px 10px; font-size: 11px; }
+
+  /* ── CLASS ITEMS TABLE ────────────────────────── */
+  #c-body tr { position: relative; }
+
+  /* ── TOAST ────────────────────────────────────── */
+  .toast {
+    bottom: 16px;
+    right: 12px;
+    left: 12px;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  /* ── EMPTY STATE ──────────────────────────────── */
+  .empty-state { padding: 24px 12px; font-size: 13px; }
+
+  /* ── Gantt 숨김 안내 ──────────────────────────── */
+  #vt-gantt main::before {
+    content: '📱 Gantt Chart는 PC에서 최적화되어 있습니다. 가로로 스크롤하거나 PC에서 확인해주세요.';
+    display: block;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--amber);
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+}
+
+/* 아주 작은 화면 (iPhone SE 등) */
+@media (max-width: 380px) {
+  .fleet-kpis { grid-template-columns: 1fr 1fr; }
+  .stats-row  { grid-template-columns: 1fr 1fr; }
+  .vnav-btn   { font-size: 11px; padding: 10px 8px; }
+  .vb-name    { font-size: 20px; }
+}
