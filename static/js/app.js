@@ -329,6 +329,56 @@ function renderActionsCell(actions, legacyAction) {
   }).join('');
 }
 
+// ══ CSV 업로드 ════════════════════════════════════════
+function downloadCSVTemplate() {
+  const headers = 'number,section,category,description,vendor,budget';
+  const sample = [
+    '1.1,GENERAL,Shipyard,Fixed fire fighting system isolation,,0',
+    '1.2,GENERAL,Shipyard,Ventilation fan,,0',
+    '2.1,PAINT,Shipyard,Hull blasting & painting,,0',
+    '3.1,STEEL,Shipyard,Hull steel renewal,,0',
+    '5.1,ENGINE,Shore Repair,Main engine inspection,,0',
+  ].join('\n');
+  const csv = headers + '\n' + sample;
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.getElementById('csv-template-download');
+  a.href = url; a.download = 'job_template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV 양식이 다운로드됐습니다');
+}
+
+async function uploadJobsCSV(input) {
+  if (!VID) { toast('선박을 먼저 선택하세요', true); return; }
+  if (!input.files.length) return;
+
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+
+  setSS('saving');
+  try {
+    const res = await fetch(`${API}/vessels/${VID}/jobs/csv`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || '업로드 실패', true); setSS('error'); return; }
+
+    setSS('synced');
+    toast(`✓ ${data.inserted}개 Job이 추가됐습니다${data.errors.length ? ` (오류 ${data.errors.length}건)` : ''}`);
+
+    // 새로 추가된 Job 반영
+    const newJobs = await apiFetch(`${API}/vessels/${VID}/jobs`);
+    FLEET[VID].jobs = newJobs.map(dbJ);
+    buildJFilters(); renderJobs(); renderDash();
+  } catch(e) {
+    setSS('error'); toast('업로드 실패: ' + e.message, true);
+  }
+  input.value = '';
+}
+
 function buildJFilters(){
   if(!VID)return;
   const jobs=FLEET[VID].jobs||[];
@@ -374,25 +424,25 @@ function renderJobs(){
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
 
     return`<tr data-ri="${ri}">
-      <td><span class="cell-edit" onclick="startEdit(this,${ri},'number','text')">${j.number||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditSelect(this,${ri},'section',[${SECTIONS.map(s=>`'${s}'`).join(',')}])">
+      <td data-label="No."><span class="cell-edit" onclick="startEdit(this,${ri},'number','text')">${j.number||'—'}</span></td>
+      <td data-label="Section"><span class="cell-edit" onclick="startEditSelect(this,${ri},'section',[${SECTIONS.map(s=>`'${s}'`).join(',')}])">
         <span style="font-size:12px;color:var(--txt-s)">${j.section||'—'}</span>
       </span></td>
-      <td><span class="cell-edit" onclick="startEditSelect(this,${ri},'category',[${CATS.map(c=>`'${c}'`).join(',')}])">
+      <td data-label="Category"><span class="cell-edit" onclick="startEditSelect(this,${ri},'category',[${CATS.map(c=>`'${c}'`).join(',')}])">
         <span class="cat-badge ${cc}">${j.category||'—'}</span>
       </span></td>
-      <td><span class="cell-edit" onclick="startEdit(this,${ri},'description','text')" style="display:block;max-width:260px;color:var(--txt-h);font-size:13px;font-weight:500">${j.description||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEdit(this,${ri},'vendor','text')" style="display:block;max-width:130px;font-size:12px;color:var(--txt-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.vendor||'—'}</span></td>
-      <td style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'budget','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--txt-h)">$${(+j.budget||0).toLocaleString()}</span></td>
-      <td style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${(+j.consumption||0).toLocaleString()}</span></td>
-      <td>
+      <td data-label="Description"><span class="cell-edit" onclick="startEdit(this,${ri},'description','text')" style="display:block;max-width:260px;color:var(--txt-h);font-size:13px;font-weight:500">${j.description||'—'}</span></td>
+      <td data-label="Vendor"><span class="cell-edit" onclick="startEdit(this,${ri},'vendor','text')" style="display:block;max-width:130px;font-size:12px;color:var(--txt-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.vendor||'—'}</span></td>
+      <td data-label="Budget" style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'budget','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--txt-h)">$${(+j.budget||0).toLocaleString()}</span></td>
+      <td data-label="Consumed" style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${(+j.consumption||0).toLocaleString()}</span></td>
+      <td data-label="Progress">
         <div class="prog-wrap">
           <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
           <div class="prog-pct" style="color:${col}">${pct}%</div>
         </div>
         ${dateInfo}
       </td>
-      <td><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
+      <td data-label="Remark"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
       <td><button class="edit-btn" onclick="openJobModal(${ri})">Edit</button></td>
     </tr>`;
   }).join('');
@@ -711,17 +761,17 @@ function renderClass(){
     const stCls=c.status==='Open'?'c-open':'c-closed';
     const priHtml=priorityBadge(c.priority);
     return`<tr>
-      <td><span class="cell-edit" onclick="startEditC(this,${ri},'no','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${c.no||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditSelectC(this,${ri},'status',['Open','Closed'])">
+      <td data-label="No."><span class="cell-edit" onclick="startEditC(this,${ri},'no','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${c.no||'—'}</span></td>
+      <td data-label="Status"><span class="cell-edit" onclick="startEditSelectC(this,${ri},'status',['Open','Closed'])">
         <span class="c-badge ${stCls}">${c.status}</span>
       </span></td>
-      <td>${priHtml}</td>
-      <td><span class="cell-edit" onclick="startEditSelectC(this,${ri},'by',${JSON.stringify(BY_OPTS)})" style="font-size:12px;color:var(--txt-s)">${c.by||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditC(this,${ri},'finding','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:220px">${c.finding||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditC(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:220px;white-space:pre-line">${c.description||'—'}</span></td>
-      <td><div style="font-size:12px;max-width:200px;cursor:pointer" onclick="openClassModal(${ri})" title="클릭하여 편집">${renderActionsCell(c.actions, c.action)}</div></td>
-      <td><span class="cell-edit" onclick="startEditC(this,${ri},'open_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s)">${c.open_date||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditC(this,${ri},'close_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${c.close_date?'var(--green)':'var(--txt-m)'}">${c.close_date||'—'}</span></td>
+      <td data-label="Priority">${priHtml}</td>
+      <td data-label="By"><span class="cell-edit" onclick="startEditSelectC(this,${ri},'by',${JSON.stringify(BY_OPTS)})" style="font-size:12px;color:var(--txt-s)">${c.by||'—'}</span></td>
+      <td data-label="Finding"><span class="cell-edit" onclick="startEditC(this,${ri},'finding','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:220px">${c.finding||'—'}</span></td>
+      <td data-label="Description"><span class="cell-edit" onclick="startEditC(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:220px;white-space:pre-line">${c.description||'—'}</span></td>
+      <td data-label="Action"><div style="font-size:12px;max-width:200px;cursor:pointer" onclick="openClassModal(${ri})" title="클릭하여 편집">${renderActionsCell(c.actions, c.action)}</div></td>
+      <td data-label="Open"><span class="cell-edit" onclick="startEditC(this,${ri},'open_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s)">${c.open_date||'—'}</span></td>
+      <td data-label="Close"><span class="cell-edit" onclick="startEditC(this,${ri},'close_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${c.close_date?'var(--green)':'var(--txt-m)'}">${c.close_date||'—'}</span></td>
       <td><button class="edit-btn" onclick="openClassModal(${ri})">Edit</button></td>
     </tr>`;
   }).join('');
@@ -863,14 +913,14 @@ function renderDisc(){
     const stLbl=d.status==='Close'?'Closed':'Open';
     const priHtml=priorityBadge(d.priority);
     return`<tr>
-      <td><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
-      <td><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
-      <td><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:200px;white-space:pre-line">${d.description||'—'}</span></td>
-      <td><div style="font-size:12px;max-width:180px;cursor:pointer" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
-      <td>${priHtml}</td>
-      <td><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
+      <td data-label="No."><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
+      <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
+      <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
+      <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
+      <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:200px;white-space:pre-line">${d.description||'—'}</span></td>
+      <td data-label="Action"><div style="font-size:12px;max-width:180px;cursor:pointer" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
+      <td data-label="Priority">${priHtml}</td>
+      <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
         <span class="c-badge ${stCls}">${stLbl}</span>
       </span></td>
       <td><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button></td>
