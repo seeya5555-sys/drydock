@@ -167,6 +167,66 @@ def fleet_summary():
 # JOBS
 # ══════════════════════════════════════════════════════════════
 
+@app.route("/api/vessels/<vid>/jobs/csv", methods=["POST"])
+def upload_jobs_csv(vid):
+    """CSV 파일로 Job 일괄 등록
+    컬럼: number, section, category, description, vendor, budget
+    """
+    import csv, io as _io
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["file"]
+    if not f.filename.endswith(".csv"):
+        return jsonify({"error": "CSV 파일만 업로드 가능합니다"}), 400
+
+    # ── CSV 읽기 ──────────────────────────────────────────────
+    stream = _io.StringIO(f.stream.read().decode("utf-8-sig"))  # BOM 처리
+    reader = csv.DictReader(stream)
+
+    # 필수 컬럼 확인
+    required = {"number", "section", "category", "description"}
+    if not required.issubset({c.strip().lower() for c in (reader.fieldnames or [])}):
+        return jsonify({"error": f"필수 컬럼 누락: {required}"}), 400
+
+    db = get_db()
+    inserted = 0
+    errors = []
+
+    for i, row_data in enumerate(reader, start=2):
+        # 컬럼명 소문자 정규화
+        r = {k.strip().lower(): v.strip() for k, v in row_data.items()}
+        try:
+            db.execute(
+                "INSERT INTO jobs(vessel_id, number, section, category, description, "
+                "vendor, budget, consumption, start_date, end_date, completion, remarks) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    vid,
+                    r.get("number", ""),
+                    r.get("section", "GENERAL").upper(),
+                    r.get("category", "Shipyard"),
+                    r.get("description", ""),
+                    r.get("vendor", ""),
+                    float(r.get("budget", 0) or 0),
+                    0,       # consumption
+                    None,    # start_date (사이트에서 직접 입력)
+                    None,    # end_date   (사이트에서 직접 입력)
+                    0,       # completion
+                    "[]",    # remarks
+                )
+            )
+            inserted += 1
+        except Exception as e:
+            errors.append(f"Row {i}: {e}")
+
+    db.commit()
+    return jsonify({
+        "inserted": inserted,
+        "errors": errors
+    }), 201
+
 @app.route("/api/vessels/<vid>/jobs", methods=["GET"])
 def get_jobs(vid):
     return jsonify([to_job(r) for r in
