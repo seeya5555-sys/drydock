@@ -462,6 +462,320 @@ def delete_attachment(aid):
     return jsonify({"deleted": aid})
 
 
+
+# ══════════════════════════════════════════════════════════════
+# DAILY TRACKING LOGS — 공통 CRUD 헬퍼
+# ══════════════════════════════════════════════════════════════
+
+def _tracking_get(table, vid, order="id"):
+    DATE_COLS = {'start_date','end_date','open_date','close_date','completion_date',
+                 'stop_date','date','bottom_plug_open','bottom_plug_close',
+                 'last_updated','updated_at','uploaded_at'}
+    rows = []
+    for r in get_db().execute(f"SELECT * FROM {table} WHERE vessel_id=? ORDER BY {order}", (vid,)).fetchall():
+        d = dict(r)
+        for k, v in d.items():
+            if k in DATE_COLS and v and isinstance(v, str) and ' ' in v:
+                d[k] = v.split(' ')[0]  # 시간 제거
+        rows.append(d)
+    return jsonify(rows)
+
+def _tracking_bulk(table, vid, items, insert_fn):
+    db = get_db()
+    db.execute(f"DELETE FROM {table} WHERE vessel_id=?", (vid,))
+    for item in items:
+        insert_fn(db, vid, item)
+    db.commit()
+    return jsonify([dict(r) for r in
+        get_db().execute(f"SELECT * FROM {table} WHERE vessel_id=? ORDER BY id", (vid,)).fetchall()])
+
+def _tracking_delete(table, rid):
+    db = get_db()
+    db.execute(f"DELETE FROM {table} WHERE id=?", (rid,))
+    db.commit()
+    return jsonify({"deleted": rid})
+
+def _tracking_update(table, rid, update_sql, params):
+    db = get_db()
+    db.execute(update_sql, (*params, rid))
+    db.commit()
+    return jsonify(dict(get_db().execute(f"SELECT * FROM {table} WHERE id=?", (rid,)).fetchone()))
+
+
+# ── Outfitting ────────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/outfitting", methods=["GET"])
+def get_outfitting(vid): return _tracking_get("outfitting", vid)
+
+@app.route("/api/vessels/<vid>/outfitting", methods=["POST"])
+def create_outfitting(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("description",""), d.get("location",""),
+         d.get("priority","Normal"), d.get("status","Open"),
+         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM outfitting WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/outfitting/<int:rid>", methods=["PUT"])
+def update_outfitting(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("outfitting", rid,
+        "UPDATE outfitting SET no=?,description=?,location=?,priority=?,status=?,start_date=?,completion_date=?,remark=?,last_updated=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("description",""), d.get("location",""),
+         d.get("priority","Normal"), d.get("status","Open"),
+         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+
+@app.route("/api/outfitting/<int:rid>", methods=["DELETE"])
+def delete_outfitting(rid): return _tracking_delete("outfitting", rid)
+
+@app.route("/api/vessels/<vid>/outfitting/bulk", methods=["PUT"])
+def bulk_outfitting(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("description",""), item.get("location",""),
+             item.get("priority","Normal"), item.get("status","Open"),
+             item.get("start_date") or None, item.get("completion_date") or None, item.get("remark","")))
+    return _tracking_bulk("outfitting", vid, request.get_json(force=True), ins)
+
+
+# ── WBT & COT ─────────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/wbt_cot", methods=["GET"])
+def get_wbt_cot(vid): return _tracking_get("wbt_cot", vid)
+
+@app.route("/api/vessels/<vid>/wbt_cot", methods=["POST"])
+def create_wbt_cot(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("tank_name",""), d.get("manhole_status",""),
+         d.get("open_date") or None, d.get("close_date") or None,
+         d.get("bottom_plug_open",""), d.get("bottom_plug_close",""), d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM wbt_cot WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/wbt_cot/<int:rid>", methods=["PUT"])
+def update_wbt_cot(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("wbt_cot", rid,
+        "UPDATE wbt_cot SET no=?,tank_name=?,manhole_status=?,open_date=?,close_date=?,bottom_plug_open=?,bottom_plug_close=?,remark=?,updated_at=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("tank_name",""), d.get("manhole_status",""),
+         d.get("open_date") or None, d.get("close_date") or None,
+         d.get("bottom_plug_open",""), d.get("bottom_plug_close",""), d.get("remark","")))
+
+@app.route("/api/wbt_cot/<int:rid>", methods=["DELETE"])
+def delete_wbt_cot(rid): return _tracking_delete("wbt_cot", rid)
+
+@app.route("/api/vessels/<vid>/wbt_cot/bulk", methods=["PUT"])
+def bulk_wbt_cot(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("tank_name",""), item.get("manhole_status",""),
+             item.get("open_date") or None, item.get("close_date") or None,
+             item.get("bottom_plug_open",""), item.get("bottom_plug_close",""), item.get("remark","")))
+    return _tracking_bulk("wbt_cot", vid, request.get_json(force=True), ins)
+
+
+# ── Portable Fan ──────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/portable_fan", methods=["GET"])
+def get_portable_fan(vid): return _tracking_get("portable_fan", vid)
+
+@app.route("/api/vessels/<vid>/portable_fan", methods=["POST"])
+def create_portable_fan(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("location",""), d.get("qty",""),
+         d.get("start_date") or None, d.get("stop_date") or None, d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM portable_fan WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/portable_fan/<int:rid>", methods=["PUT"])
+def update_portable_fan(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("portable_fan", rid,
+        "UPDATE portable_fan SET no=?,location=?,qty=?,start_date=?,stop_date=?,remark=?,updated_at=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("location",""), d.get("qty",""),
+         d.get("start_date") or None, d.get("stop_date") or None, d.get("remark","")))
+
+@app.route("/api/portable_fan/<int:rid>", methods=["DELETE"])
+def delete_portable_fan(rid): return _tracking_delete("portable_fan", rid)
+
+@app.route("/api/vessels/<vid>/portable_fan/bulk", methods=["PUT"])
+def bulk_portable_fan(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("location",""), item.get("qty",""),
+             item.get("start_date") or None, item.get("stop_date") or None, item.get("remark","")))
+    return _tracking_bulk("portable_fan", vid, request.get_json(force=True), ins)
+
+
+# ── Staging ───────────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/staging", methods=["GET"])
+def get_staging(vid): return _tracking_get("staging", vid)
+
+@app.route("/api/vessels/<vid>/staging", methods=["POST"])
+def create_staging(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("location",""), d.get("staging_area",""), d.get("qty",""), d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM staging WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/staging/<int:rid>", methods=["PUT"])
+def update_staging(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("staging", rid,
+        "UPDATE staging SET no=?,location=?,staging_area=?,qty=?,remark=?,updated_at=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("location",""), d.get("staging_area",""), d.get("qty",""), d.get("remark","")))
+
+@app.route("/api/staging/<int:rid>", methods=["DELETE"])
+def delete_staging(rid): return _tracking_delete("staging", rid)
+
+@app.route("/api/vessels/<vid>/staging/bulk", methods=["PUT"])
+def bulk_staging(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("location",""), item.get("staging_area",""), item.get("qty",""), item.get("remark","")))
+    return _tracking_bulk("staging", vid, request.get_json(force=True), ins)
+
+
+# ── Gas Free ──────────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/gas_free", methods=["GET"])
+def get_gas_free(vid): return _tracking_get("gas_free", vid)
+
+@app.route("/api/vessels/<vid>/gas_free", methods=["POST"])
+def create_gas_free(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("tank",""), d.get("certificate",""), d.get("date") or None, d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM gas_free WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/gas_free/<int:rid>", methods=["PUT"])
+def update_gas_free(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("gas_free", rid,
+        "UPDATE gas_free SET no=?,tank=?,certificate=?,date=?,remark=?,updated_at=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("tank",""), d.get("certificate",""), d.get("date") or None, d.get("remark","")))
+
+@app.route("/api/gas_free/<int:rid>", methods=["DELETE"])
+def delete_gas_free(rid): return _tracking_delete("gas_free", rid)
+
+@app.route("/api/vessels/<vid>/gas_free/bulk", methods=["PUT"])
+def bulk_gas_free(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("tank",""), item.get("certificate",""), item.get("date") or None, item.get("remark","")))
+    return _tracking_bulk("gas_free", vid, request.get_json(force=True), ins)
+
+
+# ── XLSX 통합 업로드 ──────────────────────────────────────────
+@app.route("/api/vessels/<vid>/tracking/upload_xlsx", methods=["POST"])
+def upload_tracking_xlsx(vid):
+    """xlsx 파일을 받아 각 시트별로 DB에 저장"""
+    import openpyxl, io as _io
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    f = request.files["file"]
+    if not f.filename.endswith((".xlsx", ".xlsm")):
+        return jsonify({"error": "xlsx 파일만 가능합니다"}), 400
+
+    wb = openpyxl.load_workbook(_io.BytesIO(f.read()), read_only=True, data_only=True)
+    db = get_db()
+    result = {}
+
+    def val(v): return str(v).strip() if v is not None else ""
+
+    # Priority / Status 값 정규화
+    PRI_MAP = {
+        'normal':'Normal','urgent':'Urgent','critical':'Critical','on hold':'On Hold',
+        'high':'Urgent','low':'Normal','medium':'Normal','hold':'On Hold',
+    }
+    STAT_MAP = {
+        'open':'Not Started','not started':'Not Started',
+        'in progress':'In Progress','inprogress':'In Progress',
+        'completed':'Completed','done':'Completed','close':'Completed','closed':'Completed',
+        'on hold':'On Hold','hold':'On Hold',
+    }
+    def norm_pri(v): return PRI_MAP.get(val(v).lower(), val(v) or 'Normal')
+    def norm_stat(v): return STAT_MAP.get(val(v).lower(), val(v) or 'Open')
+
+    def get_data_rows(ws, header_row=4):
+        rows = list(ws.iter_rows(min_row=header_row+1, values_only=True))
+        return [r for r in rows if any(v is not None and str(v).strip() for v in r)]
+
+    # Outfitting Daily Log
+    if "Outfitting Daily Log" in wb.sheetnames:
+        ws = wb["Outfitting Daily Log"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM outfitting WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 9 and any(v for v in r):
+                db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (vid, val(r[0]), val(r[1]), val(r[2]),
+                     norm_pri(r[3]), norm_stat(r[4]),
+                     val(r[5]) or None, val(r[6]) or None, val(r[7])))
+                cnt += 1
+        result["outfitting"] = cnt
+
+    # WBT & COT
+    if "WBT & COT" in wb.sheetnames:
+        ws = wb["WBT & COT"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM wbt_cot WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 9 and any(v for v in r):
+                db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (vid, val(r[1]), val(r[2]), val(r[3]),
+                     val(r[4]) or None, val(r[5]) or None, val(r[6]), val(r[7]), val(r[8])))
+                cnt += 1
+        result["wbt_cot"] = cnt
+
+    # Portable Fan
+    if "Portable Fan Installation" in wb.sheetnames:
+        ws = wb["Portable Fan Installation"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM portable_fan WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 7 and any(v for v in r):
+                db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
+                    (vid, val(r[1]), val(r[2]), val(r[3]),
+                     val(r[4]) or None, val(r[5]) or None, val(r[6])))
+                cnt += 1
+        result["portable_fan"] = cnt
+
+    # Staging
+    if "Staging" in wb.sheetnames:
+        ws = wb["Staging"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM staging WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 6 and any(v for v in r):
+                db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
+                    (vid, val(r[1]), val(r[2]), val(r[3]), val(r[4]), val(r[5])))
+                cnt += 1
+        result["staging"] = cnt
+
+    # Gas Free
+    if "Gas Free Certificate" in wb.sheetnames:
+        ws = wb["Gas Free Certificate"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM gas_free WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 6 and any(v for v in r):
+                db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
+                    (vid, val(r[1]), val(r[2]), val(r[3]), val(r[4]) or None, val(r[5])))
+                cnt += 1
+        result["gas_free"] = cnt
+
+    db.commit()
+    return jsonify({"success": True, "imported": result}), 201
+
+
 # ── Run ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
