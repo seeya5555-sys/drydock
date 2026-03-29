@@ -228,6 +228,7 @@ main { padding:28px; max-width:1680px; margin:0 auto; }
 .vnav-btn:hover { color:var(--navy); border-bottom-color:var(--border-dark); }
 .vnav-btn.active { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }
 .vnav-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.vnav-sep { width:1px; background:var(--border); margin:8px 4px; align-self:stretch; display:inline-block; }
 
 /* ── VESSEL BANNER ───────────────────────────── */
 .vessel-banner {
