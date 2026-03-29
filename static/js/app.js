@@ -85,11 +85,11 @@ async function loadAll(){
         imo:'',shipyard:'',classSociety:'',dockIn:'',dockOut:'',duration:'',grt:''
       });
       IDX=[v.id];
-      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[]};
+      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[]};
     } else {
       for(const e of summary){
         const id=e.info.id; IDX.push(id);
-        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD)};
+        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),outfit:[],wbt:[],fan:[],staging:[],gasfree:[]};
       }
     }
   }catch(e){toast('로드 실패: '+e.message,true);IDX=[];FLEET={};}
@@ -181,6 +181,11 @@ function showTab(tab,btn){
   if(tab==='gantt')renderGantt();
   if(tab==='class')renderClass();
   if(tab==='daily'){buildDDF();renderDisc();}
+  if(tab==='outfit')renderTracking('outfit');
+  if(tab==='wbt')renderTracking('wbt');
+  if(tab==='fan')renderTracking('fan');
+  if(tab==='staging')renderTracking('staging');
+  if(tab==='gasfree')renderTracking('gasfree');
 }
 
 // ══ DASHBOARD ════════════════════════════════════════
@@ -354,6 +359,8 @@ async function uploadJobsCSV(input) {
   if (!input.files.length) return;
 
   const file = input.files[0];
+  if (!file.name.endsWith('.csv')) { toast('CSV 파일(.csv)만 업로드 가능합니다', true); return; }
+
   const formData = new FormData();
   formData.append('file', file);
 
@@ -367,7 +374,8 @@ async function uploadJobsCSV(input) {
     if (!res.ok) { toast(data.error || '업로드 실패', true); setSS('error'); return; }
 
     setSS('synced');
-    toast(`✓ ${data.inserted}개 Job이 추가됐습니다${data.errors.length ? ` (오류 ${data.errors.length}건)` : ''}`);
+    const errMsg = data.errors && data.errors.length ? ` (오류 ${data.errors.length}건)` : '';
+    toast(`✓ ${data.inserted}개 Job이 추가됐습니다${errMsg}`);
 
     // 새로 추가된 Job 반영
     const newJobs = await apiFetch(`${API}/vessels/${VID}/jobs`);
@@ -1104,6 +1112,251 @@ function toast(msg,isErr=false){
   t.textContent=(isErr?'✕  ':'✓  ')+msg;
   t.className='toast show'+(isErr?' err':'');
   setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// DAILY TRACKING LOGS
+// ══════════════════════════════════════════════════════════════
+
+// 탭별 설정
+const TRACKING_CFG = {
+  outfit: {
+    api: 'outfitting', key: 'outfit', tbody: 'outfit-body',
+    cols: ['no','description','location','priority','status','start_date','completion_date','remark'],
+    headers: ['No.','Description','Location','Priority','Status','Start Date','Completion','Remark'],
+    widths: ['50px','','120px','90px','120px','130px','130px',''],
+    priCol: 'priority', statCol: 'status',
+    newRow: ()=>({no:'',description:'',location:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:'',remark:''}),
+  },
+  wbt: {
+    api: 'wbt_cot', key: 'wbt', tbody: 'wbt-body',
+    cols: ['no','tank_name','manhole_status','open_date','close_date','bottom_plug_open','bottom_plug_close','remark'],
+    headers: ['No.','WBT / COT','Manhole','Open Date','Close Date','Bottom Plug Open','Bottom Plug Close','Remark'],
+    widths: ['50px','','100px','130px','130px','140px','140px',''],
+    priCol: null, statCol: null,
+    dateCols: ['open_date','close_date','bottom_plug_open','bottom_plug_close'],
+    newRow: ()=>({no:'',tank_name:'',manhole_status:'',open_date:'',close_date:'',bottom_plug_open:'',bottom_plug_close:'',remark:''}),
+  },
+  fan: {
+    api: 'portable_fan', key: 'fan', tbody: 'fan-body',
+    cols: ['no','location','qty','start_date','stop_date','remark'],
+    headers: ['No.','Location','Q\'ty','Start Date','Stop Date','Remark'],
+    widths: ['50px','','70px','130px','130px',''],
+    priCol: null, statCol: null,
+    newRow: ()=>({no:'',location:'',qty:'',start_date:'',stop_date:'',remark:''}),
+  },
+  staging: {
+    api: 'staging', key: 'staging', tbody: 'staging-body',
+    cols: ['no','location','staging_area','qty','remark'],
+    headers: ['No.','Location / Frame No.','Staging Area (L×W×H)','Q\'ty','Remark'],
+    widths: ['50px','','','80px',''],
+    priCol: null, statCol: null,
+    newRow: ()=>({no:'',location:'',staging_area:'',qty:'',remark:''}),
+  },
+  gasfree: {
+    api: 'gas_free', key: 'gasfree', tbody: 'gasfree-body',
+    cols: ['no','tank','certificate','date','remark'],
+    headers: ['No.','Tank','Gas Free Certificate','Date','Remark'],
+    widths: ['50px','','','130px',''],
+    priCol: null, statCol: null,
+    newRow: ()=>({no:'',tank:'',certificate:'',date:'',remark:''}),
+  },
+};
+
+const PRI_OPTS  = ['Normal','Urgent','Critical','On Hold'];
+const STAT_OPTS = ['Not Started','In Progress','Completed','On Hold'];
+
+// Priority/Status 옵션 인덱스로 전달 (따옴표 충돌 방지)
+const TRACKING_OPTS = { pri: PRI_OPTS, stat: STAT_OPTS };
+
+// 데이터 로드 + 렌더
+async function renderTracking(key){
+  if(!VID) return;
+  const cfg = TRACKING_CFG[key];
+  try {
+    const data = await apiFetch(`${API}/vessels/${VID}/${cfg.api}`);
+    FLEET[VID][cfg.key] = data;
+  } catch(e) { toast('로드 실패: '+e.message, true); return; }
+  _renderTrackingTable(key);
+}
+
+function _renderTrackingTable(key){
+  const cfg = TRACKING_CFG[key];
+  const data = FLEET[VID][cfg.key] || [];
+  const tbody = document.getElementById(cfg.tbody);
+  if(!tbody) return;
+
+  tbody.innerHTML = data.map((row, ri) => {
+    const rowId = row.id;
+    const cells = cfg.cols.map((col, ci) => {
+      const v = row[col] || '';
+      // dateCols 설정이 있으면 우선, 없으면 컬럼명에 date 포함 여부
+      const isDate = cfg.dateCols
+        ? cfg.dateCols.includes(col)
+        : (col.includes('date') || col === 'date');
+
+      // Priority 배지
+      if(col === cfg.priCol){
+        return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','pri')">${priorityBadge(v||'Normal')}</span></td>`;
+      }
+      // Status 배지
+      if(col === cfg.statCol){
+        const sc = v==='Completed'?'c-closed':v==='Not Started'||!v?'c-open':'cat-badge cat-sh';
+        return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','stat')"><span class="c-badge ${sc}">${v||'Not Started'}</span></span></td>`;
+      }
+      // 날짜 컬럼 — 캘린더 버튼 포함
+      if(isDate){
+        const dv = v ? String(v).slice(0,10) : '';
+        return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s);white-space:nowrap">${dv||'—'}</span>
+            <span class="cal-btn" style="width:28px;height:24px;font-size:13px;flex-shrink:0;" title="날짜 선택">📅<input type="date" ${dv?`value="${dv}"`:''}  onchange="setTrackingDate('${key}','${rowId}','${col}',this.value)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;"></span>
+          </div>
+        </td>`;
+      }
+      // No. 컬럼
+      if(col === 'no'){
+        return `<td data-label="No."><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${v||'—'}</span></td>`;
+      }
+      // 기본
+      return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-size:13px;color:var(--txt-b)">${v||'—'}</span></td>`;
+    });
+    return `<tr data-id="${rowId}">${cells.join('')}<td><button class="edit-btn" style="color:var(--red)" onclick="deleteTrackingRow('${key}','${rowId}')">✕</button></td></tr>`;
+  }).join('');
+
+  if(!data.length){
+    tbody.innerHTML = `<tr><td colspan="${cfg.cols.length+1}" class="empty-state">데이터가 없습니다. xlsx 업로드 또는 + Add Row를 사용하세요.</td></tr>`;
+  }
+}
+
+// 캘린더로 날짜 직접 설정
+async function setTrackingDate(key, rowId, col, val){
+  const cfg = TRACKING_CFG[key];
+  const row = (FLEET[VID][cfg.key]||[]).find(r=>String(r.id)===String(rowId));
+  if(!row) return;
+  row[col] = val;
+  await saveTrackingRow(key, rowId, row);
+}
+
+// 인라인 편집
+function startTrackingEdit(span, key, rowId, col, type, optsOrKey){
+  const cfg = TRACKING_CFG[key];
+  const row = (FLEET[VID][cfg.key]||[]).find(r=>String(r.id)===String(rowId));
+  if(!row) return;
+  const origVal = row[col] || '';
+
+  if(type === 'select'){
+    // 문자열 키('pri','stat')면 배열로 변환
+    const opts = typeof optsOrKey === 'string'
+      ? (TRACKING_OPTS[optsOrKey] || [])
+      : (optsOrKey || []);
+
+    const sel = document.createElement('select');
+    sel.className = 'inline-select';
+    opts.forEach(o=>{ const op=document.createElement('option'); op.value=o; op.textContent=o; if(o===origVal)op.selected=true; sel.appendChild(op); });
+    let saved = false;
+    sel.onchange = ()=>{
+      saved = true;
+      row[col] = sel.value;
+      saveTrackingRow(key, rowId, row);
+    };
+    sel.onblur = ()=>{ if(!saved) _renderTrackingTable(key); };
+    span.replaceWith(sel); sel.focus();
+    return;
+  }
+
+  const inp = document.createElement('input');
+  inp.className = 'inline-input';
+  inp.value = origVal;
+  inp.style.width = Math.max(span.offsetWidth, 80) + 'px';
+  inp.onblur = ()=>{ row[col]=inp.value; saveTrackingRow(key, rowId, row); };
+  inp.onkeydown = e=>{ if(e.key==='Enter')inp.blur(); if(e.key==='Escape'){inp.value=origVal;_renderTrackingTable(key);} };
+  span.replaceWith(inp); inp.focus(); inp.select();
+}
+
+// 저장
+async function saveTrackingRow(key, id, row){
+  const cfg = TRACKING_CFG[key];
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/${cfg.api}/${id}`, 'PUT', row);
+    setSS('synced');
+  } catch(e){ setSS('error'); toast('저장 실패: '+e.message, true); }
+  _renderTrackingTable(key);
+}
+
+// 행 추가
+async function addTrackingRow(key){
+  if(!VID) return;
+  const cfg = TRACKING_CFG[key];
+  setSS('saving');
+  try {
+    const newRow = await apiFetch(`${API}/vessels/${VID}/${cfg.api}`, 'POST', cfg.newRow());
+    FLEET[VID][cfg.key] = [...(FLEET[VID][cfg.key]||[]), newRow];
+    setSS('synced');
+    _renderTrackingTable(key);
+    toast('행이 추가됐습니다');
+  } catch(e){ setSS('error'); toast('추가 실패: '+e.message, true); }
+}
+
+// 행 삭제
+async function deleteTrackingRow(key, rowId){
+  if(!confirm('이 행을 삭제하시겠습니까?')) return;
+  const cfg = TRACKING_CFG[key];
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/${cfg.api}/${rowId}`, 'DELETE');
+    FLEET[VID][cfg.key] = (FLEET[VID][cfg.key]||[]).filter(r=>String(r.id)!==String(rowId));
+    setSS('synced');
+    _renderTrackingTable(key);
+    toast('삭제됐습니다');
+  } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
+}
+
+// xlsx 업로드 모달
+function openTrackingXlsx(){ openM('m-tracking-xlsx'); }
+
+async function uploadTrackingXlsx(input){
+  if(!VID){ toast('선박을 먼저 선택하세요', true); return; }
+  if(!input.files.length) return;
+
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+
+  setSS('saving');
+  document.getElementById('xlsx-result').style.display='none';
+
+  try {
+    const res = await fetch(`${API}/vessels/${VID}/tracking/upload_xlsx`, {method:'POST', body:formData});
+    const data = await res.json();
+    if(!res.ok){ toast(data.error||'업로드 실패', true); setSS('error'); return; }
+
+    setSS('synced');
+    const imp = data.imported || {};
+    const summary = Object.entries({
+      outfitting:'Outfitting', wbt_cot:'WBT & COT',
+      portable_fan:'Portable Fan', staging:'Staging', gas_free:'Gas Free'
+    }).map(([k,label])=>imp[k]!=null?`${label}: <b>${imp[k]}건</b>`:'').filter(Boolean).join(' &nbsp;|&nbsp; ');
+
+    const resEl = document.getElementById('xlsx-result');
+    resEl.style.display='block';
+    resEl.innerHTML=`<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px;font-size:13px;color:var(--green)">✅ 업로드 완료!<br><span style="font-size:12px;color:var(--txt-s)">${summary}</span></div>`;
+
+    // 현재 탭 데이터 갱신
+    for(const [apiKey, fKey] of [['outfitting','outfit'],['wbt_cot','wbt'],['portable_fan','fan'],['staging','staging'],['gas_free','gasfree']]){
+      if(imp[apiKey] != null){
+        const fresh = await apiFetch(`${API}/vessels/${VID}/${apiKey}`);
+        FLEET[VID][fKey] = fresh;
+      }
+    }
+    _renderTrackingTable('outfit');
+    toast('xlsx 업로드 완료!');
+  } catch(e){
+    setSS('error'); toast('업로드 실패: '+e.message, true);
+  }
+  input.value='';
 }
 
 loadAll();
