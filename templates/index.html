@@ -55,11 +55,17 @@
 <!-- ══ VESSEL DETAIL ════════════════════════════════════════════ -->
 <div id="page-vessel" class="page">
   <div class="vessel-nav">
-    <button class="vnav-btn active" onclick="showTab('dashboard',this)">Dashboard</button>
+    <button class="vnav-btn" onclick="showTab('dashboard',this)">Dashboard</button>
     <button class="vnav-btn" onclick="showTab('jobs',this)">Job Progress</button>
     <button class="vnav-btn" onclick="showTab('gantt',this)">Gantt Chart</button>
     <button class="vnav-btn" onclick="showTab('class',this)">Class Items</button>
     <button class="vnav-btn" onclick="showTab('daily',this)">Daily Log</button>
+    <span class="vnav-sep"></span>
+    <button class="vnav-btn" onclick="showTab('outfit',this)">Outfitting</button>
+    <button class="vnav-btn" onclick="showTab('wbt',this)">WBT &amp; COT</button>
+    <button class="vnav-btn" onclick="showTab('fan',this)">Portable Fan</button>
+    <button class="vnav-btn" onclick="showTab('staging',this)">Staging</button>
+    <button class="vnav-btn" onclick="showTab('gasfree',this)">Gas Free</button>
     <div class="vnav-actions">
       <button class="btn-edit" onclick="openVesselEditModal()">✎ Edit Info</button>
       <button class="btn-back" onclick="goFleet()">← Fleet</button>
@@ -208,6 +214,151 @@
       </button>
     </div>
   </main></div>
+</div>
+
+  <!-- ── Outfitting Daily Log ─────────────────────────────── -->
+  <div id="vt-outfit" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">Outfitting Daily Log</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
+        <button class="btn-add" onclick="addTrackingRow('outfit')">+ Add Row</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:52px">No.</th>
+        <th>Description</th>
+        <th style="width:130px">Location</th>
+        <th style="width:90px">Priority</th>
+        <th style="width:120px">Status</th>
+        <th style="width:110px">Start Date</th>
+        <th style="width:110px">Completion</th>
+        <th>Remark</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="outfit-body"></tbody>
+      </table>
+    </div>
+  </main></div>
+
+  <!-- ── WBT & COT ─────────────────────────────────────────── -->
+  <div id="vt-wbt" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">WBT &amp; COT</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
+        <button class="btn-add" onclick="addTrackingRow('wbt')">+ Add Row</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:50px">No.</th>
+        <th>WBT / COT</th>
+        <th style="width:100px">Manhole</th>
+        <th style="width:130px">Open Date</th>
+        <th style="width:130px">Close Date</th>
+        <th style="width:140px">Bottom Plug Open</th>
+        <th style="width:140px">Bottom Plug Close</th>
+        <th>Remark</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="wbt-body"></tbody>
+      </table>
+    </div>
+  </main></div>
+
+  <!-- ── Portable Fan ──────────────────────────────────────── -->
+  <div id="vt-fan" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">Portable Fan Installation</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
+        <button class="btn-add" onclick="addTrackingRow('fan')">+ Add Row</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:52px">No.</th>
+        <th>Location</th>
+        <th style="width:80px">Q'ty</th>
+        <th style="width:110px">Start Date</th>
+        <th style="width:110px">Stop Date</th>
+        <th>Remark</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="fan-body"></tbody>
+      </table>
+    </div>
+  </main></div>
+
+  <!-- ── Staging ───────────────────────────────────────────── -->
+  <div id="vt-staging" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">Staging</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
+        <button class="btn-add" onclick="addTrackingRow('staging')">+ Add Row</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:52px">No.</th>
+        <th>Location / Frame No.</th>
+        <th>Staging Area (L×W×H)</th>
+        <th style="width:90px">Q'ty (Stack)</th>
+        <th>Remark</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="staging-body"></tbody>
+      </table>
+    </div>
+  </main></div>
+
+  <!-- ── Gas Free Certificate ──────────────────────────────── -->
+  <div id="vt-gasfree" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">Gas Free Certificate</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
+        <button class="btn-add" onclick="addTrackingRow('gasfree')">+ Add Row</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:52px">No.</th>
+        <th>Tank</th>
+        <th>Gas Free Certificate</th>
+        <th style="width:110px">Date</th>
+        <th>Remark</th>
+        <th style="width:52px"></th>
+      </tr></thead>
+      <tbody id="gasfree-body"></tbody>
+      </table>
+    </div>
+  </main></div>
+
+<!-- xlsx 업로드 Modal -->
+<div class="modal-overlay" id="m-tracking-xlsx">
+  <div class="modal" style="width:480px">
+    <div class="modal-hdr"><div class="modal-title">📂 XLSX 업로드</div><button class="modal-x" onclick="closeM('m-tracking-xlsx')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--txt-s);margin-bottom:16px">Daily Tracking Log xlsx 파일을 업로드하면 각 시트 데이터가 자동으로 분리 저장됩니다.</p>
+      <div style="background:var(--blue-light);border:1.5px solid var(--blue);border-radius:8px;padding:14px;margin-bottom:16px;font-size:12px;color:var(--navy)">
+        <b>인식되는 시트:</b><br>
+        ① Outfitting Daily Log &nbsp; ② WBT &amp; COT<br>
+        ③ Portable Fan Installation &nbsp; ④ Staging &nbsp; ⑤ Gas Free Certificate
+      </div>
+      <div id="xlsx-dropzone" style="border:2px dashed var(--border-dark);border-radius:8px;padding:32px;text-align:center;cursor:pointer" onclick="document.getElementById('xlsx-file-input').click()">
+        <div style="font-size:32px;margin-bottom:8px">📄</div>
+        <div style="font-size:13px;color:var(--txt-s)"><span style="color:var(--blue);font-weight:600">파일 선택</span> 또는 드래그</div>
+        <div style="font-size:11px;color:var(--txt-m);margin-top:4px">.xlsx 파일만 지원</div>
+      </div>
+      <input type="file" id="xlsx-file-input" accept=".xlsx,.xlsm" style="display:none" onchange="uploadTrackingXlsx(this)">
+      <div id="xlsx-result" style="margin-top:12px;display:none"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-sec" onclick="closeM('m-tracking-xlsx')">닫기</button></div>
+  </div>
 </div>
 
 
