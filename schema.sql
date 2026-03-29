@@ -81,10 +81,82 @@ CREATE TABLE IF NOT EXISTS attachments (
     uploaded_at TEXT    DEFAULT (datetime('now'))
 );
 
+-- ── Outfitting Daily Log ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS outfitting (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id       TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no              TEXT,
+    description     TEXT,
+    location        TEXT,
+    priority        TEXT DEFAULT 'Normal',
+    status          TEXT DEFAULT 'Open',
+    start_date      TEXT,
+    completion_date TEXT,
+    remark          TEXT,
+    last_updated    TEXT DEFAULT (datetime('now'))
+);
+
+-- ── WBT & COT ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS wbt_cot (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id         TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no                TEXT,
+    tank_name         TEXT,
+    manhole_status    TEXT,
+    open_date         TEXT,
+    close_date        TEXT,
+    bottom_plug_open  TEXT,
+    bottom_plug_close TEXT,
+    remark            TEXT,
+    updated_at        TEXT DEFAULT (datetime('now'))
+);
+
+-- ── Portable Fan Installation ──────────────────────────────
+CREATE TABLE IF NOT EXISTS portable_fan (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id  TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no         TEXT,
+    location   TEXT,
+    qty        TEXT,
+    start_date TEXT,
+    stop_date  TEXT,
+    remark     TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ── Staging ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS staging (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id    TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no           TEXT,
+    location     TEXT,
+    staging_area TEXT,
+    qty          TEXT,
+    remark       TEXT,
+    updated_at   TEXT DEFAULT (datetime('now'))
+);
+
+-- ── Gas Free Certificate ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS gas_free (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id   TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no          TEXT,
+    tank        TEXT,
+    certificate TEXT,
+    date        TEXT,
+    remark      TEXT,
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+
 -- ── Indexes ────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_jobs_vessel   ON jobs(vessel_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_vendor   ON jobs(vendor);
-CREATE INDEX IF NOT EXISTS idx_class_vessel  ON class_items(vessel_id);
-CREATE INDEX IF NOT EXISTS idx_disc_vessel   ON discussions(vessel_id);
-CREATE INDEX IF NOT EXISTS idx_disc_date     ON discussions(date);
-CREATE INDEX IF NOT EXISTS idx_attach_ref    ON attachments(vessel_id, ref_type, ref_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_vessel      ON jobs(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_vendor      ON jobs(vendor);
+CREATE INDEX IF NOT EXISTS idx_class_vessel     ON class_items(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_disc_vessel      ON discussions(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_disc_date        ON discussions(date);
+CREATE INDEX IF NOT EXISTS idx_attach_ref       ON attachments(vessel_id, ref_type, ref_id);
+CREATE INDEX IF NOT EXISTS idx_outfit_vessel    ON outfitting(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_wbt_vessel       ON wbt_cot(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_fan_vessel       ON portable_fan(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_staging_vessel   ON staging(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_gasfree_vessel   ON gas_free(vessel_id);
