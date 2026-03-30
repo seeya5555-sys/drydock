@@ -502,6 +502,42 @@ def _tracking_update(table, rid, update_sql, params):
     return jsonify(dict(get_db().execute(f"SELECT * FROM {table} WHERE id=?", (rid,)).fetchone()))
 
 
+# ── Steel Repair ──────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/steel_repair", methods=["GET"])
+def get_steel_repair(vid): return _tracking_get("steel_repair", vid)
+
+@app.route("/api/vessels/<vid>/steel_repair", methods=["POST"])
+def create_steel_repair(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+        (vid, d.get("no",""), d.get("description",""), d.get("location",""),
+         d.get("priority","Normal"), d.get("status","Not Started"),
+         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM steel_repair WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/steel_repair/<int:rid>", methods=["PUT"])
+def update_steel_repair(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("steel_repair", rid,
+        "UPDATE steel_repair SET no=?,description=?,location=?,priority=?,status=?,start_date=?,completion_date=?,remark=?,last_updated=datetime('now') WHERE id=?",
+        (d.get("no",""), d.get("description",""), d.get("location",""),
+         d.get("priority","Normal"), d.get("status","Not Started"),
+         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+
+@app.route("/api/steel_repair/<int:rid>", methods=["DELETE"])
+def delete_steel_repair(rid): return _tracking_delete("steel_repair", rid)
+
+@app.route("/api/vessels/<vid>/steel_repair/bulk", methods=["PUT"])
+def bulk_steel_repair(vid):
+    def ins(db, vid, item):
+        db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+            (vid, item.get("no",""), item.get("description",""), item.get("location",""),
+             item.get("priority","Normal"), item.get("status","Not Started"),
+             item.get("start_date") or None, item.get("completion_date") or None, item.get("remark","")))
+    return _tracking_bulk("steel_repair", vid, request.get_json(force=True), ins)
+
+
 # ── Outfitting ────────────────────────────────────────────────
 @app.route("/api/vessels/<vid>/outfitting", methods=["GET"])
 def get_outfitting(vid): return _tracking_get("outfitting", vid)
@@ -667,6 +703,16 @@ def bulk_gas_free(vid):
     return _tracking_bulk("gas_free", vid, request.get_json(force=True), ins)
 
 
+@app.route("/api/tracking/template")
+def download_tracking_template():
+    """Daily Tracking Log 템플릿 xlsx 다운로드"""
+    template_path = os.path.join(os.path.dirname(__file__), "static", "templates", "DD_DAILY_LOG_TEMPLATE.xlsx")
+    return send_file(template_path,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True,
+                     download_name="DD_DAILY_LOG_TEMPLATE.xlsx")
+
+
 # ── XLSX 통합 업로드 ──────────────────────────────────────────
 @app.route("/api/vessels/<vid>/tracking/upload_xlsx", methods=["POST"])
 def upload_tracking_xlsx(vid):
@@ -702,6 +748,21 @@ def upload_tracking_xlsx(vid):
     def get_data_rows(ws, header_row=4):
         rows = list(ws.iter_rows(min_row=header_row+1, values_only=True))
         return [r for r in rows if any(v is not None and str(v).strip() for v in r)]
+
+    # Steel Repair
+    if "Steel Repair" in wb.sheetnames:
+        ws = wb["Steel Repair"]
+        data_rows = get_data_rows(ws, 4)
+        db.execute("DELETE FROM steel_repair WHERE vessel_id=?", (vid,))
+        cnt = 0
+        for r in data_rows:
+            if len(r) >= 9 and any(v for v in r):
+                db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (vid, val(r[0]), val(r[1]), val(r[2]),
+                     norm_pri(r[3]), norm_stat(r[4]),
+                     val(r[5]) or None, val(r[6]) or None, val(r[7])))
+                cnt += 1
+        result["steel_repair"] = cnt
 
     # Outfitting Daily Log
     if "Outfitting Daily Log" in wb.sheetnames:
