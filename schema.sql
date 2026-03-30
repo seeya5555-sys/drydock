@@ -81,6 +81,21 @@ CREATE TABLE IF NOT EXISTS attachments (
     uploaded_at TEXT    DEFAULT (datetime('now'))
 );
 
+-- ── Steel Repair ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS steel_repair (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id       TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no              TEXT,
+    description     TEXT,
+    location        TEXT,
+    priority        TEXT DEFAULT 'Normal',
+    status          TEXT DEFAULT 'Not Started',
+    start_date      TEXT,
+    completion_date TEXT,
+    remark          TEXT,
+    last_updated    TEXT DEFAULT (datetime('now'))
+);
+
 -- ── Outfitting Daily Log ──────────────────────────────────
 CREATE TABLE IF NOT EXISTS outfitting (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,6 +171,7 @@ CREATE INDEX IF NOT EXISTS idx_disc_vessel      ON discussions(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_disc_date        ON discussions(date);
 CREATE INDEX IF NOT EXISTS idx_attach_ref       ON attachments(vessel_id, ref_type, ref_id);
 CREATE INDEX IF NOT EXISTS idx_outfit_vessel    ON outfitting(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_steel_vessel     ON steel_repair(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_wbt_vessel       ON wbt_cot(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_fan_vessel       ON portable_fan(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_staging_vessel   ON staging(vessel_id);
