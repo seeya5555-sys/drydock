@@ -480,6 +480,8 @@ function startEdit(span, ri, field, type) {
     FLEET[VID].jobs[ri][field] = val;
     persist('jobs',FLEET[VID].jobs);
     if(field === 'vendor') buildJFilters();
+    // number 입력 완료 시 번호순 정렬로 복귀
+    if(field === 'number') { sKey='number'; sDir=1; }
     renderJobs();
     renderDash();
   };
@@ -560,7 +562,20 @@ async function addInlineRow() {
   toast('새 행이 추가됐습니다');
 }
 function sortJ(k){sKey===k?sDir*=-1:(sKey=k,sDir=1);renderJobs();}
-function pNum(n){const p=String(n).split('.');return(parseInt(p[0])||0)*1000+(parseInt(p[1])||0);}
+function pNum(n){
+  // R10, P1, R14-2 같은 알파벳 접두사 처리
+  const s = String(n||'').trim();
+  // 알파벳 접두사 추출 (R, P, S 등)
+  const prefixMatch = s.match(/^([A-Za-z]*)/);
+  const prefix = prefixMatch ? prefixMatch[1].toUpperCase() : '';
+  const rest = s.slice(prefix.length);
+  // 나머지 숫자 파싱 (14-2 → 14002, 1.1 → 1001)
+  const parts = rest.replace('-', '.').split('.');
+  const num = (parseInt(parts[0])||0)*1000 + (parseInt(parts[1])||0);
+  // 접두사를 숫자로 변환 (없으면 0, A=1, B=2 ... Z=26)
+  const prefixVal = prefix ? (prefix.charCodeAt(0) - 64) * 1000000 : 0;
+  return prefixVal + num;
+}
 
 function openJobModal(idx){
   if(!VID)return;eJobIdx=idx;
@@ -619,7 +634,7 @@ function saveJob(){
   if(!j.number||!j.description){toast('Job number and description are required',true);return;}
   const jobs=FLEET[VID].jobs;
   if(eJobIdx===null)jobs.push(j);else jobs[eJobIdx]=j;
-  persist('jobs',jobs);closeM('m-job');buildJFilters();renderJobs();renderDash();
+  persist('jobs',jobs);closeM('m-job');buildJFilters();sKey='number';sDir=1;renderJobs();renderDash();
   toast(eJobIdx===null?'Job added':'Job updated');
 }
 // ══ DAILY REMARKS HELPERS ════════════════════════════
