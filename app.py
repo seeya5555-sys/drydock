@@ -197,6 +197,9 @@ def upload_jobs_csv(vid):
     for i, row_data in enumerate(reader, start=2):
         # 컬럼명 소문자 정규화
         r = {k.strip().lower(): v.strip() for k, v in row_data.items()}
+        # budget 정규화: $, 쉼표, 공백 제거
+        raw_budget = r.get("budget", "0") or "0"
+        clean_budget = raw_budget.replace("$", "").replace(",", "").strip()
         try:
             db.execute(
                 "INSERT INTO jobs(vessel_id, number, section, category, description, "
@@ -209,7 +212,7 @@ def upload_jobs_csv(vid):
                     r.get("category", "Shipyard"),
                     r.get("description", ""),
                     r.get("vendor", ""),
-                    float(r.get("budget", 0) or 0),
+                    float(clean_budget or 0),
                     0,       # consumption
                     None,    # start_date (사이트에서 직접 입력)
                     None,    # end_date   (사이트에서 직접 입력)
@@ -424,6 +427,9 @@ def upload_attachment(vid, ref_type, ref_id):
         return jsonify({"error": "No files"}), 400
     db = get_db()
     uploaded = []
+    # 모든 타입 항상 1개만 유지 — 기존 파일 삭제
+    db.execute("DELETE FROM attachments WHERE vessel_id=? AND ref_type=? AND ref_id=?",
+               (vid, ref_type, ref_id))
     for f in request.files.getlist("files"):
         if not f.filename: continue
         data = f.read()
