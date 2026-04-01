@@ -154,11 +154,17 @@ def fleet_summary():
     result = []
     for v in db.execute("SELECT * FROM vessels ORDER BY created_at").fetchall():
         vid = v["id"]
+        # 첨부파일 있는 ref_id 목록 (id, ref_type, ref_id만)
+        attach_rows = db.execute(
+            "SELECT ref_type, ref_id FROM attachments WHERE vessel_id=? GROUP BY ref_type, ref_id",
+            (vid,)).fetchall()
+        attachments = [{"ref_type": r["ref_type"], "ref_id": r["ref_id"]} for r in attach_rows]
         result.append({
             "info":        to_vessel(v),
             "jobs":        [to_job(r)   for r in db.execute("SELECT * FROM jobs        WHERE vessel_id=? ORDER BY id",     (vid,)).fetchall()],
             "classItems":  [to_class(r) for r in db.execute("SELECT * FROM class_items WHERE vessel_id=? ORDER BY id",     (vid,)).fetchall()],
             "discussions": [to_disc(r)  for r in db.execute("SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id",(vid,)).fetchall()],
+            "attachments": attachments,
         })
     return jsonify(result)
 
