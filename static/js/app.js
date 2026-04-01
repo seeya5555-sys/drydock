@@ -88,11 +88,12 @@ async function loadAll(){
         imo:'',shipyard:'',classSociety:'',dockIn:'',dockOut:'',duration:'',grt:''
       });
       IDX=[v.id];
-      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[]};
+      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set()};
     } else {
       for(const e of summary){
         const id=e.info.id; IDX.push(id);
-        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[]};
+        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],
+          attachSet: new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`))};
       }
     }
   }catch(e){toast('로드 실패: '+e.message,true);IDX=[];FLEET={};}
@@ -187,10 +188,10 @@ function showTab(tab,btn){
   if(btn)btn.classList.add('active');
   const el=document.getElementById('vt-'+tab);if(el)el.classList.add('active');
   if(tab==='dashboard')renderDash();
-  if(tab==='jobs'){buildJFilters();renderJobs();loadAttachStates('job','_id','jattbtn');}
+  if(tab==='jobs'){buildJFilters();renderJobs();}
   if(tab==='gantt')renderGantt();
-  if(tab==='class'){renderClass();loadAttachStates('class','_id','cattbtn');}
-  if(tab==='daily'){buildDDF();renderDisc();loadAttachStates('disc','_id','dattbtn');}
+  if(tab==='class')renderClass();
+  if(tab==='daily'){buildDDF();renderDisc();}
   if(tab==='steel')renderTracking('steel');
   if(tab==='outfit')renderTracking('outfit');
   if(tab==='wbt')renderTracking('wbt');
@@ -522,7 +523,9 @@ function renderJobs(){
       <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
       <td style="white-space:nowrap">
         <button class="edit-btn" onclick="openJobModal(${ri})">Edit</button>
-        <button class="attach-btn" id="jattbtn-${j._id}" onclick="openJobAttach(${j._id})" title="첨부파일">📎</button>
+        <button class="attach-btn" id="jattbtn-${j._id}" onclick="openJobAttach(${j._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('job:'+j._id)?'background:var(--blue);color:var(--white)':''}">
+          ${(FLEET[VID].attachSet||new Set()).has('job:'+j._id)?'📎 1':'📎'}
+        </button>
       </td>
     </tr>`;
   }).join('');
@@ -943,6 +946,7 @@ async function uploadJobAttach(input) {
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
     const file = list && list.length ? list[list.length-1] : null;
     _renderJobAttachUI(file);
+    if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`job:${jobId}`);
     _updateJobAttachBtn(jobId, !!file);
     toast('파일 업로드 완료');
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
@@ -956,6 +960,7 @@ async function deleteJobAttach(aid, jobId) {
     await apiFetch(`${API}/attachments/${aid}`, 'DELETE');
     setSS('synced');
     _renderJobAttachUI(null);
+    if(FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`job:${jobId}`);
     _updateJobAttachBtn(jobId, false);
     toast('삭제됐습니다');
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
@@ -1043,6 +1048,7 @@ async function uploadGenAttach(input) {
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`);
     const file = list && list.length ? list[list.length-1] : null;
     _renderGenAttachUI(file);
+    if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`${refType}:${refId}`);
     _updateGenAttachBtn(refType, +refId, !!file);
     setSS('synced'); toast('파일 업로드 완료');
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
@@ -1057,6 +1063,7 @@ async function deleteGenAttach(aid) {
   try {
     await apiFetch(`${API}/attachments/${aid}`, 'DELETE');
     _renderGenAttachUI(null);
+    if(FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`${refType}:${refId}`);
     _updateGenAttachBtn(refType, +refId, false);
     setSS('synced'); toast('삭제됐습니다');
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
@@ -1108,7 +1115,7 @@ function renderClass(){
       <td data-label="Action"><div style="font-size:12px;max-width:200px;cursor:pointer" onclick="openClassModal(${ri})" title="클릭하여 편집">${renderActionsCell(c.actions, c.action)}</div></td>
       <td data-label="Open"><span class="cell-edit" onclick="startEditC(this,${ri},'open_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s)">${c.open_date||'—'}</span></td>
       <td data-label="Close"><span class="cell-edit" onclick="startEditC(this,${ri},'close_date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:${c.close_date?'var(--green)':'var(--txt-m)'}">${c.close_date||'—'}</span></td>
-      <td style="white-space:nowrap"><button class="edit-btn" onclick="openClassModal(${ri})">Edit</button><button class="attach-btn" id="cattbtn-${c._id}" onclick="openGenAttach('class',${c._id})" title="첨부파일">📎</button></td>
+      <td style="white-space:nowrap"><button class="edit-btn" onclick="openClassModal(${ri})">Edit</button><button class="attach-btn" id="cattbtn-${c._id}" onclick="openGenAttach('class',${c._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('class:'+c._id)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('class:'+c._id)?'📎 1':'📎'}</button></td>
     </tr>`;
   }).join('');
 }
@@ -1259,7 +1266,7 @@ function renderDisc(){
       <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
         <span class="c-badge ${stCls}">${stLbl}</span>
       </span></td>
-      <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button><button class="attach-btn" id="dattbtn-${d._id}" onclick="openGenAttach('disc',${d._id})" title="첨부파일">📎</button></td>
+      <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button><button class="attach-btn" id="dattbtn-${d._id}" onclick="openGenAttach('disc',${d._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'📎 1':'📎'}</button></td>
     </tr>`;
   }).join('');
 }
