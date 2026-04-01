@@ -67,7 +67,10 @@ async function apiFetch(url, method='GET', body=null){
 async function persist(key, data){
   setSS('saving');
   try{
-    if(key==='jobs')       await apiFetch(`${API}/vessels/${VID}/jobs/bulk`,'PUT',data);
+    if(key==='jobs'){
+      const res = await apiFetch(`${API}/vessels/${VID}/jobs/bulk`,'PUT',data);
+      FLEET[VID].jobs = res.map(dbJ);
+    }
     else if(key==='class') await apiFetch(`${API}/vessels/${VID}/class_items/bulk`,'PUT',data);
     else if(key==='disc')  await apiFetch(`${API}/vessels/${VID}/discussions/bulk`,'PUT',data);
     setSS('synced');
@@ -102,7 +105,14 @@ async function loadAll(){
 
 // DB → frontend normalizers
 function dbI(r){return{id:r.id,name:r.name||'',type:r.type||'',imo:r.imo||'',shipyard:r.shipyard||'',classSociety:r.class_society||r.classSociety||'',dockIn:r.dock_in||r.dockIn||'',dockOut:r.dock_out||r.dockOut||'',duration:r.duration||'',grt:r.grt||''};}
-function dbJ(r){return{_id:r.id||r._id,number:r.number||'',section:r.section||'GENERAL',category:r.category||'Shipyard',description:r.description||'',vendor:r.vendor||'',budget:r.budget||0,consumption:r.consumption||0,start_date:r.start_date||'',end_date:r.end_date||'',completion:r.completion||0,remarks:Array.isArray(r.remarks)?r.remarks:[]};}
+function dbJ(r){
+  let remarks = [];
+  if(Array.isArray(r.remarks)) remarks = r.remarks;
+  else if(typeof r.remarks === 'string'){
+    try { remarks = JSON.parse(r.remarks); } catch(e){ remarks = []; }
+  }
+  return {_id:r.id||r._id,number:r.number||'',section:r.section||'GENERAL',category:r.category||'Shipyard',description:r.description||'',vendor:r.vendor||'',budget:r.budget||0,consumption:r.consumption||0,start_date:r.start_date||'',end_date:r.end_date||'',completion:r.completion||0,remarks};
+}
 function dbC(r){return{_id:r.id||r._id,no:r.no||'',finding:r.finding||'',description:r.description||'',actions:Array.isArray(r.actions)?r.actions:[],by:r.responsible||r.by||'Crew',open_date:r.open_date||'',close_date:r.close_date||'',status:r.status||'Open',priority:r.priority||'Normal'};}
 function dbD(r){return{_id:r.id||r._id,no:r.no||'',date:r.date||'',time_of_day:r.time_of_day||'',item:r.item||'',description:r.description||'',actions:Array.isArray(r.actions)?r.actions:[],status:r.status||'Open',priority:r.priority||'Normal'};}
 
@@ -302,13 +312,46 @@ function renderRemarkCell(j) {
   const remarks = Array.isArray(j.remarks) ? j.remarks
     : (j.remark ? [{date:'', progress:j.remark, important:false}] : []);
   if (!remarks.length) return '—';
-  return remarks.map(r => {
-    const dateSpan = r.date
-      ? `<span class="rm-date">${r.date}</span>`
-      : '';
-    const cls = r.important ? 'rm-text important' : 'rm-text';
-    return `<div class="remark-entry">${dateSpan}<span class="${cls}">${r.progress||''}</span></div>`;
-  }).join('');
+
+  const mkRow = (r, indent) => {
+    const ds = r.date ? `<span class="rm-date" style="display:inline-block;min-width:72px">${r.date}</span>` : '<span style="display:inline-block;min-width:72px"></span>';
+    const importantStyle = r.important ? 'color:#dc2626;font-weight:700;' : '';
+    const pl = indent ? 'padding-left:14px;' : '';
+    return `<div style="display:block;${pl}line-height:1.6">${ds}<span style="font-size:12px;${importantStyle}">${r.progress||''}</span></div>`;
+  };
+
+  const last = remarks[remarks.length - 1];
+  if (remarks.length === 1) return mkRow(last, false);
+
+  const uid = 'rm_' + Math.random().toString(36).slice(2,8);
+
+  // 접힌 상태: ▶ + 마지막만
+  const collapsedHtml =
+    `<div style="display:flex;align-items:center;gap:4px;">` +
+    `<span onclick="event.stopPropagation();toggleRemark('${uid}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">▶</span>` +
+    mkRow(last, false) +
+    `</div>`;
+
+  // 펼친 상태: ▼ + 첫번째 같은 줄, 나머지 아래 (날짜 들여쓰기 맞춤)
+  const expandedHtml =
+    `<div style="display:flex;align-items:flex-start;gap:4px;">` +
+    `<span onclick="event.stopPropagation();toggleRemark('${uid}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none;margin-top:3px">▼</span>` +
+    `<div>` +
+    remarks.map((r, i) => mkRow(r, false)).join('') +
+    `</div>` +
+    `</div>`;
+
+  return `<div id="${uid}" data-open="0"
+    data-c="${encodeURIComponent(collapsedHtml)}"
+    data-e="${encodeURIComponent(expandedHtml)}">${collapsedHtml}</div>`;
+}
+
+function toggleRemark(uid) {
+  const el = document.getElementById(uid);
+  if (!el) return;
+  const isOpen = el.dataset.open === '1';
+  el.dataset.open = isOpen ? '0' : '1';
+  el.innerHTML = decodeURIComponent(isOpen ? el.dataset.c : el.dataset.e);
 }
 
 // ── Priority badge renderer ────────────────────────
@@ -456,7 +499,7 @@ function renderJobs(){
         </div>
         ${dateInfo}
       </td>
-      <td data-label="Remark"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
+      <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
       <td><button class="edit-btn" onclick="openJobModal(${ri})">Edit</button></td>
     </tr>`;
   }).join('');
