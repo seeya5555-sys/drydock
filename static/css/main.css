@@ -335,6 +335,8 @@ tbody td { padding:10px 14px; font-size:13px; color:var(--txt-b); vertical-align
 }
 .edit-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-light); }
 .remark-cell { max-width:280px; font-size:12px; color:var(--txt-s); line-height:1.5; white-space:pre-line; word-break:break-word; }
+.remark-cell > div { display:flex; align-items:flex-start; }
+.remark-entry { line-height:1.6; min-height:18px; }
 
 /* ── Daily Remarks Table in Modal ─────────────────── */
 .remarks-table { width:100%; border-collapse:collapse; margin-top:6px; }
