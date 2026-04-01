@@ -422,14 +422,14 @@ function renderJobs(){
   if(!fil.length){tb.innerHTML='<tr><td colspan="10" class="empty-state">No jobs match the filters</td></tr>';return;}
 
   const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ETC'];
-  const CATS=['Shipyard','Shore Repair','Crew'];
+  const CATS=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
 
   tb.innerHTML=fil.map(j=>{
     const ri=jobs.indexOf(j);
     const livePct=calcProgress(j.start_date,j.end_date);
     const pct=livePct!==null?livePct:(j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
-    const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':'cat-cr';
+    const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=j.start_date&&j.end_date
       ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${j.start_date} → ${j.end_date}</div>`
       :`<div style="font-size:10px;color:var(--txt-m)">—</div>`;
@@ -710,12 +710,12 @@ function deleteJob(){
 function renderGantt(){
   if(!VID)return;
   const secs=[...new Set((FLEET[VID].jobs||[]).map(j=>j.section))];
+  const allCats=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
   document.getElementById('g-chips').innerHTML=
     `<button class="g-chip active" onclick="buildGantt(null,null,this)">All Sections</button>`+
     secs.map(s=>`<button class="g-chip" onclick="buildGantt('${s}',null,this)">${s}</button>`).join('')+
     `<span style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;display:inline-block"></span>`+
-    `<button class="g-chip" onclick="buildGantt(null,'Shipyard',this)">Shipyard</button>`+
-    `<button class="g-chip" onclick="buildGantt(null,'Shore Repair',this)">Shore Repair</button>`;
+    allCats.map(c=>`<button class="g-chip" onclick="buildGantt(null,'${c}',this)">${c}</button>`).join('');
   buildGantt(null,null,null);
 }
 function buildGantt(sf,cf,btn){
