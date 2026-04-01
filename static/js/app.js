@@ -187,10 +187,10 @@ function showTab(tab,btn){
   if(btn)btn.classList.add('active');
   const el=document.getElementById('vt-'+tab);if(el)el.classList.add('active');
   if(tab==='dashboard')renderDash();
-  if(tab==='jobs'){buildJFilters();renderJobs();loadAttachStates('job','_id','jattbtn');}
+  if(tab==='jobs'){buildJFilters();renderJobs();setTimeout(()=>loadAttachStates('job','_id','jattbtn'),300);}
   if(tab==='gantt')renderGantt();
-  if(tab==='class'){renderClass();loadAttachStates('class','_id','cattbtn');}
-  if(tab==='daily'){buildDDF();renderDisc();loadAttachStates('disc','_id','dattbtn');}
+  if(tab==='class'){renderClass();setTimeout(()=>loadAttachStates('class','_id','cattbtn'),300);}
+  if(tab==='daily'){buildDDF();renderDisc();setTimeout(()=>loadAttachStates('disc','_id','dattbtn'),300);}
   if(tab==='steel')renderTracking('steel');
   if(tab==='outfit')renderTracking('outfit');
   if(tab==='wbt')renderTracking('wbt');
