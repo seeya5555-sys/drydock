@@ -821,7 +821,7 @@ function buildGantt(sf,cf,btn){
     if(sf && j.section!==sf) return false;
     if(cf && j.category!==cf) return false;
     return true;
-  });
+  }).sort((a,b)=>pNum(a.number)-pNum(b.number));
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // Find today's column index for absolute line overlay
