@@ -637,18 +637,15 @@ async function addInlineRow() {
 }
 function sortJ(k){sKey===k?sDir*=-1:(sKey=k,sDir=1);renderJobs();}
 function pNum(n){
-  // R10, P1, R14-2 같은 알파벳 접두사 처리
   const s = String(n||'').trim();
-  // 알파벳 접두사 추출 (R, P, S 등)
   const prefixMatch = s.match(/^([A-Za-z]*)/);
   const prefix = prefixMatch ? prefixMatch[1].toUpperCase() : '';
   const rest = s.slice(prefix.length);
-  // 나머지 숫자 파싱 (14-2 → 14002, 1.1 → 1001)
   const parts = rest.replace('-', '.').split('.');
   const num = (parseInt(parts[0])||0)*1000 + (parseInt(parts[1])||0);
-  // 접두사를 숫자로 변환 (없으면 0, A=1, B=2 ... Z=26)
-  const prefixVal = prefix ? (prefix.charCodeAt(0) - 64) * 1000000 : 0;
-  return prefixVal + num;
+  // 알파벳 접두사 있으면 앞에(음수 영역), 없으면(숫자만) 뒤에(양수 영역)
+  if(prefix) return (prefix.charCodeAt(0) - 64) * 100000 + num;
+  return 10000000 + num;
 }
 
 function openJobModal(idx){
