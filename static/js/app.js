@@ -541,12 +541,14 @@ function startEdit(span, ri, field, type) {
   inp.focus();
   inp.select();
 
-  const save = () => {
+  const save = async () => {
     const val = type === 'number' ? (+inp.value || 0) : inp.value.trim();
     FLEET[VID].jobs[ri][field] = val;
-    persist('jobs',FLEET[VID].jobs);
+    const job = FLEET[VID].jobs[ri];
+    try {
+      await apiFetch(`${API}/jobs/${job._id}`,'PUT', job);
+    } catch(e){ toast('저장 실패: '+e.message,true); }
     if(field === 'vendor') buildJFilters();
-    // number 입력 완료 시 번호순 정렬로 복귀
     if(field === 'number') { sKey='number'; sDir=1; }
     renderJobs();
     renderDash();
@@ -571,9 +573,12 @@ function startEditSelect(span, ri, field, options) {
   span.replaceWith(sel);
   sel.focus();
 
-  const save = () => {
+  const save = async () => {
     FLEET[VID].jobs[ri][field] = sel.value;
-    persist('jobs',FLEET[VID].jobs);
+    const job = FLEET[VID].jobs[ri];
+    try {
+      await apiFetch(`${API}/jobs/${job._id}`,'PUT', job);
+    } catch(e){ toast('저장 실패: '+e.message,true); }
     buildJFilters();
     renderJobs();
     renderDash();
@@ -679,7 +684,7 @@ function openJobModal(idx){
   });
   openM('m-job');
 }
-function saveJob(){
+async function saveJob(){
   if(!VID)return;
   const st = document.getElementById('mj-st').value || document.getElementById('mj-st-txt').value.trim();
   const en = document.getElementById('mj-en').value || document.getElementById('mj-en-txt').value.trim();
@@ -698,9 +703,21 @@ function saveJob(){
     remarks: collectRemarks()
   };
   if(!j.number||!j.description){toast('Job number and description are required',true);return;}
-  const jobs=FLEET[VID].jobs;
-  if(eJobIdx===null)jobs.push(j);else jobs[eJobIdx]=j;
-  persist('jobs',jobs);closeM('m-job');buildJFilters();sKey='number';sDir=1;renderJobs();renderDash();
+  setSS('saving');
+  try {
+    if(eJobIdx===null){
+      // 신규 추가
+      const res = await apiFetch(`${API}/vessels/${VID}/jobs`,'POST',j);
+      FLEET[VID].jobs.push(dbJ(res));
+    } else {
+      // 기존 수정 — id 유지
+      const existing = FLEET[VID].jobs[eJobIdx];
+      const res = await apiFetch(`${API}/jobs/${existing._id}`,'PUT',j);
+      FLEET[VID].jobs[eJobIdx] = dbJ(res);
+    }
+    setSS('synced');
+  } catch(e){ setSS('error'); toast('저장 실패: '+e.message,true); return; }
+  closeM('m-job');buildJFilters();sKey='number';sDir=1;renderJobs();renderDash();
   toast(eJobIdx===null?'Job added':'Job updated');
 }
 // ══ DAILY REMARKS HELPERS ════════════════════════════
@@ -766,9 +783,15 @@ function collectRemarks() {
   return collectRemarksFrom('mj-remarks-body');
 }
 
-function deleteJob(){
+async function deleteJob(){
   if(eJobIdx===null||!VID)return;if(!confirm('Delete this job?'))return;
-  FLEET[VID].jobs.splice(eJobIdx,1);persist('jobs',FLEET[VID].jobs);
+  const job = FLEET[VID].jobs[eJobIdx];
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/jobs/${job._id}`,'DELETE');
+    FLEET[VID].jobs.splice(eJobIdx,1);
+    setSS('synced');
+  } catch(e){ setSS('error'); toast('삭제 실패: '+e.message,true); return; }
   closeM('m-job');renderJobs();renderDash();toast('Job deleted');
 }
 
