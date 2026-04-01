@@ -187,10 +187,10 @@ function showTab(tab,btn){
   if(btn)btn.classList.add('active');
   const el=document.getElementById('vt-'+tab);if(el)el.classList.add('active');
   if(tab==='dashboard')renderDash();
-  if(tab==='jobs'){buildJFilters();renderJobs();setTimeout(()=>loadAttachStates('job','_id','jattbtn'),300);}
+  if(tab==='jobs'){buildJFilters();renderJobs();loadAttachStates('job','_id','jattbtn');}
   if(tab==='gantt')renderGantt();
-  if(tab==='class'){renderClass();setTimeout(()=>loadAttachStates('class','_id','cattbtn'),300);}
-  if(tab==='daily'){buildDDF();renderDisc();setTimeout(()=>loadAttachStates('disc','_id','dattbtn'),300);}
+  if(tab==='class'){renderClass();loadAttachStates('class','_id','cattbtn');}
+  if(tab==='daily'){buildDDF();renderDisc();loadAttachStates('disc','_id','dattbtn');}
   if(tab==='steel')renderTracking('steel');
   if(tab==='outfit')renderTracking('outfit');
   if(tab==='wbt')renderTracking('wbt');
@@ -204,19 +204,19 @@ async function loadAttachStates(refType, idKey, btnPrefix) {
   const items = refType==='job' ? (FLEET[VID].jobs||[])
     : refType==='class' ? (FLEET[VID].classItems||[])
     : (FLEET[VID].discussions||[]);
-  for(const item of items) {
+  await Promise.all(items.map(async item => {
     const id = item[idKey] || item._id;
-    if(!id) continue;
+    if(!id) return;
     try {
       const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${id}`);
       const btn = document.getElementById(`${btnPrefix}-${id}`);
-      if(!btn) continue;
+      if(!btn) return;
       const has = list && list.length > 0;
       btn.style.background = has ? 'var(--blue)' : '';
       btn.style.color = has ? 'var(--white)' : '';
       btn.textContent = has ? '📎 1' : '📎';
     } catch(e) {}
-  }
+  }));
 }
 
 // ══ DASHBOARD ════════════════════════════════════════
