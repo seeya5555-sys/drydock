@@ -365,6 +365,65 @@
     </div>
   </main></div>
 
+<!-- Generic 첨부파일 Modal (Class / Daily Log) -->
+<div class="modal-overlay" id="m-gen-attach">
+  <div class="modal" style="width:460px">
+    <div class="modal-hdr">
+      <div class="modal-title">📎 첨부파일</div>
+      <button class="modal-x" onclick="closeM('m-gen-attach')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ga-reftype">
+      <input type="hidden" id="ga-refid">
+      <label style="display:block;cursor:pointer;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:8px;padding:12px;font-size:13px;font-weight:600">
+          <span>📂</span> 파일 선택 / 업로드
+        </div>
+        <input type="file" style="display:none" onchange="uploadGenAttach(this)">
+      </label>
+      <div id="ga-file-area">
+        <div style="text-align:center;padding:24px;color:var(--txt-m);font-size:13px">
+          <div style="font-size:32px;margin-bottom:8px">📂</div>
+          첨부된 파일이 없습니다
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeM('m-gen-attach')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Job 첨부파일 Modal -->
+<div class="modal-overlay" id="m-job-attach">
+  <div class="modal" style="width:460px">
+    <div class="modal-hdr">
+      <div class="modal-title" id="ja-title">📎 첨부파일</div>
+      <button class="modal-x" onclick="closeM('m-job-attach')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ja-jobid">
+      <!-- 업로드 버튼 -->
+      <label style="display:block;cursor:pointer;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:8px;padding:12px;font-size:13px;font-weight:600">
+          <span>📂</span> 파일 선택 / 교체 업로드
+        </div>
+        <input type="file" style="display:none" onchange="uploadJobAttach(this)">
+      </label>
+      <!-- 파일 정보 영역 -->
+      <div id="ja-file-area">
+        <div style="text-align:center;padding:24px;color:var(--txt-m);font-size:13px">
+          <div style="font-size:32px;margin-bottom:8px">📂</div>
+          첨부된 파일이 없습니다
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeM('m-job-attach')">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- xlsx 업로드 Modal -->
 <div class="modal-overlay" id="m-tracking-xlsx">
   <div class="modal" style="width:480px">
