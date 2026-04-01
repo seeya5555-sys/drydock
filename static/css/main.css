@@ -334,6 +334,8 @@ tbody td { padding:10px 14px; font-size:13px; color:var(--txt-b); vertical-align
   transition:all .12s;
 }
 .edit-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-light); }
+.attach-btn { padding:4px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px; background:var(--white); color:var(--txt-s); cursor:pointer; margin-left:4px; transition:all .15s; }
+.attach-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-light); }
 .remark-cell { max-width:280px; font-size:12px; color:var(--txt-s); line-height:1.5; white-space:pre-line; word-break:break-word; }
 .remark-cell > div { display:flex; align-items:flex-start; }
 .remark-entry { line-height:1.6; min-height:18px; }
