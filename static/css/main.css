@@ -813,3 +813,53 @@ textarea.form-ctrl { min-height:80px; resize:vertical; line-height:1.5; }
   .vnav-btn   { font-size: 11px; padding: 10px 8px; }
   .vb-name    { font-size: 20px; }
 }
+
+/* ══ PRINT STYLES ═══════════════════════════════════════ */
+@media print {
+  /* 색상 강제 출력 */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* 화면 UI 전부 숨김 */
+  .fleet-list, .page-fleet,
+  .vnav, .vessel-banner,
+  .modal-overlay,
+  .btn-back, .btn-edit, .btn-sec,
+  .add-btn, .upload-btn, .edit-btn, .attach-btn,
+  .j-toolbar, .c-toolbar, .d-toolbar,
+  #j-add-row-btn,
+  .toast-wrap,
+  .g-chips
+  { display: none !important; }
+
+  /* 현재 탭만 표시 */
+  .page { display: none !important; }
+  .page.active { display: block !important; }
+
+  /* body/html 기본 */
+  body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
+  #page-vessel { padding: 0 !important; }
+  main { padding: 8px !important; max-width: 100% !important; }
+
+  /* 일반 탭 (Portrait): 화면 너비에 맞게 */
+  @page { size: A4 portrait; margin: 8mm; }
+  body { width: 100% !important; }
+  table { width: 100% !important; table-layout: auto !important; font-size: 10px !important; border-collapse: collapse !important; }
+  th, td { padding: 3px 5px !important; font-size: 10px !important; }
+  tr { page-break-inside: avoid !important; }
+
+  /* 모바일 레이아웃 무효화 - 항상 데스크탑 테이블 */
+  table { display: table !important; }
+  thead { display: table-header-group !important; }
+  tbody { display: table-row-group !important; }
+  tr { display: table-row !important; }
+  th, td { display: table-cell !important; }
+  td[data-label]::before { content: none !important; display: none !important; }
+
+  /* Gantt 탭 (Landscape): 전체 일정 한 페이지 */
+  html.print-gantt @page { size: A4 landscape; margin: 6mm; }
+  html.print-gantt #vt-gantt { overflow: visible !important; }
+  html.print-gantt #vt-gantt main { overflow: visible !important; padding: 0 !important; }
+  html.print-gantt .gantt-outer { overflow: visible !important; }
+  html.print-gantt #g-wrap { overflow: visible !important; }
+  html.print-gantt #g-wrap > div { transform-origin: top left !important; }
+}
