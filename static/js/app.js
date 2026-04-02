@@ -71,8 +71,14 @@ async function persist(key, data){
       const res = await apiFetch(`${API}/vessels/${VID}/jobs/bulk`,'PUT',data);
       FLEET[VID].jobs = res.map(dbJ);
     }
-    else if(key==='class') await apiFetch(`${API}/vessels/${VID}/class_items/bulk`,'PUT',data);
-    else if(key==='disc')  await apiFetch(`${API}/vessels/${VID}/discussions/bulk`,'PUT',data);
+    else if(key==='class'){
+      const res = await apiFetch(`${API}/vessels/${VID}/class_items/bulk`,'PUT',data);
+      if(Array.isArray(res)) FLEET[VID].classItems = res.map(dbC);
+    }
+    else if(key==='disc'){
+      const res = await apiFetch(`${API}/vessels/${VID}/discussions/bulk`,'PUT',data);
+      if(Array.isArray(res)) FLEET[VID].discussions = res.map(dbD);
+    }
     setSS('synced');
   }catch(e){setSS('error');toast('저장 실패: '+e.message,true);}
 }
@@ -181,6 +187,78 @@ function openVessel(id){
   setBreadcrumb([{label:'FLEET OVERVIEW',fn:'goFleet()'},{label:FLEET[id].info.name}]);
 }
 function goFleet(){VID=null;renderFleet();}
+
+function printCurrentTab() {
+  const activeBtn = document.querySelector('.vnav-btn.active');
+  const isGantt = activeBtn && activeBtn.textContent.trim().includes('Gantt');
+
+  const old = document.getElementById('print-orientation');
+  if(old) old.remove();
+
+  const style = document.createElement('style');
+  style.id = 'print-orientation';
+
+  if(isGantt) {
+    document.documentElement.classList.add('print-gantt');
+    style.innerHTML = '@media print { @page { size: A4 landscape; margin: 6mm; } }';
+    document.head.appendChild(style);
+
+    const gWrap = document.getElementById('g-wrap');
+    const inner = gWrap ? gWrap.firstElementChild : null;
+    if(inner) {
+      const contentW = inner.scrollWidth;
+      const pageW = Math.floor((297 - 12) / 25.4 * 96);
+      if(contentW > pageW) {
+        const scale = pageW / contentW;
+        inner.style.transformOrigin = 'top left';
+        inner.style.transform = `scale(${scale})`;
+        const origH = inner.scrollHeight;
+        inner.style.marginBottom = `-${Math.round(origH * (1 - scale))}px`;
+        inner.dataset.printScaled = '1';
+      }
+    }
+    window.print();
+    setTimeout(cleanup, 500);
+  } else {
+    document.documentElement.classList.remove('print-gantt');
+
+    // 뷰포트를 1400px로 강제 변경 → 데스크탑 레이아웃 유지
+    const vp = document.querySelector('meta[name="viewport"]');
+    const origVp = vp ? vp.content : '';
+    if(vp) vp.content = 'width=1400';
+
+    // A4 portrait에 1400px 맞추기
+    style.innerHTML = `@media print {
+      @page { size: A4 portrait; margin: 8mm; }
+      body { zoom: ${(210 - 16) / (1400 / (96 / 25.4))}% !important; }
+    }`;
+    document.head.appendChild(style);
+
+    // 뷰포트 적용 대기 후 프린트
+    setTimeout(() => {
+      window.print();
+      // 복구
+      setTimeout(() => {
+        if(vp) vp.content = origVp;
+        cleanup();
+      }, 500);
+    }, 300);
+  }
+
+  function cleanup() {
+    document.documentElement.classList.remove('print-gantt');
+    const s = document.getElementById('print-orientation');
+    if(s) s.remove();
+    const gWrap = document.getElementById('g-wrap');
+    const inner = gWrap ? gWrap.firstElementChild : null;
+    if(inner && inner.dataset.printScaled) {
+      inner.style.transform = '';
+      inner.style.transformOrigin = '';
+      inner.style.marginBottom = '';
+      delete inner.dataset.printScaled;
+    }
+  }
+}
 
 function showTab(tab,btn){
   document.querySelectorAll('.vnav-btn').forEach(b=>b.classList.remove('active'));
@@ -381,6 +459,9 @@ const PRI_CONFIG = {
   'Urgent':   { cls:'pri-urgent',   label:'🔶 Urgent' },
   'Critical': { cls:'pri-critical', label:'🔴 Critical' },
   'On Hold':  { cls:'pri-onhold',   label:'⏸ On Hold' },
+  'Low':      { cls:'pri-normal',   label:'Low' },
+  'Medium':   { cls:'pri-urgent',   label:'Medium' },
+  'High':     { cls:'pri-critical', label:'High' },
 };
 function priorityBadge(pri) {
   const cfg = PRI_CONFIG[pri] || PRI_CONFIG['Normal'];
@@ -462,12 +543,148 @@ function buildJFilters(){
   const vendors=[...new Set(jobs.map(j=>j.vendor).filter(Boolean))].sort();
   document.getElementById('j-vf').innerHTML='<option value="">All Vendors</option>'+vendors.map(v=>`<option>${v}</option>`).join('');
 }
+// ══ JOB HIERARCHY ════════════════════════════════════
+// Job No. 기반 계층 구조 파싱
+// 예: 22 → 22.6 → 22.6.1 / R9 / S1 → S1.1 → S1.1B
+
+const jobCollapsed = new Set(); // 접힌 항목의 number 저장
+
+// Job No.의 부모 번호 반환
+// 22.6.1 → 22.6, 22.6 → 22, 22 → null
+// R → null, R1 → R, R1.1 → R1, R1.1.2 → R1.1
+// S1.1 → S1, S1.1B → S1.1, S1 → S, S → null
+function getParentNumber(num) {
+  if(!num) return null;
+  const s = String(num).trim();
+
+  // 알파벳 접두사 추출 (R, P, S, ST 등)
+  const prefixMatch = s.match(/^([A-Za-z]+)/);
+  const prefix = prefixMatch ? prefixMatch[1] : '';
+  const rest = s.slice(prefix.length);
+
+  // rest가 없으면 (예: "R", "P") → 부모 없음
+  if(!rest) return null;
+
+  // 마지막 알파벳 suffix 제거 (예: S1.1B → S1.1, R1A → R1)
+  const alphaMatch = rest.match(/^([\d.]+)([A-Za-z]+)$/);
+  if(alphaMatch) {
+    const parent = prefix + alphaMatch[1];
+    return parent;
+  }
+
+  // 마지막 .숫자 제거 (예: R1.1.2 → R1.1, 22.6.1 → 22.6)
+  const dotMatch = rest.match(/^(.+)\.\d+[A-Za-z]*$/);
+  if(dotMatch) {
+    return prefix + dotMatch[1];
+  }
+
+  // 단독 숫자 (예: R1 → R, S1 → S, 22 → null)
+  if(/^\d+$/.test(rest)) {
+    // prefix있으면 prefix가 부모, 없으면 null
+    return prefix ? prefix : null;
+  }
+
+  return null;
+}
+
+// jobs 배열을 계층 트리로 변환 (flat 배열, depth/parent 정보 추가)
+function buildJobTree(jobs) {
+  // number → job 맵
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+
+  // 각 job에 depth, parentNumber 계산
+  return jobs.map(j => {
+    let depth = 0;
+    let p = j.number;
+    while(true) {
+      const parent = getParentNumber(p);
+      if(!parent) break;
+      if(numMap[parent]) { depth++; p = parent; } else break;
+    }
+    return { ...j, _depth: depth, _parentNum: getParentNumber(j.number) };
+  });
+}
+
+// 계층 정렬: 부모 바로 아래 자식들이 오도록
+function sortJobTree(jobs) {
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+
+  const result = [];
+  const visited = new Set();
+
+  function insertWithChildren(job) {
+    if(visited.has(job.number)) return;
+    visited.add(job.number);
+    result.push(job);
+    // 이 job의 직접 자식들 (parentNumber === job.number)
+    const children = jobs
+      .filter(j => getParentNumber(j.number) === job.number)
+      .sort((a,b) => pNum(a.number) - pNum(b.number));
+    children.forEach(c => insertWithChildren(c));
+  }
+
+  // 루트 항목부터 (parentNumber가 맵에 없는 것)
+  const roots = jobs
+    .filter(j => {
+      if(!j.number) return true; // 번호 없는 것도 루트로
+      const p = getParentNumber(j.number);
+      return !p || !numMap[p];
+    })
+    .sort((a,b) => {
+      if(!a.number) return 1;  // 번호 없는 것은 맨 뒤
+      if(!b.number) return -1;
+      return pNum(a.number) - pNum(b.number);
+    });
+
+  roots.forEach(r => insertWithChildren(r));
+
+  // 혹시 누락된 항목 추가
+  jobs.forEach(j => { if(!visited.has(j.number)) result.push(j); });
+
+  return result;
+}
+
+// 접힌 상태에서 보여야 할 항목인지 확인
+function isJobVisible(job, jobs) {
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+
+  let p = getParentNumber(job.number);
+  while(p) {
+    if(jobCollapsed.has(p)) return false;
+    p = getParentNumber(p);
+    if(p && !numMap[p]) break;
+  }
+  return true;
+}
+
+// 해당 job의 직접 자식이 있는지
+function hasChildren(num, jobs) {
+  return jobs.some(j => getParentNumber(j.number) === num);
+}
+
+function toggleJobCollapse(num) {
+  if(jobCollapsed.has(num)) jobCollapsed.delete(num);
+  else jobCollapsed.add(num);
+  renderJobs();
+}
+
+function toggleGanttCollapse(num) {
+  if(jobCollapsed.has(num)) jobCollapsed.delete(num);
+  else jobCollapsed.add(num);
+  buildGantt(null, null, null);
+}
+
 function renderJobs(){
   if(!VID)return;
   const jobs=FLEET[VID].jobs||[];
   const q=document.getElementById('j-q').value.toLowerCase();
   const sf=document.getElementById('j-sf').value,cf=document.getElementById('j-cf').value,pf=document.getElementById('j-pf').value;
   const vf=document.getElementById('j-vf').value;
+
+  // 필터 적용
   let fil=jobs.filter(j=>{
     if(q&&!j.description.toLowerCase().includes(q)&&!j.number.includes(q)&&!(j.vendor||'').toLowerCase().includes(q))return false;
     if(sf&&j.section!==sf)return false;if(cf&&j.category!==cf)return false;
@@ -475,20 +692,32 @@ function renderJobs(){
     if(pf==='ns'&&j.completion>0)return false;if(pf==='ip'&&(j.completion===0||j.completion>=100))return false;
     if(pf==='done'&&j.completion<100)return false;return true;
   });
-  fil.sort((a,b)=>{
-    let av=a[sKey], bv=b[sKey];
-    if(sKey==='number'){av=pNum(av);bv=pNum(bv);}
-    if(sKey==='_id'){av=+(a._id||0);bv=+(b._id||0);}
-    return av<bv?-sDir:av>bv?sDir:0;
-  });
+
+  // 검색/필터 중이면 계층 정렬만, 아니면 트리 구조 표시
+  const isFiltering = q||sf||cf||vf||pf;
+  if(isFiltering){
+    fil.sort((a,b)=>{
+      let av=a[sKey], bv=b[sKey];
+      if(sKey==='number'){av=pNum(av);bv=pNum(bv);}
+      if(sKey==='_id'){av=+(a._id||0);bv=+(b._id||0);}
+      return av<bv?-sDir:av>bv?sDir:0;
+    });
+  } else {
+    fil = sortJobTree(fil);
+  }
+
   document.getElementById('j-cnt').textContent=`${fil.length} / ${jobs.length} jobs`;
   const tb=document.getElementById('j-body');
   if(!fil.length){tb.innerHTML='<tr><td colspan="10" class="empty-state">No jobs match the filters</td></tr>';return;}
 
-  const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ETC'];
+  const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ETC','REPAIR','STORE','SPARE'];
   const CATS=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
 
-  tb.innerHTML=fil.map(j=>{
+  // 계층 트리 미리 계산 (depth 캐시)
+  const treeMap = {};
+  buildJobTree(fil).forEach(j => { treeMap[j._id] = j._depth || 0; });
+
+  tb.innerHTML=fil.filter(j => isFiltering || isJobVisible(j, fil)).map(j=>{
     const ri=jobs.indexOf(j);
     const livePct=calcProgress(j.start_date,j.end_date);
     const pct=livePct!==null?livePct:(j.completion||0);
@@ -501,8 +730,26 @@ function renderJobs(){
     const secOpts=SECTIONS.map(s=>`<option${s===j.section?' selected':''}>${s}</option>`).join('');
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
 
-    return`<tr data-ri="${ri}">
-      <td data-label="No."><span class="cell-edit" onclick="startEdit(this,${ri},'number','text')">${j.number||'—'}</span></td>
+    // 계층 들여쓰기
+    const depth = isFiltering ? 0 : (treeMap[j._id] || 0);
+    const indent = depth * 20;
+    const isCollapsed = jobCollapsed.has(j.number);
+    const hasKids = hasChildren(j.number, fil);
+    const toggleBtn = hasKids
+      ? `<span onclick="toggleJobCollapse('${j.number}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);margin-right:4px;user-select:none;flex-shrink:0">${isCollapsed?'▶':'▼'}</span>`
+      : `<span style="display:inline-block;width:13px;flex-shrink:0"></span>`;
+    const numStyle = depth===0
+      ? 'font-weight:700;color:var(--navy)'
+      : depth===1 ? 'font-weight:600;color:var(--blue)' : 'color:var(--txt-s)';
+    const rowBg = depth===0 ? 'var(--bg-panel)' : 'var(--bg-white)';
+
+    return`<tr data-ri="${ri}" style="background:${rowBg}">
+      <td data-label="No." style="padding-left:${8+indent}px">
+        <div style="display:flex;align-items:center">
+          ${toggleBtn}
+          <span class="cell-edit" onclick="startEdit(this,${ri},'number','text')" style="${numStyle};font-family:'IBM Plex Mono',monospace;font-size:12px">${j.number||'—'}</span>
+        </div>
+      </td>
       <td data-label="Section"><span class="cell-edit" onclick="startEditSelect(this,${ri},'section',[${SECTIONS.map(s=>`'${s}'`).join(',')}])">
         <span style="font-size:12px;color:var(--txt-s)">${j.section||'—'}</span>
       </span></td>
@@ -594,19 +841,7 @@ function startEditSelect(span, ri, field, options) {
 async function addInlineRow() {
   if(!VID) return;
 
-  // 1. API로 새 Job 생성
-  setSS('saving');
-  try {
-    const newJob = await apiFetch(`${API}/vessels/${VID}/jobs`, 'POST', {
-      number:'', section:'GENERAL', category:'Shipyard',
-      description:'', vendor:'', budget:0, consumption:0,
-      start_date:'', end_date:'', completion:0, remarks:[]
-    });
-    FLEET[VID].jobs = [...(FLEET[VID].jobs||[]), dbJ(newJob)];
-    setSS('synced');
-  } catch(e){ setSS('error'); toast('추가 실패: '+e.message, true); return; }
-
-  // 2. 필터 초기화 + 정렬을 id순(입력순)으로 변경 → 새 행이 맨 아래
+  // 필터 초기화
   const qEl = document.getElementById('j-q');
   const sfEl = document.getElementById('j-sf');
   const cfEl = document.getElementById('j-cf');
@@ -617,23 +852,61 @@ async function addInlineRow() {
   if(cfEl) cfEl.value = '';
   if(vfEl) vfEl.value = '';
   if(stEl) stEl.value = '';
-  sKey = '_id'; sDir = 1;  // id 순으로 정렬 → 새 행이 맨 아래
+  sKey = 'number'; sDir = 1;
 
   buildJFilters();
   renderJobs();
 
-  // 3. 맨 아래로 스크롤 + 새 행의 No. 셀에 커서
-  setTimeout(() => {
-    const rows = document.querySelectorAll('#j-body tr');
-    const lastRow = rows[rows.length - 1];
-    if(lastRow) {
-      lastRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const numCell = lastRow.querySelector('td:first-child .cell-edit');
-      if(numCell) numCell.click();
-    }
-  }, 150);
+  // 테이블 맨 아래에 임시 입력 행 추가 (DB 저장 없음)
+  const tb = document.getElementById('j-body');
+  const tempTr = document.createElement('tr');
+  tempTr.id = 'inline-temp-row';
+  tempTr.style.background = 'var(--blue-light)';
+  tempTr.innerHTML = `
+    <td style="padding:6px 8px">
+      <input id="inline-num-inp" class="inline-input" type="text" placeholder="No." style="width:70px">
+    </td>
+    <td colspan="9" style="padding:6px 8px;color:var(--txt-m);font-size:12px">번호 입력 후 Enter — Esc로 취소</td>`;
+  tb.appendChild(tempTr);
 
-  toast('새 행이 추가됐습니다');
+  const inp = document.getElementById('inline-num-inp');
+  inp.focus();
+  tempTr.scrollIntoView({ behavior:'smooth', block:'center' });
+
+  inp.addEventListener('keydown', async e => {
+    if(e.key === 'Escape') {
+      tempTr.remove();
+      return;
+    }
+    if(e.key === 'Enter') {
+      const num = inp.value.trim();
+      if(!num) { tempTr.remove(); return; }
+      tempTr.remove();
+
+      // DB에 저장
+      setSS('saving');
+      try {
+        const newJob = await apiFetch(`${API}/vessels/${VID}/jobs`, 'POST', {
+          number: num, section:'GENERAL', category:'Shipyard',
+          description:'', vendor:'', budget:0, consumption:0,
+          start_date:'', end_date:'', completion:0, remarks:[]
+        });
+        FLEET[VID].jobs = [...(FLEET[VID].jobs||[]), dbJ(newJob)];
+        setSS('synced');
+      } catch(err){ setSS('error'); toast('추가 실패: '+err.message, true); return; }
+
+      sKey = 'number'; sDir = 1;
+      buildJFilters(); renderJobs();
+      toast('Job 추가됐습니다');
+    }
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(() => {
+      const row = document.getElementById('inline-temp-row');
+      if(row) row.remove();
+    }, 200);
+  });
 }
 function sortJ(k){sKey===k?sDir*=-1:(sKey=k,sDir=1);renderJobs();}
 function pNum(n){
@@ -817,11 +1090,11 @@ function buildGantt(sf,cf,btn){
   const nd=Math.max(28,Math.ceil((de-ds)/86400000)+4);
   const dates=Array.from({length:nd},(_,i)=>new Date(ds.getTime()+i*86400000));
   const today=new Date();const DW=38;
-  const jobs=(FLEET[VID].jobs||[]).filter(j=>{
+  const jobs = sortJobTree((FLEET[VID].jobs||[]).filter(j=>{
     if(sf && j.section!==sf) return false;
     if(cf && j.category!==cf) return false;
     return true;
-  }).sort((a,b)=>pNum(a.number)-pNum(b.number));
+  }));
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // Find today's column index for absolute line overlay
@@ -856,15 +1129,30 @@ function buildGantt(sf,cf,btn){
     }
   });
   html+=`</div></div>`;
+  // depth 캐시
+  const ganttTreeMap = {};
+  buildJobTree(jobs).forEach(j => { ganttTreeMap[j._id] = j._depth || 0; });
+
   jobs.forEach((j,ji)=>{
+    if(!isJobVisible(j, jobs)) return;
+    const depth = ganttTreeMap[j._id] || 0;
+    const indent = depth * 16;
+    const isCollapsed = jobCollapsed.has(j.number);
+    const hasKids = hasChildren(j.number, jobs);
+    const toggleBtn = hasKids
+      ? `<span onclick="toggleGanttCollapse('${j.number}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">${isCollapsed?'▶':'▼'}</span>`
+      : `<span style="display:inline-block;width:13px;flex-shrink:0"></span>`;
+
     let bs=-1,bw=0;
     if(j.start_date&&j.start_date!==''){const sd=new Date(j.start_date),ed=j.end_date&&j.end_date!==''?new Date(j.end_date):new Date(sd.getTime()+Math.max(1,+j.duration||1)*86400000);bs=Math.round((sd-ds)/86400000);bw=Math.max(1,Math.round((ed-sd)/86400000)+1);}
     const pct=Math.min(100, calcProgress(j.start_date, j.end_date) ?? (+j.completion||0));
     const barCol=pct>=100?'var(--green)':pct>0?'linear-gradient(90deg,var(--navy),var(--blue))':'#cbd5e1';
     const rowBg=ji%2===0?'var(--bg-white)':'var(--bg-panel)';
+    const numStyle = depth===0 ? 'font-weight:700;color:var(--navy)' : depth===1 ? 'font-weight:600;color:var(--blue)' : 'color:var(--txt-s)';
     html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:36px;background:${rowBg}" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='${rowBg}'">
-      <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px;border-right:2px solid var(--border);display:flex;align-items:center;gap:8px;overflow:hidden;">
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600;flex-shrink:0;min-width:32px">${j.number}</span>
+      <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px 6px ${8+indent}px;border-right:2px solid var(--border);display:flex;align-items:center;gap:4px;overflow:hidden;">
+        ${toggleBtn}
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;${numStyle};flex-shrink:0;min-width:28px">${j.number}</span>
         <span style="font-size:12px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;flex:1" title="${j.description}">${j.description}</span>
       </div>
       <div style="display:flex;align-items:center;flex:1;position:relative;">`;
@@ -1244,28 +1532,81 @@ function renderDisc(){
     if(pf&&(d.priority||'Normal')!==pf)return false;
     return true;
   });
+
+  // 최초 렌더 시 모든 날짜 자동 접기
+  if(discCollapsed.size === 0 && fil.length > 0) {
+    const dates = [...new Set(fil.map(d => d.date || '(날짜 없음)'))];
+    dates.forEach(d => discCollapsed.add(d));
+  }
   document.getElementById('d-cnt').textContent=`${fil.length} items`;
   const tb=document.getElementById('d-body');
   if(!fil.length){tb.innerHTML='<tr><td colspan="9" class="empty-state">No discussion items found</td></tr>';return;}
-  tb.innerHTML=fil.map(d=>{
-    const ri=items.indexOf(d);
-    const stCls=d.status==='Close'?'c-closed':'c-open';
-    const stLbl=d.status==='Close'?'Closed':'Open';
-    const priHtml=priorityBadge(d.priority);
-    return`<tr>
-      <td data-label="No."><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
-      <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
-      <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
-      <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
-      <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:200px;white-space:pre-line">${d.description||'—'}</span></td>
-      <td data-label="Action"><div style="font-size:12px;max-width:180px;cursor:pointer" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
-      <td data-label="Priority">${priHtml}</td>
-      <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
-        <span class="c-badge ${stCls}">${stLbl}</span>
-      </span></td>
-      <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button><button class="attach-btn" id="dattbtn-${d._id}" onclick="openGenAttach('disc',${d._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'📎 1':'📎'}</button></td>
+
+  // 날짜별 그룹핑
+  const isFiltering = document.getElementById('d-q').value || document.getElementById('d-df').value ||
+                      document.getElementById('d-sf').value || document.getElementById('d-pf').value;
+
+  if(isFiltering) {
+    // 필터 중이면 그냥 평면 표시
+    tb.innerHTML=fil.map(d=>_discRow(d, items)).join('');
+    return;
+  }
+
+  // 날짜별 그룹화
+  const groups = {};
+  const groupOrder = [];
+  fil.forEach(d => {
+    const key = d.date || '(날짜 없음)';
+    if(!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(d);
+  });
+
+  let html = '';
+  groupOrder.forEach(dateKey => {
+    const isCollapsed = discCollapsed.has(dateKey);
+    const count = groups[dateKey].length;
+    // 날짜 헤더 행
+    html += `<tr class="disc-date-header" style="background:var(--navy);cursor:pointer" onclick="toggleDiscDate('${dateKey}')">
+      <td colspan="9" style="padding:8px 14px;color:#fff;font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace;user-select:none">
+        <span style="margin-right:8px;font-size:10px">${isCollapsed?'▶':'▼'}</span>
+        ${dateKey}
+        <span style="margin-left:8px;font-size:11px;opacity:.7;font-weight:400">${count} item${count>1?'s':''}</span>
+      </td>
     </tr>`;
-  }).join('');
+    // 하위 항목들
+    if(!isCollapsed) {
+      groups[dateKey].forEach(d => { html += _discRow(d, items); });
+    }
+  });
+  tb.innerHTML = html;
+}
+
+const discCollapsed = new Set();
+
+function toggleDiscDate(dateKey) {
+  if(discCollapsed.has(dateKey)) discCollapsed.delete(dateKey);
+  else discCollapsed.add(dateKey);
+  renderDisc();
+}
+
+function _discRow(d, items) {
+  const ri = items.indexOf(d);
+  const stCls=d.status==='Close'?'c-closed':'c-open';
+  const stLbl=d.status==='Close'?'Closed':'Open';
+  const priHtml=priorityBadge(d.priority);
+  return`<tr style="background:var(--bg-white)">
+    <td data-label="No."><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
+    <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
+    <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
+    <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
+    <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:200px;white-space:pre-line">${d.description||'—'}</span></td>
+    <td data-label="Action"><div style="font-size:12px;max-width:180px;cursor:pointer" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
+    <td data-label="Priority">${priHtml}</td>
+    <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
+      <span class="c-badge ${stCls}">${stLbl}</span>
+    </span></td>
+    <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button><button class="attach-btn" id="dattbtn-${d._id}" onclick="openGenAttach('disc',${d._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'📎 1':'📎'}</button></td>
+  </tr>`;
 }
 
 function startEditD(span, ri, field, type){
@@ -1303,13 +1644,17 @@ function addDiscRow(){
   if(!VID)return;
   if(!FLEET[VID].discussions)FLEET[VID].discussions=[];
   const items=FLEET[VID].discussions;
-  items.push({no:String(items.length+1),date:new Date().toISOString().slice(0,10),time_of_day:'',item:'',description:'',action:'',status:'Open'});
-  persist('disc',items);
-  buildDDF();renderDisc();
-  requestAnimationFrame(()=>{
-    const rows=document.querySelectorAll('#d-body tr');
-    const last=rows[rows.length-1];
-    if(last){const cells=last.querySelectorAll('.cell-edit');if(cells[1])cells[1].click();}
+  const today = new Date().toISOString().slice(0,10);
+  items.push({no:String(items.length+1),date:today,time_of_day:'',item:'',description:'',action:'',status:'Open'});
+  persist('disc',items).then(()=>{
+    // 오늘 날짜 그룹 펼치기
+    discCollapsed.delete(today);
+    buildDDF();renderDisc();
+    requestAnimationFrame(()=>{
+      const rows=document.querySelectorAll('#d-body tr:not(.disc-date-header)');
+      const last=rows[rows.length-1];
+      if(last){const cells=last.querySelectorAll('.cell-edit');if(cells[1])cells[1].click();}
+    });
   });
   toast('새 로그가 추가됐습니다. 셀을 클릭해서 바로 입력하세요.');
 }
@@ -1496,10 +1841,11 @@ const TRACKING_CFG = {
 };
 
 const PRI_OPTS  = ['Normal','Urgent','Critical','On Hold'];
+const PRI_OPTS_LMH = ['Low','Medium','High'];
 const STAT_OPTS = ['Not Started','In Progress','Completed','On Hold'];
 
 // Priority/Status 옵션 인덱스로 전달 (따옴표 충돌 방지)
-const TRACKING_OPTS = { pri: PRI_OPTS, stat: STAT_OPTS };
+const TRACKING_OPTS = { pri: PRI_OPTS, pri_lmh: PRI_OPTS_LMH, stat: STAT_OPTS };
 
 // 데이터 로드 + 렌더
 async function renderTracking(key){
@@ -1529,7 +1875,8 @@ function _renderTrackingTable(key){
 
       // Priority 배지
       if(col === cfg.priCol){
-        return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','pri')">${priorityBadge(v||'Normal')}</span></td>`;
+        const priKey = (key === 'steel' || key === 'outfit') ? 'pri_lmh' : 'pri';
+        return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${priKey}')">${priorityBadge(v||'Normal')}</span></td>`;
       }
       // Status 배지
       if(col === cfg.statCol){
