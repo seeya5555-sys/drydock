@@ -217,35 +217,15 @@ function printCurrentTab() {
         inner.dataset.printScaled = '1';
       }
     }
-    window.print();
-    setTimeout(cleanup, 500);
   } else {
     document.documentElement.classList.remove('print-gantt');
-
-    // 뷰포트를 1400px로 강제 변경 → 데스크탑 레이아웃 유지
-    const vp = document.querySelector('meta[name="viewport"]');
-    const origVp = vp ? vp.content : '';
-    if(vp) vp.content = 'width=1400';
-
-    // A4 portrait에 1400px 맞추기
-    style.innerHTML = `@media print {
-      @page { size: A4 portrait; margin: 8mm; }
-      body { zoom: ${(210 - 16) / (1400 / (96 / 25.4))}% !important; }
-    }`;
+    style.innerHTML = '@media print { @page { size: A4 portrait; margin: 8mm; } }';
     document.head.appendChild(style);
-
-    // 뷰포트 적용 대기 후 프린트
-    setTimeout(() => {
-      window.print();
-      // 복구
-      setTimeout(() => {
-        if(vp) vp.content = origVp;
-        cleanup();
-      }, 500);
-    }, 300);
   }
 
-  function cleanup() {
+  window.print();
+
+  setTimeout(() => {
     document.documentElement.classList.remove('print-gantt');
     const s = document.getElementById('print-orientation');
     if(s) s.remove();
@@ -257,7 +237,7 @@ function printCurrentTab() {
       inner.style.marginBottom = '';
       delete inner.dataset.printScaled;
     }
-  }
+  }, 500);
 }
 
 function showTab(tab,btn){
