@@ -941,14 +941,29 @@ async function addInlineRow() {
 function sortJ(k){sKey===k?sDir*=-1:(sKey=k,sDir=1);renderJobs();}
 function pNum(n){
   const s = String(n||'').trim();
-  const prefixMatch = s.match(/^([A-Za-z]*)/);
+  // 알파벳 접두사 (R, S, P 등)
+  const prefixMatch = s.match(/^([A-Za-z]+)/);
   const prefix = prefixMatch ? prefixMatch[1].toUpperCase() : '';
   const rest = s.slice(prefix.length);
-  const parts = rest.replace('-', '.').split('.');
-  const num = (parseInt(parts[0])||0)*1000 + (parseInt(parts[1])||0);
-  // 알파벳 접두사 있으면 앞에(음수 영역), 없으면(숫자만) 뒤에(양수 영역)
-  if(prefix) return (prefix.charCodeAt(0) - 64) * 100000 + num;
-  return 10000000 + num;
+
+  // rest를 점/하이픈으로 분리 후 각 파트에서 숫자/suffix 추출
+  // 예: '14.2' → ['14','2'], '1A' → ['1A'], '1.1B' → ['1','1B']
+  const dotParts = rest.replace('-', '.').split('.');
+
+  let num = 0;
+  let multiplier = 1000000;
+  for(let i = 0; i < Math.min(dotParts.length, 3); i++) {
+    const part = dotParts[i];
+    const numMatch = part.match(/^(\d*)/);
+    const suffixMatch = part.match(/([A-Za-z]+)$/);
+    const partNum = numMatch ? (parseInt(numMatch[1]) || 0) : 0;
+    const partSuffix = suffixMatch ? (suffixMatch[1].toUpperCase().charCodeAt(0) - 64) : 0;
+    num += (partNum * 100 + partSuffix) * multiplier;
+    multiplier = Math.floor(multiplier / 10000);
+  }
+
+  if(prefix) return (prefix.charCodeAt(0) - 64) * 100000000000 + num;
+  return 1000000000000 + num;
 }
 
 function openJobModal(idx){
