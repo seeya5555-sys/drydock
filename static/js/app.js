@@ -583,18 +583,15 @@ function getParentNumber(num) {
 
 // jobs 배열을 계층 트리로 변환 (flat 배열, depth/parent 정보 추가)
 function buildJobTree(jobs) {
-  // number → job 맵
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
 
-  // 각 job에 depth, parentNumber 계산
   return jobs.map(j => {
     let depth = 0;
-    let p = j.number;
-    while(true) {
-      const parent = getParentNumber(p);
-      if(!parent) break;
-      if(numMap[parent]) { depth++; p = parent; } else break;
+    let p = getParentNumber(j.number);
+    while(p) {
+      if(numMap[p]) { depth++; }
+      p = getParentNumber(p);
     }
     return { ...j, _depth: depth, _parentNum: getParentNumber(j.number) };
   });
@@ -608,33 +605,43 @@ function sortJobTree(jobs) {
   const result = [];
   const visited = new Set();
 
+  // 가장 가까운 실존 조상 찾기
+  function findNearestAncestor(num) {
+    let p = getParentNumber(num);
+    while(p) {
+      if(numMap[p]) return p;
+      p = getParentNumber(p);
+    }
+    return null;
+  }
+
   function insertWithChildren(job) {
     if(visited.has(job.number)) return;
     visited.add(job.number);
     result.push(job);
-    // 이 job의 직접 자식들 (parentNumber === job.number)
+    // 직접 자식 + 중간 부모가 없는 자손도 포함
     const children = jobs
-      .filter(j => getParentNumber(j.number) === job.number)
+      .filter(j => {
+        if(visited.has(j.number)) return false;
+        return findNearestAncestor(j.number) === job.number;
+      })
       .sort((a,b) => pNum(a.number) - pNum(b.number));
     children.forEach(c => insertWithChildren(c));
   }
 
-  // 루트 항목부터 (parentNumber가 맵에 없는 것)
+  // 루트: 실존 조상이 없는 항목
   const roots = jobs
     .filter(j => {
-      if(!j.number) return true; // 번호 없는 것도 루트로
-      const p = getParentNumber(j.number);
-      return !p || !numMap[p];
+      if(!j.number) return true;
+      return findNearestAncestor(j.number) === null;
     })
     .sort((a,b) => {
-      if(!a.number) return 1;  // 번호 없는 것은 맨 뒤
+      if(!a.number) return 1;
       if(!b.number) return -1;
       return pNum(a.number) - pNum(b.number);
     });
 
   roots.forEach(r => insertWithChildren(r));
-
-  // 혹시 누락된 항목 추가
   jobs.forEach(j => { if(!visited.has(j.number)) result.push(j); });
 
   return result;
@@ -654,9 +661,16 @@ function isJobVisible(job, jobs) {
   return true;
 }
 
-// 해당 job의 직접 자식이 있는지
+// 해당 job의 직접 자식이 있는지 (중간 부모 없는 자손 포함)
 function hasChildren(num, jobs) {
-  return jobs.some(j => getParentNumber(j.number) === num);
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+  function findNearestAncestor(n) {
+    let p = getParentNumber(n);
+    while(p) { if(numMap[p]) return p; p = getParentNumber(p); }
+    return null;
+  }
+  return jobs.some(j => j.number !== num && findNearestAncestor(j.number) === num);
 }
 
 function toggleJobCollapse(num) {
