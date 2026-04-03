@@ -818,11 +818,25 @@ function renderJobs(){
         <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed</div>
       </td>
       <td style="padding:10px 8px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden">
-            <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:4px"></div>
+        <div style="display:flex;gap:16px;align-items:center">
+          <div style="flex:1">
+            <div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:3px;letter-spacing:.4px">BUDGET VS CONSUMED</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
+                <div style="width:${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%;height:100%;background:var(--green);border-radius:3px"></div>
+              </div>
+              <span style="font-size:11px;font-weight:700;color:var(--green);min-width:32px">${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%</span>
+            </div>
           </div>
-          <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
+          <div style="flex:1">
+            <div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:3px;letter-spacing:.4px">PROGRESS</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
+                <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:3px"></div>
+              </div>
+              <span style="font-size:11px;font-weight:700;color:${pctCol};min-width:32px">${avgPct}%</span>
+            </div>
+          </div>
         </div>
       </td>
       <td colspan="3" style="padding:10px 8px"></td>
