@@ -977,7 +977,7 @@ function pNum(n){
   }
 
   if(prefix) return (prefix.charCodeAt(0) - 64) * 100000000000 + num;
-  return 1000000000000 + num;
+  return 10000000000000 + num;  // 숫자만 있는 경우 맨 뒤
 }
 
 function openJobModal(idx){
