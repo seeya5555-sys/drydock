@@ -758,10 +758,14 @@ function renderJobs(){
   // 상위항목 날짜 자동 계산
   computeParentDates(fil);
 
-  // Category 그룹 헤더 Set (접힘 상태 관리)
-  // 새 카테고리가 생기면 자동으로 접힘 상태로 추가
+  // Category/Section 그룹 기본 접힘 초기화
   const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
   allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
+  // Section 중분류도 기본 접힘
+  allCats.forEach(c => {
+    const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+    secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k+'_opened')) catCollapsed.add(k); });
+  });
 
   // 필터 중이면 그냥 평면 표시
   if(isFiltering) {
@@ -842,11 +846,86 @@ function renderJobs(){
       <td colspan="3" style="padding:10px 8px"></td>
     </tr>`;
 
-    // 하위 job 행들
+    // 하위 job 행들 - Section 중분류로 그룹화
     if(!isCollapsed) {
       const sorted = sortJobTree(catJobs);
-      sorted.filter(j => isJobVisible(j, sorted)).forEach(j => {
-        html += _jobRow(j, jobs, sorted, buildJobTree(sorted).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{}), 0, false);
+      const secTreeMap = buildJobTree(sorted).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{});
+
+      // Section별 그룹화
+      const secGroups = {};
+      const secOrder = [];
+      sorted.forEach(j => {
+        const sec = j.section || 'GENERAL';
+        if(!secGroups[sec]) { secGroups[sec] = []; secOrder.push(sec); }
+        secGroups[sec].push(j);
+      });
+
+      secOrder.forEach(sec => {
+        const secJobs = secGroups[sec];
+        if(!secJobs.length) return;
+        const secKey = cat + '::' + sec;
+        const isSecCollapsed = catCollapsed.has(secKey) && !catCollapsed.has(secKey+'_opened');
+
+        // Section 집계
+        const sBudget   = secJobs.reduce((s,j)=>s+(+j.budget||0),0);
+        const sConsumed = secJobs.reduce((s,j)=>s+(+j.consumption||0),0);
+        const sPcts = secJobs.map(j=>{
+          const es=j._autoStart||j.start_date, ee=j._autoEnd||j.end_date;
+          const lp=calcProgress(es,ee); return lp!==null?lp:(j.completion||0);
+        });
+        const sAvgPct = sPcts.length?Math.round(sPcts.reduce((a,b)=>a+b,0)/sPcts.length):0;
+        const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
+        const sConsPct = sBudget>0?Math.min(100,Math.round(sConsumed/sBudget*100)):0;
+
+        // Section 헤더 행 (파란색 계열)
+        html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}')">
+          <td colspan="2" style="padding:8px 14px 8px 28px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:9px;color:rgba(255,255,255,.7);user-select:none">${isSecCollapsed?'▶':'▼'}</span>
+              <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:.5px">${sec}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,.4)">${secJobs.length} jobs</span>
+            </div>
+          </td>
+          <td colspan="2" style="padding:8px"></td>
+          <td style="padding:8px;text-align:right">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${sBudget.toLocaleString()}</div>
+          </td>
+          <td style="padding:8px;text-align:right">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${sConsumed.toLocaleString()}</div>
+          </td>
+          <td colspan="2" style="padding:8px 14px">
+            <div style="display:flex;gap:16px">
+              <div style="min-width:130px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                  <div style="width:90px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;flex-shrink:0">
+                    <div style="width:${sConsPct}%;height:100%;background:var(--green);border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:11px;font-weight:600;color:var(--green)">${sConsPct}%</span>
+                </div>
+                <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL CONSUMED</div>
+              </div>
+              <div style="min-width:130px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                  <div style="width:90px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;flex-shrink:0">
+                    <div style="width:${sAvgPct}%;height:100%;background:${sPctCol};border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:11px;font-weight:600;color:${sPctCol}">${sAvgPct}%</span>
+                </div>
+                <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL PROGRESS</div>
+              </div>
+            </div>
+          </td>
+          <td colspan="2" style="padding:8px"></td>
+        </tr>`;
+
+        // Section 하위 job들
+        if(!isSecCollapsed) {
+          const secSorted = sortJobTree(secJobs);
+          const secJobTreeMap = buildJobTree(secSorted).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{});
+          secSorted.filter(j=>isJobVisible(j,secSorted)).forEach(j=>{
+            html += _jobRow(j, jobs, secSorted, secJobTreeMap, 0, false);
+          });
+        }
       });
     }
   });
@@ -862,6 +941,17 @@ function toggleCatGroup(cat) {
   } else {
     catCollapsed.add(cat);
     catCollapsed.delete(cat+'_opened');
+  }
+  renderJobs();
+}
+
+function toggleSecGroup(secKey) {
+  if(catCollapsed.has(secKey)) {
+    catCollapsed.delete(secKey);
+    catCollapsed.add(secKey+'_opened');
+  } else {
+    catCollapsed.add(secKey);
+    catCollapsed.delete(secKey+'_opened');
   }
   renderJobs();
 }
