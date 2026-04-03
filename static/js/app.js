@@ -246,7 +246,21 @@ function showTab(tab,btn){
   if(btn)btn.classList.add('active');
   const el=document.getElementById('vt-'+tab);if(el)el.classList.add('active');
   if(tab==='dashboard')renderDash();
-  if(tab==='jobs'){buildJFilters();renderJobs();}
+  if(tab==='jobs'){
+    buildJFilters();
+    // 탭 열 때 루트(depth=0) 항목 자동 접기
+    const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
+    if(jobs.length > 0 && jobCollapsed.size === 0) {
+      const numMap = {};
+      jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+      jobs.forEach(j => {
+        if(!j.number) return;
+        const p = getParentNumber(j.number);
+        if(!p || !numMap[p]) jobCollapsed.add(j.number); // 루트 항목
+      });
+    }
+    renderJobs();
+  }
   if(tab==='gantt')renderGantt();
   if(tab==='class')renderClass();
   if(tab==='daily'){buildDDF();renderDisc();}
@@ -657,6 +671,36 @@ function toggleGanttCollapse(num) {
   buildGantt(null, null, null);
 }
 
+// 상위항목 날짜를 하위항목 기준으로 자동 계산
+function computeParentDates(jobs) {
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+
+  // 모든 자손 수집 함수
+  function getDescendants(num) {
+    const result = [];
+    jobs.forEach(child => {
+      if(getParentNumber(child.number) === num) {
+        result.push(child);
+        getDescendants(child.number).forEach(d => result.push(d));
+      }
+    });
+    return result;
+  }
+
+  jobs.forEach(j => {
+    if(!hasChildren(j.number, jobs)) return;
+    const descendants = getDescendants(j.number);
+    if(!descendants.length) return;
+
+    const starts = descendants.map(d => d.start_date).filter(s => s && s.trim());
+    const ends   = descendants.map(d => d.end_date).filter(e => e && e.trim());
+
+    j._autoStart = starts.length ? starts.sort()[0] : null;
+    j._autoEnd   = ends.length   ? ends.sort().reverse()[0] : null;
+  });
+}
+
 function renderJobs(){
   if(!VID)return;
   const jobs=FLEET[VID].jobs||[];
@@ -697,14 +741,20 @@ function renderJobs(){
   const treeMap = {};
   buildJobTree(fil).forEach(j => { treeMap[j._id] = j._depth || 0; });
 
+  // 상위항목 날짜 자동 계산
+  computeParentDates(fil);
+
   tb.innerHTML=fil.filter(j => isFiltering || isJobVisible(j, fil)).map(j=>{
     const ri=jobs.indexOf(j);
-    const livePct=calcProgress(j.start_date,j.end_date);
+    // 상위항목은 자동 계산 날짜 사용
+    const effStart = j._autoStart || j.start_date;
+    const effEnd   = j._autoEnd   || j.end_date;
+    const livePct=calcProgress(effStart, effEnd);
     const pct=livePct!==null?livePct:(j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
-    const dateInfo=j.start_date&&j.end_date
-      ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${j.start_date} → ${j.end_date}</div>`
+    const dateInfo=effStart&&effEnd
+      ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${effStart} → ${effEnd}${j._autoStart?'<span style="font-size:9px;color:var(--blue);margin-left:4px">auto</span>':''}</div>`
       :`<div style="font-size:10px;color:var(--txt-m)">—</div>`;
 
     const secOpts=SECTIONS.map(s=>`<option${s===j.section?' selected':''}>${s}</option>`).join('');
@@ -1109,9 +1159,10 @@ function buildGantt(sf,cf,btn){
     }
   });
   html+=`</div></div>`;
-  // depth 캐시
+  // depth 캐시 + 상위항목 날짜 자동 계산
   const ganttTreeMap = {};
   buildJobTree(jobs).forEach(j => { ganttTreeMap[j._id] = j._depth || 0; });
+  computeParentDates(jobs);
 
   jobs.forEach((j,ji)=>{
     if(!isJobVisible(j, jobs)) return;
@@ -1123,9 +1174,20 @@ function buildGantt(sf,cf,btn){
       ? `<span onclick="toggleGanttCollapse('${j.number}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">${isCollapsed?'▶':'▼'}</span>`
       : `<span style="display:inline-block;width:13px;flex-shrink:0"></span>`;
 
+    // 상위항목은 자동 계산 날짜 사용
+    const effStart = j._autoStart || j.start_date;
+    const effEnd   = j._autoEnd   || j.end_date;
+
     let bs=-1,bw=0;
-    if(j.start_date&&j.start_date!==''){const sd=new Date(j.start_date),ed=j.end_date&&j.end_date!==''?new Date(j.end_date):new Date(sd.getTime()+Math.max(1,+j.duration||1)*86400000);bs=Math.round((sd-ds)/86400000);bw=Math.max(1,Math.round((ed-sd)/86400000)+1);}
-    const pct=Math.min(100, calcProgress(j.start_date, j.end_date) ?? (+j.completion||0));
+    if(effStart&&effStart!==''){
+      const sd=new Date(effStart);
+      const ed=effEnd&&effEnd!==''?new Date(effEnd):new Date(sd.getTime()+Math.max(1,+j.duration||1)*86400000);
+      bs=Math.round((sd-ds)/86400000);
+      bw=Math.max(1,Math.round((ed-sd)/86400000)+1);
+      // dockIn 이전 시작이면 바를 0부터 시작 (잘림 처리)
+      if(bs < 0){ bw=Math.max(1, bw+bs); bs=0; }
+    }
+    const pct=Math.min(100, calcProgress(effStart, effEnd) ?? (+j.completion||0));
     const barCol=pct>=100?'var(--green)':pct>0?'linear-gradient(90deg,var(--navy),var(--blue))':'#cbd5e1';
     const rowBg=ji%2===0?'var(--bg-white)':'var(--bg-panel)';
     const numStyle = depth===0 ? 'font-weight:700;color:var(--navy)' : depth===1 ? 'font-weight:600;color:var(--blue)' : 'color:var(--txt-s)';
