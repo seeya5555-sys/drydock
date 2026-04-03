@@ -759,9 +759,9 @@ function renderJobs(){
   computeParentDates(fil);
 
   // Category 그룹 헤더 Set (접힘 상태 관리)
-  if(!window.catCollapsed) window.catCollapsed = new Set(
-    [...new Set(fil.map(j=>j.category||'Uncategorized'))]
-  ); // 기본 전체 접힘
+  // 새 카테고리가 생기면 자동으로 접힘 상태로 추가
+  const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
+  allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
 
   // 필터 중이면 그냥 평면 표시
   if(isFiltering) {
@@ -817,25 +817,25 @@ function renderJobs(){
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green)">$${totalConsumed.toLocaleString()}</div>
         <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed</div>
       </td>
-      <td style="padding:10px 8px">
-        <div style="display:flex;gap:16px;align-items:center">
-          <div style="flex:1">
-            <div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:3px;letter-spacing:.4px">BUDGET VS CONSUMED</div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
-                <div style="width:${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%;height:100%;background:var(--green);border-radius:3px"></div>
+      <td colspan="2" style="padding:10px 14px">
+        <div style="display:flex;gap:20px">
+          <div style="min-width:160px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;flex-shrink:0">
+                <div style="width:${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%;height:100%;background:var(--green);border-radius:4px"></div>
               </div>
-              <span style="font-size:11px;font-weight:700;color:var(--green);min-width:32px">${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%</span>
+              <span style="font-size:12px;font-weight:700;color:var(--green);min-width:36px">${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%</span>
             </div>
+            <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.4px">TOTAL CONSUMED</div>
           </div>
-          <div style="flex:1">
-            <div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:3px;letter-spacing:.4px">PROGRESS</div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
-                <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:3px"></div>
+          <div style="min-width:160px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;flex-shrink:0">
+                <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:4px"></div>
               </div>
-              <span style="font-size:11px;font-weight:700;color:${pctCol};min-width:32px">${avgPct}%</span>
+              <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
             </div>
+            <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.4px">TOTAL PROGRESS</div>
           </div>
         </div>
       </td>
@@ -856,8 +856,13 @@ function renderJobs(){
 const catCollapsed = window.catCollapsed || new Set();
 
 function toggleCatGroup(cat) {
-  if(catCollapsed.has(cat)) catCollapsed.delete(cat);
-  else catCollapsed.add(cat);
+  if(catCollapsed.has(cat)) {
+    catCollapsed.delete(cat);
+    catCollapsed.add(cat+'_opened'); // 한번 열었음을 기억
+  } else {
+    catCollapsed.add(cat);
+    catCollapsed.delete(cat+'_opened');
+  }
   renderJobs();
 }
 
