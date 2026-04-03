@@ -758,7 +758,96 @@ function renderJobs(){
   // 상위항목 날짜 자동 계산
   computeParentDates(fil);
 
-  tb.innerHTML=fil.filter(j => isFiltering || isJobVisible(j, fil)).map(j=>{
+  // Category 그룹 헤더 Set (접힘 상태 관리)
+  if(!window.catCollapsed) window.catCollapsed = new Set(
+    [...new Set(fil.map(j=>j.category||'Uncategorized'))]
+  ); // 기본 전체 접힘
+
+  // 필터 중이면 그냥 평면 표시
+  if(isFiltering) {
+    tb.innerHTML = fil.map(j => _jobRow(j, jobs, fil, treeMap, 0, false)).join('');
+    return;
+  }
+
+  // Category별 그룹화
+  const CATS_ORDER = ['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
+  const catGroups = {};
+  CATS_ORDER.forEach(c => catGroups[c] = []);
+  fil.forEach(j => {
+    const cat = j.category || 'Uncategorized';
+    if(!catGroups[cat]) catGroups[cat] = [];
+    catGroups[cat].push(j);
+  });
+
+  let html = '';
+  Object.entries(catGroups).forEach(([cat, catJobs]) => {
+    if(!catJobs.length) return;
+    const isCollapsed = catCollapsed.has(cat);
+
+    // 집계
+    const totalBudget   = catJobs.reduce((s,j) => s + (+j.budget||0), 0);
+    const totalConsumed = catJobs.reduce((s,j) => s + (+j.consumption||0), 0);
+
+    // Progress: 날짜 있는 항목 기준 평균
+    const pcts = catJobs.map(j => {
+      const es = j._autoStart||j.start_date, ee = j._autoEnd||j.end_date;
+      const lp = calcProgress(es, ee);
+      return lp !== null ? lp : (j.completion||0);
+    });
+    const avgPct = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : 0;
+    const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
+
+    const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
+
+    // Category 헤더 행
+    html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}')">
+      <td colspan="2" style="padding:10px 14px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:10px;color:#fff;user-select:none">${isCollapsed?'▶':'▼'}</span>
+          <span class="cat-badge ${catCls}" style="font-size:12px">${cat}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,.6)">${catJobs.length} jobs</span>
+        </div>
+      </td>
+      <td colspan="2" style="padding:10px 8px;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.5px"></td>
+      <td style="padding:10px 8px;text-align:right">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#fff">$${totalBudget.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5)">Total Budget</div>
+      </td>
+      <td style="padding:10px 8px;text-align:right">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green)">$${totalConsumed.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed</div>
+      </td>
+      <td style="padding:10px 8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden">
+            <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:4px"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
+        </div>
+      </td>
+      <td colspan="3" style="padding:10px 8px"></td>
+    </tr>`;
+
+    // 하위 job 행들
+    if(!isCollapsed) {
+      const sorted = sortJobTree(catJobs);
+      sorted.filter(j => isJobVisible(j, sorted)).forEach(j => {
+        html += _jobRow(j, jobs, sorted, buildJobTree(sorted).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{}), 0, false);
+      });
+    }
+  });
+  tb.innerHTML = html;
+}
+
+const catCollapsed = window.catCollapsed || new Set();
+
+function toggleCatGroup(cat) {
+  if(catCollapsed.has(cat)) catCollapsed.delete(cat);
+  else catCollapsed.add(cat);
+  renderJobs();
+}
+
+function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const ri=jobs.indexOf(j);
     // 상위항목은 자동 계산 날짜 사용
     const effStart = j._autoStart || j.start_date;
@@ -771,6 +860,8 @@ function renderJobs(){
       ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${effStart} → ${effEnd}${j._autoStart?'<span style="font-size:9px;color:var(--blue);margin-left:4px">auto</span>':''}</div>`
       :`<div style="font-size:10px;color:var(--txt-m)">—</div>`;
 
+    const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ETC','REPAIR','STORE','SPARE'];
+    const CATS=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
     const secOpts=SECTIONS.map(s=>`<option${s===j.section?' selected':''}>${s}</option>`).join('');
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
 
@@ -819,7 +910,6 @@ function renderJobs(){
         </button>
       </td>
     </tr>`;
-  }).join('');
 }
 
 // ── INLINE EDIT HELPERS ──────────────────────────────────────
