@@ -956,6 +956,38 @@ function toggleSecGroup(secKey) {
   renderJobs();
 }
 
+function expandCollapseAll() {
+  const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
+  const btn = document.getElementById('btn-expand-all');
+
+  // 현재 접힌 게 있으면 → 전체 펼치기, 없으면 → 전체 접기
+  const hasCollapsed = catCollapsed.size > 0;
+
+  catCollapsed.clear();
+  jobCollapsed.clear();
+
+  if(hasCollapsed) {
+    // 전체 펼치기 상태
+    if(btn) btn.textContent = '▼ 전체 접기';
+  } else {
+    // 전체 접기 - Category, Section, Job 모두 접기
+    const cats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
+    cats.forEach(c => {
+      catCollapsed.add(c);
+      const secs = [...new Set(jobs.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+      secs.forEach(s => catCollapsed.add(c+'::'+s));
+    });
+    // Job No. 계층도 접기
+    const numMap = {};
+    jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+    jobs.forEach(j => {
+      if(j.number && hasChildren(j.number, jobs)) jobCollapsed.add(j.number);
+    });
+    if(btn) btn.textContent = '▶ 전체 펼치기';
+  }
+  renderJobs();
+}
+
 function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const ri=jobs.indexOf(j);
     // 상위항목은 자동 계산 날짜 사용
