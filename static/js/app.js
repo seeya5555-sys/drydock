@@ -1321,9 +1321,10 @@ function expandCollapseAll() {
 
 function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const ri=jobs.indexOf(j);
-    // 상위항목은 자동 계산 날짜/합계 사용
-    const effStart = j._autoStart || j.start_date;
-    const effEnd   = j._autoEnd   || j.end_date;
+    // 수동 날짜 있으면 autoStart 무시, 없으면 자식 기준 자동날짜 사용
+    const hasManualDates = !!(j.start_date && j.end_date);
+    const effStart = hasManualDates ? j.start_date : (j._autoStart || j.start_date);
+    const effEnd   = hasManualDates ? j.end_date   : (j._autoEnd   || j.end_date);
     const hasAutoSum = j._autoSum !== null && j._autoSum !== undefined;
     // 부모 항목에 직접 입력값이 있으면 우선 사용, 없으면(0) 자동 계산값 사용
     const hasManualBudget   = hasAutoSum && (+j.budget||0) > 0;
@@ -1331,8 +1332,7 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
-    // 스케줄 바: 부모에 날짜 직접 입력 → 수동, 없으면 자식 평균
-    const hasManualDates = !!(j.start_date && j.end_date);
+    // 스케줄 바: 수동 날짜 있으면 수동 기반, 없으면 자식 평균
     const livePct = calcProgress(effStart, effEnd);
     const pct = hasManualDates
       ? (livePct !== null ? livePct : 0)
@@ -1340,8 +1340,9 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
       : (livePct !== null ? livePct : 0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
 
-    // 공정률 바: 부모에 completion 직접 입력(>0) → 수동, 없으면(0) 자식 평균
-    const hasManualCompletion = hasAutoSum && (+j.completion||0) > 0;
+    // 공정률 바: completion > 0 이면 수동값 우선, 0이면 자식 평균
+    // 부모항목도 클릭하여 수동 입력 가능
+    const hasManualCompletion = (+j.completion||0) > 0;
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=effStart&&effEnd
       ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${effStart} → ${effEnd}${j._autoStart?'<span style="font-size:9px;color:var(--blue);margin-left:4px">auto</span>':''}</div>`
@@ -1357,7 +1358,8 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effCompletion = hasManualCompletion ? (+j.completion||0)
                         : hasAutoSum ? j._autoSum.completion
                         : (j.completion||0);
-    const isAutoCompletion = hasAutoSum && !hasManualCompletion;
+    // 자동계산 표시만 하고 클릭은 항상 가능 (수동 입력으로 override 가능)
+    const isAutoCompletion = false;
     const actBarCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'#cbd5e1';
     const actPctCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'var(--txt-m)';
     const depth = isFiltering ? 0 : (treeMap[j._id] || 0);
