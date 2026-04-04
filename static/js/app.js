@@ -559,9 +559,13 @@ function syncDatePicker(txtId, pickerId) {
 function calcProgress(startDate, endDate) {
   if (!startDate || !endDate) return null;
   const sd = new Date(startDate), ed = new Date(endDate);
-  if (isNaN(sd) || isNaN(ed) || ed <= sd) return null;
+  if (isNaN(sd) || isNaN(ed)) return null;
   const today = new Date();
   today.setHours(0,0,0,0);
+  sd.setHours(0,0,0,0);
+  ed.setHours(0,0,0,0);
+  // 시작일 = 완료일 (당일 완료): 오늘이 그 날짜 이후면 100%
+  if (ed <= sd) return today >= sd ? 100 : 0;
   if (today < sd) return 0;
   if (today >= ed) return 100;
   const total = ed - sd;
