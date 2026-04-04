@@ -1030,9 +1030,10 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const hasAutoSum = j._autoSum !== null && j._autoSum !== undefined;
     const effBudget   = hasAutoSum ? j._autoSum.budget     : (+j.budget||0);
     const effConsumed = hasAutoSum ? j._autoSum.consumption: (+j.consumption||0);
-    const livePct = calcProgress(effStart, effEnd);
-    const pct = livePct !== null ? livePct
-              : hasAutoSum ? j._autoSum.completion
+    // 자식 있는 항목은 _autoSum.completion 우선 (날짜 기반 덮어쓰기 방지)
+    const livePct = hasAutoSum ? null : calcProgress(effStart, effEnd);
+    const pct = hasAutoSum ? j._autoSum.completion
+              : livePct !== null ? livePct
               : (j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
@@ -1532,7 +1533,7 @@ function buildGantt(sf,cf,btn){
       bw=Math.max(1,Math.round((ed-sd)/86400000)+1);
       if(bs<0){bw=Math.max(1,bw+bs);bs=0;}
     }
-    const pct=Math.min(100,calcProgress(effStart,effEnd)??((j._autoSum?.completion)||+j.completion||0));
+    const pct=Math.min(100, j._autoSum ? j._autoSum.completion : (calcProgress(effStart,effEnd) ?? (+j.completion||0)));
     const barCol=pct>=100?'var(--green)':pct>0?'linear-gradient(90deg,var(--navy),var(--blue))':'#cbd5e1';
     const rowBg=ji%2===0?'var(--bg-white)':'var(--bg-panel)';
     const numStyle=depth===0?'font-weight:700;color:var(--navy)':depth===1?'font-weight:600;color:var(--blue)':'color:var(--txt-s)';
