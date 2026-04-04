@@ -1498,39 +1498,45 @@ function buildGantt(sf,cf,btn){
     }
   });
   html+=`</div></div>`;
-  // depth 캐시 + 상위항목 날짜 자동 계산
+  // depth 캐시 + 상위항목 날짜/합계 자동 계산
   const ganttTreeMap = {};
   buildJobTree(jobs).forEach(j => { ganttTreeMap[j._id] = j._depth || 0; });
   computeParentDates(jobs);
+  computeParentSums(jobs);
 
-  jobs.forEach((j,ji)=>{
-    if(!isJobVisible(j, jobs)) return;
-    const depth = ganttTreeMap[j._id] || 0;
+  const CATS_ORDER = ['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
+  const catGroups = {};
+  CATS_ORDER.forEach(c => catGroups[c] = []);
+  jobs.forEach(j => {
+    const cat = j.category || 'Uncategorized';
+    if(!catGroups[cat]) catGroups[cat] = [];
+    catGroups[cat].push(j);
+  });
+
+  // Gantt 행 렌더 헬퍼
+  function ganttJobRow(j, depth, ji) {
+    if(!isJobVisible(j, jobs)) return '';
     const indent = depth * 16;
-    const isCollapsed = jobCollapsed.has(j.number);
+    const isColl = jobCollapsed.has(j.number);
     const hasKids = hasChildren(j.number, jobs);
     const toggleBtn = hasKids
-      ? `<span onclick="toggleGanttCollapse('${j.number}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">${isCollapsed?'▶':'▼'}</span>`
+      ? `<span onclick="toggleGanttCollapse('${j.number}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">${isColl?'▶':'▼'}</span>`
       : `<span style="display:inline-block;width:13px;flex-shrink:0"></span>`;
-
-    // 상위항목은 자동 계산 날짜 사용
     const effStart = j._autoStart || j.start_date;
     const effEnd   = j._autoEnd   || j.end_date;
-
     let bs=-1,bw=0;
     if(effStart&&effStart!==''){
       const sd=new Date(effStart);
-      const ed=effEnd&&effEnd!==''?new Date(effEnd):new Date(sd.getTime()+Math.max(1,+j.duration||1)*86400000);
+      const ed=effEnd&&effEnd!==''?new Date(effEnd):new Date(sd.getTime()+86400000);
       bs=Math.round((sd-ds)/86400000);
       bw=Math.max(1,Math.round((ed-sd)/86400000)+1);
-      // dockIn 이전 시작이면 바를 0부터 시작 (잘림 처리)
-      if(bs < 0){ bw=Math.max(1, bw+bs); bs=0; }
+      if(bs<0){bw=Math.max(1,bw+bs);bs=0;}
     }
-    const pct=Math.min(100, calcProgress(effStart, effEnd) ?? (+j.completion||0));
+    const pct=Math.min(100,calcProgress(effStart,effEnd)??((j._autoSum?.completion)||+j.completion||0));
     const barCol=pct>=100?'var(--green)':pct>0?'linear-gradient(90deg,var(--navy),var(--blue))':'#cbd5e1';
     const rowBg=ji%2===0?'var(--bg-white)':'var(--bg-panel)';
-    const numStyle = depth===0 ? 'font-weight:700;color:var(--navy)' : depth===1 ? 'font-weight:600;color:var(--blue)' : 'color:var(--txt-s)';
-    html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:36px;background:${rowBg}" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='${rowBg}'">
+    const numStyle=depth===0?'font-weight:700;color:var(--navy)':depth===1?'font-weight:600;color:var(--blue)':'color:var(--txt-s)';
+    let row=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:36px;background:${rowBg}" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background='${rowBg}'">
       <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px 6px ${8+indent}px;border-right:2px solid var(--border);display:flex;align-items:center;gap:4px;overflow:hidden;">
         ${toggleBtn}
         <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;${numStyle};flex-shrink:0;min-width:28px">${j.number}</span>
@@ -1539,15 +1545,69 @@ function buildGantt(sf,cf,btn){
       <div style="display:flex;align-items:center;flex:1;position:relative;">`;
     dates.forEach((d,i)=>{
       const isT=d.toDateString()===today.toDateString();
-      const cellBg = isT
-        ? 'background:rgba(29,111,219,.08);border-left:2px solid var(--blue);border-right:2px solid var(--blue);box-sizing:border-box;'
-        : '';
-      html+=`<div style="min-width:${DW}px;height:36px;border-right:${isT?'none':'1px solid var(--border)'};flex:none;position:relative;${cellBg}">`;
-      if(i===bs&&bs>=0){const w=bw*DW-4;html+=`<div style="position:absolute;top:50%;transform:translateY(-50%);left:2px;width:${w}px;height:16px;background:${barCol};border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15)"><div style="width:${pct}%;height:100%;background:rgba(255,255,255,.25);border-radius:4px 0 0 4px"></div></div>`;}
-      html+=`</div>`;
+      const cellBg=isT?'background:rgba(29,111,219,.08);border-left:2px solid var(--blue);border-right:2px solid var(--blue);box-sizing:border-box;':'';
+      row+=`<div style="min-width:${DW}px;height:36px;border-right:${isT?'none':'1px solid var(--border)'};flex:none;position:relative;${cellBg}">`;
+      if(i===bs&&bs>=0){const w=bw*DW-4;row+=`<div style="position:absolute;top:50%;transform:translateY(-50%);left:2px;width:${w}px;height:16px;background:${barCol};border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.15)"><div style="width:${pct}%;height:100%;background:rgba(255,255,255,.25);border-radius:4px 0 0 4px"></div></div>`;}
+      row+=`</div>`;
     });
-    html+=`</div></div>`;
+    row+=`</div></div>`;
+    return row;
+  }
+
+  let ji = 0;
+  Object.entries(catGroups).forEach(([cat, catJobs]) => {
+    if(!catJobs.length) return;
+    const isCatColl = catCollapsed.has(cat) && !catCollapsed.has(cat+'_opened');
+    const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
+
+    // Category 헤더 행
+    html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:38px;background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');buildGantt(null,null,null)">
+      <div style="width:280px;min-width:280px;max-width:280px;padding:8px 14px;border-right:2px solid var(--border);display:flex;align-items:center;gap:8px;">
+        <span style="font-size:10px;color:#fff;user-select:none">${isCatColl?'▶':'▼'}</span>
+        <span class="cat-badge ${catCls}" style="font-size:11px">${cat}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.5)">${catJobs.length}</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;padding:0 14px">
+        <span style="font-size:11px;color:rgba(255,255,255,.4)">— ${catJobs.length} jobs</span>
+      </div>
+    </div>`;
+
+    if(!isCatColl) {
+      // Section 그룹
+      const secGroups = {};
+      const secOrder = [];
+      sortJobTree(catJobs).forEach(j => {
+        const sec = j.section||'GENERAL';
+        if(!secGroups[sec]) { secGroups[sec]=[]; secOrder.push(sec); }
+        secGroups[sec].push(j);
+      });
+
+      secOrder.forEach(sec => {
+        const secJobs = secGroups[sec];
+        const secKey = cat+'::'+sec;
+        const isSecColl = catCollapsed.has(secKey) && !catCollapsed.has(secKey+'_opened');
+
+        // Section 헤더 행
+        html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:34px;background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');buildGantt(null,null,null)">
+          <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px 6px 28px;border-right:2px solid var(--border);display:flex;align-items:center;gap:6px;">
+            <span style="font-size:9px;color:rgba(255,255,255,.7);user-select:none">${isSecColl?'▶':'▼'}</span>
+            <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.85)">${sec}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,.4)">${secJobs.length}</span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;padding:0 14px">
+            <span style="font-size:10px;color:rgba(255,255,255,.3)">— ${secJobs.length} jobs</span>
+          </div>
+        </div>`;
+
+        if(!isSecColl) {
+          sortJobTree(secJobs).filter(j=>isJobVisible(j,jobs)).forEach(j => {
+            html += ganttJobRow(j, ganttTreeMap[j._id]||0, ji++);
+          });
+        }
+      });
+    }
   });
+
   html+=`</div>`;
   document.getElementById('g-wrap').innerHTML=html;
 }
