@@ -506,15 +506,48 @@ function renderDash(){
   document.getElementById('vs-con-s').textContent=tb?(tc/tb*100).toFixed(1)+'% of budget':'0%';
   document.getElementById('vs-cls').textContent=oc;
 
+  // Duration 자동계산 (DB 저장값 없으면 날짜로 계산)
+  const autoDur = (info.dockIn && info.dockOut)
+    ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000)
+    : (info.duration || null);
+
+  // D-day / 소요일 계산
+  const today = new Date(); today.setHours(0,0,0,0);
+  let ddayStr = '', elapsedStr = '';
+  if(info.dockIn && info.dockOut) {
+    const sd = new Date(info.dockIn), ed = new Date(info.dockOut);
+    const elapsed = Math.round((today - sd) / 86400000);
+    const dday    = Math.round((ed - today) / 86400000);
+    if(today < sd) {
+      ddayStr    = `D-${Math.round((sd-today)/86400000)}`;
+      elapsedStr = '입거 전';
+    } else if(today > ed) {
+      ddayStr    = 'D+'+Math.abs(dday);
+      elapsedStr = `${elapsed}일 경과 (완료)`;
+    } else {
+      ddayStr    = dday === 0 ? 'D-DAY' : `D-${dday}`;
+      elapsedStr = `${elapsed}일째 / ${autoDur}일`;
+    }
+  }
+
   const metas=[
     info.shipyard&&`SHIPYARD: <span>${info.shipyard}</span>`,
     info.dockIn&&`DOCK IN: <span>${info.dockIn}</span>`,
     info.dockOut&&`DOCK OUT: <span>${info.dockOut}</span>`,
-    info.duration&&`DURATION: <span>${info.duration} DAYS</span>`,
+    autoDur&&`DURATION: <span>${autoDur} DAYS</span>`,
     info.classSociety&&`CLASS: <span>${info.classSociety}</span>`,
     info.imo&&`IMO: <span>${info.imo}</span>`
   ].filter(Boolean);
   document.getElementById('vb-meta').innerHTML=metas.length?metas.map(m=>`<div class="vb-meta-item">${m}</div>`).join(''):'<div style="font-size:13px;opacity:.5">Click Edit Info to add dock details</div>';
+
+  // D-day / 소요일 표시 (오른쪽 배너)
+  const ddayEl = document.getElementById('vb-dday');
+  if(ddayEl) {
+    ddayEl.innerHTML = ddayStr
+      ? `<div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:1px;font-family:'IBM Plex Mono',monospace">${ddayStr}</div>
+         <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:4px">${elapsedStr}</div>`
+      : '';
+  }
 
   const st=vesselStatus(info);
   const sv=document.getElementById('vb-status');
