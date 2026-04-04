@@ -267,7 +267,7 @@ async function loadUserList() {
         </div>
         ${u.username!=='admin' && CURRENT_USER.role==='admin' ?`
         <div style="display:flex;gap:6px">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="editUserVessels(${u.id},'${u.username}',${JSON.stringify(vessels)})">⚙ 설정</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="editUserVessels(${u.id},'${u.username}',${JSON.stringify(vessels).replace(/"/g,'&quot;')})">⚙ 설정</button>
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;color:var(--red)" onclick="deleteUserMgmt(${u.id},'${u.username}')">삭제</button>
         </div>`:''}
       </div>`;
@@ -297,6 +297,10 @@ async function addUserMgmt() {
 }
 
 async function editUserVessels(uid, username, currentVessels) {
+  // HTML 인코딩된 경우 복원
+  if(typeof currentVessels === 'string') {
+    try { currentVessels = JSON.parse(currentVessels.replace(/&quot;/g,'"')); } catch(e) { currentVessels = []; }
+  }
   const vesselOpts = IDX.map(vid => {
     const name = FLEET[vid]?.info?.name || vid;
     const checked = currentVessels.includes(vid) ? 'checked' : '';
