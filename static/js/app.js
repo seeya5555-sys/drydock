@@ -1324,11 +1324,9 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
-    // Progress는 항상 자식 평균 사용 (Budget 직접입력 여부 무관)
-    const livePct = hasAutoSum ? null : calcProgress(effStart, effEnd);
-    const pct = hasAutoSum ? j._autoSum.completion
-              : livePct !== null ? livePct
-              : (j.completion||0);
+    // 스케줄 바: 항상 날짜 기반 (자식 있어도 날짜로 계산)
+    const livePct = calcProgress(effStart, effEnd);
+    const pct = livePct !== null ? livePct : 0;
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=effStart&&effEnd
