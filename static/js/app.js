@@ -247,6 +247,10 @@ async function openUserMgmt() {
   openM('m-user-mgmt');
 }
 
+// 사용자 vessel 캐시
+const _userVesselCache = {};
+const _userNameCache = {};
+
 async function loadUserList() {
   try {
     const users = await apiFetch('/api/auth/users');
@@ -256,6 +260,8 @@ async function loadUserList() {
     if(!users.length) { el.innerHTML='<div style="color:var(--txt-m);font-size:13px">등록된 사용자 없음</div>'; return; }
     el.innerHTML = users.map(u => {
       const vessels = JSON.parse(u.vessels||'[]');
+      _userVesselCache[u.id] = vessels;
+      _userNameCache[u.id] = u.username;
       const vesselNames = vessels.map(vid => FLEET[vid]?.info?.name || vid).join(', ') || '전체';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-panel);border-radius:8px;margin-bottom:6px">
         <div>
@@ -267,7 +273,7 @@ async function loadUserList() {
         </div>
         ${u.username!=='admin' && CURRENT_USER.role==='admin' ?`
         <div style="display:flex;gap:6px">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="editUserVessels(${u.id},'${u.username}',${JSON.stringify(vessels).replace(/"/g,'&quot;')})">⚙ 설정</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="editUserVessels(${u.id})">⚙ 설정</button>
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;color:var(--red)" onclick="deleteUserMgmt(${u.id},'${u.username}')">삭제</button>
         </div>`:''}
       </div>`;
@@ -296,11 +302,9 @@ async function addUserMgmt() {
   } catch(e) { errEl.textContent = e.message||'추가 실패'; errEl.style.display='block'; }
 }
 
-async function editUserVessels(uid, username, currentVessels) {
-  // HTML 인코딩된 경우 복원
-  if(typeof currentVessels === 'string') {
-    try { currentVessels = JSON.parse(currentVessels.replace(/&quot;/g,'"')); } catch(e) { currentVessels = []; }
-  }
+async function editUserVessels(uid) {
+  const username = _userNameCache[uid] || '';
+  const currentVessels = _userVesselCache[uid] || [];
   const vesselOpts = IDX.map(vid => {
     const name = FLEET[vid]?.info?.name || vid;
     const checked = currentVessels.includes(vid) ? 'checked' : '';
