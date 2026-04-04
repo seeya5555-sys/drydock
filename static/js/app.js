@@ -1057,10 +1057,9 @@ function renderJobs(){
   const treeMap = {};
   buildJobTree(fil).forEach(j => { treeMap[j._id] = j._depth || 0; });
 
-  // 상위항목 날짜 자동 계산
-  computeParentDates(fil);
-  // 상위항목 Budget/Consumed/Progress 자동 계산
-  computeParentSums(fil);
+  // 상위항목 날짜/합계 자동 계산 - 전체 jobs 기준으로 해야 부모-자식 관계 정확
+  computeParentDates(jobs);
+  computeParentSums(jobs);
 
   // Category/Section 그룹 기본 접힘 초기화 (전체 펼치기 상태면 건너뜀)
   const btn = document.getElementById('btn-expand-all');
