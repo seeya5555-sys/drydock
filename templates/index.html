@@ -533,24 +533,24 @@
         <div class="form-group">
           <label class="form-lbl">Dock In Date</label>
           <div class="date-combo">
-            <input class="form-ctrl" id="mv-in-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-in-txt','mv-in')">
+            <input class="form-ctrl" id="mv-in-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-in-txt','mv-in');calcVesselDuration()">
             <div class="cal-btn" title="캘린더로 선택">📅
-              <input type="date" id="mv-in" onchange="document.getElementById('mv-in-txt').value=this.value;">
+              <input type="date" id="mv-in" onchange="document.getElementById('mv-in-txt').value=this.value;calcVesselDuration()">
             </div>
           </div>
         </div>
         <div class="form-group">
           <label class="form-lbl">Dock Out Date</label>
           <div class="date-combo">
-            <input class="form-ctrl" id="mv-out-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-out-txt','mv-out')">
+            <input class="form-ctrl" id="mv-out-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-out-txt','mv-out');calcVesselDuration()">
             <div class="cal-btn" title="캘린더로 선택">📅
-              <input type="date" id="mv-out" onchange="document.getElementById('mv-out-txt').value=this.value;">
+              <input type="date" id="mv-out" onchange="document.getElementById('mv-out-txt').value=this.value;calcVesselDuration()">
             </div>
           </div>
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-lbl">Duration (days)</label><input class="form-ctrl" id="mv-dur" type="number" placeholder="22"></div>
+        <div class="form-group"><label class="form-lbl">Duration (days) <span style="font-size:10px;color:var(--blue)">자동계산</span></label><input class="form-ctrl" id="mv-dur" type="number" placeholder="자동계산" readonly style="background:var(--bg-panel);color:var(--txt-s);cursor:default"></div>
         <div class="form-group"><label class="form-lbl">GRT / DWT</label><input class="form-ctrl" id="mv-grt" placeholder="e.g. 7170 MT / 8487 MT"></div>
       </div>
     </div>
