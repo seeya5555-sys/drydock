@@ -1677,7 +1677,8 @@ async function saveJob(){
   if(!VID)return;
   const st = document.getElementById('mj-st').value || document.getElementById('mj-st-txt').value.trim();
   const en = document.getElementById('mj-en').value || document.getElementById('mj-en-txt').value.trim();
-  const autoPct = calcProgress(st, en);
+  // completion은 기존 값 유지 (날짜 변경으로 덮어쓰지 않음)
+  const existingCompletion = eJobIdx !== null ? (FLEET[VID].jobs[eJobIdx].completion || 0) : 0;
   const j={
     number:document.getElementById('mj-num').value.trim(),
     section:document.getElementById('mj-sec').value,
@@ -1688,7 +1689,7 @@ async function saveJob(){
     consumption:+document.getElementById('mj-con').value||0,
     start_date:st,
     end_date:en,
-    completion: autoPct !== null ? autoPct : 0,
+    completion: existingCompletion,
     remarks: collectRemarks()
   };
   if(!j.number||!j.description){toast('Job number and description are required',true);return;}
