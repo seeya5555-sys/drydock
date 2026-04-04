@@ -1099,7 +1099,7 @@ function renderJobs(){
     const totalBudget   = catJobs.reduce((s,j) => s + (+j.budget||0), 0);
     const totalConsumed = catJobs.reduce((s,j) => s + (+j.consumption||0), 0);
 
-    // Progress: 날짜 있는 항목 기준 평균
+    // Progress: 날짜 기반 자동 평균
     const pcts = catJobs.map(j => {
       const es = j._autoStart||j.start_date, ee = j._autoEnd||j.end_date;
       const lp = calcProgress(es, ee);
@@ -1107,6 +1107,13 @@ function renderJobs(){
     });
     const avgPct = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : 0;
     const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
+
+    // 실제 공정률: leaf 항목 completion 평균
+    const leafCatJobs = catJobs.filter(j => !hasChildren(j.number, fil));
+    const actPct = leafCatJobs.length
+      ? Math.round(leafCatJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafCatJobs.length)
+      : 0;
+    const actCol = actPct>=100?'#0d9488':actPct>0?'#7c3aed':'rgba(255,255,255,.2)';
 
     const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
 
@@ -1146,7 +1153,15 @@ function renderJobs(){
               </div>
               <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
             </div>
-            <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.4px">TOTAL PROGRESS</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+              <div style="width:120px;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;flex-shrink:0">
+                <div style="width:${actPct}%;height:100%;background:${actCol};border-radius:3px"></div>
+              </div>
+              <span style="font-size:11px;font-weight:600;color:${actCol};min-width:36px">${actPct}%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.3px">
+              <span>📅 예정</span><span>✏ 실제</span>
+            </div>
           </div>
         </div>
       </td>
@@ -1183,6 +1198,12 @@ function renderJobs(){
         const sAvgPct = sPcts.length?Math.round(sPcts.reduce((a,b)=>a+b,0)/sPcts.length):0;
         const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
         const sConsPct = sBudget>0?Math.min(100,Math.round(sConsumed/sBudget*100)):0;
+        // 실제 공정률: leaf 항목 completion 평균
+        const leafSecJobs = secJobs.filter(j => !hasChildren(j.number, fil));
+        const sActPct = leafSecJobs.length
+          ? Math.round(leafSecJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafSecJobs.length)
+          : 0;
+        const sActCol = sActPct>=100?'#0d9488':sActPct>0?'#7c3aed':'rgba(255,255,255,.15)';
 
         // Section 헤더 행 (파란색 계열)
         html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}')">
@@ -1218,7 +1239,15 @@ function renderJobs(){
                   </div>
                   <span style="font-size:11px;font-weight:600;color:${sPctCol}">${sAvgPct}%</span>
                 </div>
-                <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL PROGRESS</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                  <div style="width:90px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;flex-shrink:0">
+                    <div style="width:${sActPct}%;height:100%;background:${sActCol};border-radius:3px"></div>
+                  </div>
+                  <span style="font-size:10px;font-weight:600;color:${sActCol}">${sActPct}%</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,.35)">
+                  <span>📅 예정</span><span>✏ 실제</span>
+                </div>
               </div>
             </div>
           </td>
