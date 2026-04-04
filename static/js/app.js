@@ -1344,7 +1344,11 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const secOpts=SECTIONS.map(s=>`<option${s===j.section?' selected':''}>${s}</option>`).join('');
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
 
-    // 계층 들여쓰기
+    // 공정률: 자식 있으면 autoSum.completion 자동계산, 없으면 수동입력
+    const effCompletion = hasAutoSum ? j._autoSum.completion : (j.completion||0);
+    const isAutoCompletion = hasAutoSum; // 자동계산 여부
+    const actBarCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'#cbd5e1';
+    const actPctCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'var(--txt-m)';
     const depth = isFiltering ? 0 : (treeMap[j._id] || 0);
     const indent = depth * 20;
     const isCollapsed = jobCollapsed.has(j.number);
@@ -1389,11 +1393,14 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         </div>
         <div style="display:flex;align-items:center;gap:4px;margin-top:3px" title="실제 공정률 (클릭하여 수정)">
           <span style="font-size:9px;color:#7c3aed;white-space:nowrap;min-width:36px">✏ 공정률</span>
-          <div class="prog-wrap" style="flex:1;background:#e2e8f0">
+          <div style="flex:1;background:#e2e8f0">
             <div class="prog-bar" style="background:#e2e8f0">
-              <div class="prog-fill" style="width:${j.completion||0}%;background:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'#cbd5e1'}"></div>
+              <div class="prog-fill" style="width:${effCompletion}%;background:${actBarCol}"></div>
             </div>
-            <div class="prog-pct cell-edit" onclick="startEdit(this,${ri},'completion','number')" style="color:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'var(--txt-m)'};cursor:pointer">${j.completion||0}%</div>
+            ${isAutoCompletion
+              ? `<div class="prog-pct" style="color:${actPctCol}">${effCompletion}%</div>`
+              : `<div class="prog-pct cell-edit" onclick="startEdit(this,${ri},'completion','number')" style="color:${actPctCol};cursor:pointer">${effCompletion}%</div>`
+            }
           </div>
         </div>
         ${dateInfo}
