@@ -746,7 +746,8 @@ def upload_tracking_xlsx(vid):
     # Priority / Status 값 정규화
     PRI_MAP = {
         'normal':'Normal','urgent':'Urgent','critical':'Critical','on hold':'On Hold',
-        'high':'Urgent','low':'Normal','medium':'Normal','hold':'On Hold',
+        'hold':'On Hold',
+        'low':'Low','medium':'Medium','high':'High',  # steel/outfit용
     }
     STAT_MAP = {
         'open':'Not Started','not started':'Not Started',
@@ -755,7 +756,7 @@ def upload_tracking_xlsx(vid):
         'on hold':'On Hold','hold':'On Hold',
     }
     def norm_pri(v): return PRI_MAP.get(val(v).lower(), val(v) or 'Normal')
-    def norm_stat(v): return STAT_MAP.get(val(v).lower(), val(v) or 'Open')
+    def norm_stat(v): return STAT_MAP.get(val(v).lower(), val(v) or 'Not Started')
 
     def get_data_rows(ws, header_row=4):
         rows = list(ws.iter_rows(min_row=header_row+1, values_only=True))
