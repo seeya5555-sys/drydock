@@ -1147,20 +1147,19 @@ function renderJobs(){
             <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.4px">TOTAL CONSUMED</div>
           </div>
           <div style="min-width:160px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <div style="width:120px;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">📅 스케줄</span>
+              <div style="flex:1;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden">
                 <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:4px"></div>
               </div>
               <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-              <div style="width:120px;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">✏ 공정률</span>
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">
                 <div style="width:${actPct}%;height:100%;background:${actCol};border-radius:3px"></div>
               </div>
               <span style="font-size:11px;font-weight:600;color:${actCol};min-width:36px">${actPct}%</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.3px">
-              <span>📅 예정</span><span>✏ 실제</span>
             </div>
           </div>
         </div>
@@ -1233,20 +1232,19 @@ function renderJobs(){
                 <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL CONSUMED</div>
               </div>
               <div style="min-width:130px">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-                  <div style="width:90px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;flex-shrink:0">
+                <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+                  <span style="font-size:8px;color:rgba(255,255,255,.45);white-space:nowrap;min-width:28px">📅 스케줄</span>
+                  <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
                     <div style="width:${sAvgPct}%;height:100%;background:${sPctCol};border-radius:3px"></div>
                   </div>
-                  <span style="font-size:11px;font-weight:600;color:${sPctCol}">${sAvgPct}%</span>
+                  <span style="font-size:11px;font-weight:600;color:${sPctCol};min-width:30px">${sAvgPct}%</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                  <div style="width:90px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;flex-shrink:0">
+                <div style="display:flex;align-items:center;gap:5px">
+                  <span style="font-size:8px;color:rgba(255,255,255,.45);white-space:nowrap;min-width:28px">✏ 공정률</span>
+                  <div style="flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
                     <div style="width:${sActPct}%;height:100%;background:${sActCol};border-radius:3px"></div>
                   </div>
-                  <span style="font-size:10px;font-weight:600;color:${sActCol}">${sActPct}%</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,.35)">
-                  <span>📅 예정</span><span>✏ 실제</span>
+                  <span style="font-size:10px;font-weight:600;color:${sActCol};min-width:30px">${sActPct}%</span>
                 </div>
               </div>
             </div>
@@ -1382,19 +1380,21 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${effConsumed.toLocaleString()}</span>
       </td>
       <td data-label="Progress">
-        <div class="prog-wrap">
-          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
-          <div class="prog-pct" style="color:${col}">${pct}%</div>
-        </div>
-        <div class="prog-wrap" style="margin-top:3px" title="실제 공정률 (클릭하여 수정)">
-          <div class="prog-bar" style="background:#e2e8f0">
-            <div class="prog-fill" style="width:${j.completion||0}%;background:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'#cbd5e1'}"></div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:9px;color:var(--txt-m);white-space:nowrap;min-width:36px">📅 스케줄</span>
+          <div class="prog-wrap" style="flex:1">
+            <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
+            <div class="prog-pct" style="color:${col}">${pct}%</div>
           </div>
-          <div class="prog-pct cell-edit" onclick="startEdit(this,${ri},'completion','number')" style="color:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'var(--txt-m)'};cursor:pointer" title="클릭하여 실제 공정률 입력">${j.completion||0}%</div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:2px">
-          <span style="font-size:9px;color:var(--txt-m)">📅 예정</span>
-          <span style="font-size:9px;color:#7c3aed">✏ 실제</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:3px" title="실제 공정률 (클릭하여 수정)">
+          <span style="font-size:9px;color:#7c3aed;white-space:nowrap;min-width:36px">✏ 공정률</span>
+          <div class="prog-wrap" style="flex:1;background:#e2e8f0">
+            <div class="prog-bar" style="background:#e2e8f0">
+              <div class="prog-fill" style="width:${j.completion||0}%;background:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'#cbd5e1'}"></div>
+            </div>
+            <div class="prog-pct cell-edit" onclick="startEdit(this,${ri},'completion','number')" style="color:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'var(--txt-m)'};cursor:pointer">${j.completion||0}%</div>
+          </div>
         </div>
         ${dateInfo}
       </td>
