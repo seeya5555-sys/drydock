@@ -540,6 +540,21 @@ function renderDash(){
 }
 
 // ══ DATE SYNC HELPERS ════════════════════════════════
+function calcVesselDuration() {
+  const inVal  = document.getElementById('mv-in-txt')?.value.trim()  || document.getElementById('mv-in')?.value;
+  const outVal = document.getElementById('mv-out-txt')?.value.trim() || document.getElementById('mv-out')?.value;
+  const durEl  = document.getElementById('mv-dur');
+  if(!durEl) return;
+  if(inVal && outVal) {
+    const sd = new Date(inVal), ed = new Date(outVal);
+    if(!isNaN(sd) && !isNaN(ed) && ed >= sd) {
+      durEl.value = Math.round((ed - sd) / 86400000);
+      return;
+    }
+  }
+  durEl.value = '';
+}
+
 function syncDatePicker(txtId, pickerId) {
   const val = document.getElementById(txtId).value.trim();
   // Accept YYYY-MM-DD or YYYY/MM/DD or DD-MM-YYYY
@@ -2414,7 +2429,8 @@ function openVesselEditModal(){
   document.getElementById('mv-imo').value=info.imo||'';document.getElementById('mv-yard').value=info.shipyard||'';
   document.getElementById('mv-class').value=info.classSociety||'';
   document.getElementById('mv-in').value=info.dockIn||'';document.getElementById('mv-in-txt').value=info.dockIn||'';
-  document.getElementById('mv-out').value=info.dockOut||'';document.getElementById('mv-out-txt').value=info.dockOut||'';document.getElementById('mv-dur').value=info.duration||'';
+  document.getElementById('mv-out').value=info.dockOut||'';document.getElementById('mv-out-txt').value=info.dockOut||'';
+  calcVesselDuration();
   document.getElementById('mv-grt').value=info.grt||'';openM('m-vessel');
 }
 async function saveVessel(){
