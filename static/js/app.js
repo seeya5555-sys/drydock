@@ -196,8 +196,8 @@ function renderFleet(){
     if(info.dockIn && autoDur) {
       const todayC = new Date(); todayC.setHours(0,0,0,0);
       const sdC = new Date(info.dockIn);
-      const elapsed = Math.round((todayC - sdC) / 86400000);
-      if(elapsed > 0 && elapsed <= autoDur) {
+      const elapsed = Math.round((todayC - sdC) / 86400000) + 1; // In 날 = 1일째
+      if(elapsed >= 1 && elapsed <= autoDur) {
         elapsedTag = ` <span style="font-size:11px;color:var(--amber);font-weight:600">(${elapsed}일째)</span>`;
       } else if(elapsed > autoDur) {
         elapsedTag = ` <span style="font-size:11px;color:var(--green);font-weight:600">(완료)</span>`;
@@ -533,14 +533,14 @@ function renderDash(){
   let ddayStr = '', elapsedStr = '';
   if(info.dockIn && info.dockOut) {
     const sd = new Date(info.dockIn), ed = new Date(info.dockOut);
-    const elapsed = Math.round((today - sd) / 86400000);
+    const elapsed = Math.round((today - sd) / 86400000) + 1; // In 날 = 1일째
     const dday    = Math.round((ed - today) / 86400000);
     if(today < sd) {
       ddayStr    = `D-${Math.round((sd-today)/86400000)}`;
       elapsedStr = '입거 전';
     } else if(today > ed) {
       ddayStr    = 'D+'+Math.abs(dday);
-      elapsedStr = `${elapsed}일 경과 (완료)`;
+      elapsedStr = `${elapsed-1}일 경과 (완료)`;
     } else {
       ddayStr    = dday === 0 ? 'D-DAY' : `D-${dday}`;
       elapsedStr = `${elapsed}일째 / ${autoDur}일`;
