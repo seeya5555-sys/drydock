@@ -187,6 +187,23 @@ function renderFleet(){
     const st=vesselStatus(info);
     const stripeCls=st==='IN DOCK'?'amber':st==='COMPLETED'?'green':'grey';
     const badgeCls=st==='IN DOCK'?'sb-dock':st==='COMPLETED'?'sb-done':'sb-plan';
+
+    // Duration 자동계산 + 소요일
+    const autoDur = (info.dockIn && info.dockOut)
+      ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000)
+      : (info.duration || null);
+    let elapsedTag = '';
+    if(info.dockIn && autoDur) {
+      const todayC = new Date(); todayC.setHours(0,0,0,0);
+      const sdC = new Date(info.dockIn);
+      const elapsed = Math.round((todayC - sdC) / 86400000);
+      if(elapsed > 0 && elapsed <= autoDur) {
+        elapsedTag = ` <span style="font-size:11px;color:var(--amber);font-weight:600">(${elapsed}일째)</span>`;
+      } else if(elapsed > autoDur) {
+        elapsedTag = ` <span style="font-size:11px;color:var(--green);font-weight:600">(완료)</span>`;
+      }
+    }
+
     return`<div class="vessel-card" onclick="openVessel('${id}')">
       <div class="vc-stripe ${stripeCls}"></div>
       <div class="vc-top">
@@ -196,7 +213,7 @@ function renderFleet(){
           ${info.shipyard?`<div class="vc-meta-item"><b>${info.shipyard}</b></div>`:''}
           ${info.dockIn?`<div class="vc-meta-item">In: <b>${info.dockIn}</b></div>`:''}
           ${info.dockOut?`<div class="vc-meta-item">Out: <b>${info.dockOut}</b></div>`:''}
-          ${info.duration?`<div class="vc-meta-item"><b>${info.duration}</b> days</div>`:''}
+          ${autoDur?`<div class="vc-meta-item"><b>${autoDur}</b> days${elapsedTag}</div>`:''}
         </div>
         <div class="status-badge ${badgeCls}">${st}</div>
       </div>
