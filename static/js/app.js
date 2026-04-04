@@ -1169,15 +1169,16 @@ async function addInlineRow() {
 
   // Tab키로 필드 간 이동, Enter로 저장
   const saveRow = async () => {
-    const num = document.getElementById('il-num')?.value.trim();
-    if(!num) { tempTr.remove(); return; }
-    tempTr.remove();
-
+    // 값을 먼저 읽고 나서 행 제거
+    const num   = document.getElementById('il-num')?.value.trim();
     const sec   = document.getElementById('il-sec')?.value  || 'GENERAL';
     const cat   = document.getElementById('il-cat')?.value  || 'Shipyard';
     const desc  = document.getElementById('il-desc')?.value.trim() || '';
     const vend  = document.getElementById('il-vend')?.value.trim() || '';
     const bud   = parseFloat(document.getElementById('il-bud')?.value) || 0;
+
+    if(!num) { tempTr.remove(); return; }
+    tempTr.remove();
 
     setSS('saving');
     try {
