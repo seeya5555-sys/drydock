@@ -1005,11 +1005,18 @@ function computeParentSums(jobs) {
 
     const totalBudget   = desc.reduce((s,d) => s + (+d.budget||0), 0);
     const totalConsumed = desc.reduce((s,d) => s + (+d.consumption||0), 0);
-    // leaf 항목의 completion 값만으로 평균 계산 (날짜 기반 스케줄과 분리)
+    // leaf 항목만 기준으로 계산
     const leaves = desc.filter(d => !hasChildren(d.number, jobs));
+    // 공정률: leaf의 completion 평균
     const compPcts = leaves.map(d => (+d.completion||0));
     const avgPct = compPcts.length ? Math.round(compPcts.reduce((a,b)=>a+b,0)/compPcts.length) : 0;
-    j._autoSum = { budget: totalBudget, consumption: totalConsumed, completion: avgPct };
+    // 스케줄: leaf의 날짜 기반 progress 평균 (날짜 없는 항목은 0%)
+    const schedPcts = leaves.map(d => {
+      const lp = calcProgress(d.start_date, d.end_date);
+      return lp !== null ? lp : 0;
+    });
+    const avgSchedPct = schedPcts.length ? Math.round(schedPcts.reduce((a,b)=>a+b,0)/schedPcts.length) : 0;
+    j._autoSum = { budget: totalBudget, consumption: totalConsumed, completion: avgPct, schedule: avgSchedPct };
   });
 }
 
@@ -1324,9 +1331,9 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
-    // 스케줄 바: 항상 날짜 기반 (자식 있어도 날짜로 계산)
+    // 스케줄 바: 자식 있으면 leaf 스케줄 평균, 없으면 날짜 기반
     const livePct = calcProgress(effStart, effEnd);
-    const pct = livePct !== null ? livePct : 0;
+    const pct = hasAutoSum ? (j._autoSum.schedule ?? 0) : (livePct !== null ? livePct : 0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=effStart&&effEnd
