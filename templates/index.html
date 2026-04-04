@@ -25,6 +25,8 @@
     <div class="save-pill synced" id="savePill">● SYNCED</div>
     <div class="live-pill"><div class="live-dot"></div>LIVE</div>
     <div class="today-label" id="todayLbl"></div>
+    <button class="btn-sec" onclick="openUserMgmt()" style="font-size:11px;padding:5px 10px" title="사용자 관리">👤 계정</button>
+    <a href="/logout" class="btn-sec" style="font-size:11px;padding:5px 10px;text-decoration:none;color:inherit">🚪 로그아웃</a>
   </div>
 </header>
 
@@ -366,6 +368,56 @@
       </table>
     </div>
   </main></div>
+
+<!-- 사용자 관리 Modal -->
+<div class="modal-overlay" id="m-user-mgmt">
+  <div class="modal" style="width:520px">
+    <div class="modal-hdr">
+      <div class="modal-title">👤 사용자 관리</div>
+      <button class="modal-x" onclick="closeM('m-user-mgmt')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 사용자 목록 -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:var(--txt-s);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">등록된 사용자</div>
+        <div id="user-list"></div>
+      </div>
+      <!-- 새 사용자 추가 (admin만) -->
+      <div id="user-add-section" style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px;display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--txt-s);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">새 사용자 추가</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1"><input class="form-ctrl" id="new-username" placeholder="아이디"></div>
+          <div style="flex:1"><input class="form-ctrl" id="new-password" type="password" placeholder="비밀번호"></div>
+          <div style="flex:1">
+            <select class="form-ctrl" id="new-role">
+              <option value="editor">편집자</option>
+              <option value="viewer">읽기전용</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--txt-s);margin-bottom:6px">접근 가능 선박</div>
+          <div id="new-vessel-checks" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+        <button class="btn-add" onclick="addUserMgmt()" style="width:100%">+ 사용자 추가</button>
+        <div id="user-add-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none"></div>
+      </div>
+      <!-- 비밀번호 변경 -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--txt-s);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">내 비밀번호 변경</div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div style="flex:1"><input class="form-ctrl" id="old-pw" type="password" placeholder="현재 비밀번호"></div>
+          <div style="flex:1"><input class="form-ctrl" id="new-pw" type="password" placeholder="새 비밀번호"></div>
+          <button class="btn-sec" onclick="changePw()" style="flex-shrink:0">변경</button>
+        </div>
+        <div id="pw-msg" style="font-size:12px;margin-top:6px;display:none"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeM('m-user-mgmt')">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- Generic 첨부파일 Modal (Class / Daily Log) -->
 <div class="modal-overlay" id="m-gen-attach">
