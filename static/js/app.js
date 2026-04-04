@@ -83,8 +83,47 @@ async function persist(key, data){
   }catch(e){setSS('error');toast('저장 실패: '+e.message,true);}
 }
 
+function isViewer() { return CURRENT_USER.role === 'viewer'; }
+
+function applyRoleUI() {
+  const isAdminUser = CURRENT_USER.role === 'admin';
+
+  // admin 아니면 👤 계정 버튼 숨김
+  const userMgmtBtn = document.querySelector('[onclick="openUserMgmt()"]');
+  if(userMgmtBtn) userMgmtBtn.style.display = isAdminUser ? '' : 'none';
+
+  // viewer면 CSS로 쓰기 UI 전체 숨김
+  if(isViewer()) {
+    if(!document.getElementById('viewer-style')) {
+      const style = document.createElement('style');
+      style.id = 'viewer-style';
+      style.textContent = `
+        .btn-add, .add-btn, .edit-btn, .attach-btn, .btn-edit,
+        #j-add-row-btn, .upload-btn, .btn-sec[onclick*="CSV"],
+        .j-toolbar .btn-sec, .c-toolbar .btn-sec, .d-toolbar .btn-sec,
+        button[onclick*="openJobModal(null)"], button[onclick*="openAddVesselModal"],
+        button[onclick*="addDiscRow"], button[onclick*="addInlineRow"],
+        button[onclick*="uploadJobsCSV"], button[onclick*="downloadCSVTemplate"],
+        button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
+        button[onclick*="openTrackingXlsx"]
+        { display: none !important; }
+        .cell-edit { pointer-events: none !important; cursor: default !important; }
+        .tracking-date-cell input, .tracking-date-cell select
+        { pointer-events: none !important; }
+      `;
+      document.head.appendChild(style);
+    }
+  }
+}
+
 async function loadAll(){
   setSS('saving');
+  // 현재 사용자 정보 로드
+  try {
+    CURRENT_USER = await apiFetch(`${API}/auth/me`);
+    applyRoleUI();
+  } catch(e) {}
+
   try{
     const summary=await apiFetch(`${API}/fleet/summary`);
     IDX=[];FLEET={};
@@ -187,6 +226,153 @@ function openVessel(id){
   setBreadcrumb([{label:'FLEET OVERVIEW',fn:'goFleet()'},{label:FLEET[id].info.name}]);
 }
 function goFleet(){VID=null;renderFleet();}
+
+// ══ USER MANAGEMENT ═══════════════════════════════════
+async function openUserMgmt() {
+  // admin만 추가 섹션 표시
+  const addSection = document.getElementById('user-add-section');
+  if(addSection) addSection.style.display = CURRENT_USER.role==='admin' ? 'block' : 'none';
+
+  // 선박 체크박스 동적 생성
+  const checksEl = document.getElementById('new-vessel-checks');
+  if(checksEl) {
+    checksEl.innerHTML = IDX.map(vid => {
+      const name = FLEET[vid]?.info?.name || vid;
+      return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;background:var(--bg-panel);padding:4px 8px;border-radius:6px">
+        <input type="checkbox" value="${vid}"> ${name}
+      </label>`;
+    }).join('');
+  }
+  await loadUserList();
+  openM('m-user-mgmt');
+}
+
+async function loadUserList() {
+  try {
+    const users = await apiFetch('/api/auth/users');
+    const el = document.getElementById('user-list');
+    const roleLabel = {'admin':'관리자','editor':'편집자','viewer':'읽기전용'};
+    const roleColor = {'admin':'var(--blue)','editor':'var(--green)','viewer':'var(--amber)'};
+    if(!users.length) { el.innerHTML='<div style="color:var(--txt-m);font-size:13px">등록된 사용자 없음</div>'; return; }
+    el.innerHTML = users.map(u => {
+      const vessels = JSON.parse(u.vessels||'[]');
+      const vesselNames = vessels.map(vid => FLEET[vid]?.info?.name || vid).join(', ') || '전체';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-panel);border-radius:8px;margin-bottom:6px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600;color:var(--txt-h)">${u.username}</span>
+            <span style="font-size:10px;font-weight:600;color:${roleColor[u.role]||'var(--txt-m)'};background:var(--bg-white);padding:2px 7px;border-radius:4px;border:1px solid ${roleColor[u.role]||'var(--border)'}">${roleLabel[u.role]||u.role}</span>
+          </div>
+          <div style="font-size:11px;color:var(--txt-m)">접근 선박: ${u.role==='admin'?'전체':vesselNames}</div>
+        </div>
+        ${u.username!=='admin' && CURRENT_USER.role==='admin' ?`
+        <div style="display:flex;gap:6px">
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="editUserVessels(${u.id},'${u.username}',${JSON.stringify(vessels)})">⚙ 설정</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;color:var(--red)" onclick="deleteUserMgmt(${u.id},'${u.username}')">삭제</button>
+        </div>`:''}
+      </div>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function addUserMgmt() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const role = document.getElementById('new-role').value;
+  const errEl = document.getElementById('user-add-err');
+  errEl.style.display = 'none';
+  if(!username||!password) { errEl.textContent='아이디와 비밀번호를 입력하세요'; errEl.style.display='block'; return; }
+
+  // 선택된 vessel 수집
+  const vessels = [];
+  document.querySelectorAll('#new-vessel-checks input:checked').forEach(cb => vessels.push(cb.value));
+
+  try {
+    await apiFetch('/api/auth/users','POST',{username, password, role, vessels});
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    await loadUserList();
+    toast('사용자가 추가됐습니다');
+  } catch(e) { errEl.textContent = e.message||'추가 실패'; errEl.style.display='block'; }
+}
+
+async function editUserVessels(uid, username, currentVessels) {
+  const vesselOpts = IDX.map(vid => {
+    const name = FLEET[vid]?.info?.name || vid;
+    const checked = currentVessels.includes(vid) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+      <input type="checkbox" value="${vid}" ${checked}> <span style="font-size:13px">${name}</span>
+    </label>`;
+  }).join('');
+
+  const roleOpts = ['editor','viewer'].map(r =>
+    `<option value="${r}">${r==='editor'?'편집자':'읽기전용'}</option>`).join('');
+
+  const html = `<div style="padding:16px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px">👤 ${username} 설정</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--txt-s);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">역할</div>
+      <select id="edit-role" class="form-ctrl">${roleOpts}</select>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--txt-s);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">접근 가능 선박</div>
+      <div id="edit-vessel-checks">${vesselOpts}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-add" onclick="saveUserEdit(${uid})" style="flex:1">저장</button>
+      <button class="btn-sec" onclick="closeM('m-edit-user')" style="flex:1">취소</button>
+    </div>
+  </div>`;
+
+  // 간단한 인라인 모달
+  let editModal = document.getElementById('m-edit-user');
+  if(!editModal) {
+    editModal = document.createElement('div');
+    editModal.id = 'm-edit-user';
+    editModal.className = 'modal-overlay';
+    editModal.innerHTML = `<div class="modal" style="width:380px"><div id="edit-user-body"></div></div>`;
+    document.body.appendChild(editModal);
+  }
+  document.getElementById('edit-user-body').innerHTML = html;
+  openM('m-edit-user');
+}
+
+async function saveUserEdit(uid) {
+  const role = document.getElementById('edit-role').value;
+  const vessels = [];
+  document.querySelectorAll('#edit-vessel-checks input:checked').forEach(cb => vessels.push(cb.value));
+  try {
+    await apiFetch(`/api/auth/users/${uid}`,'PUT',{role, vessels});
+    closeM('m-edit-user');
+    await loadUserList();
+    toast('설정이 저장됐습니다');
+  } catch(e) { toast('저장 실패: '+e.message, true); }
+}
+
+async function deleteUserMgmt(uid, username) {
+  if(!confirm(`'${username}' 계정을 삭제하시겠습니까?`)) return;
+  try {
+    await apiFetch(`/api/auth/users/${uid}`,'DELETE');
+    await loadUserList();
+    toast('사용자가 삭제됐습니다');
+  } catch(e) { toast('삭제 실패: '+e.message, true); }
+}
+
+async function changePw() {
+  const oldPw = document.getElementById('old-pw').value;
+  const newPw = document.getElementById('new-pw').value;
+  const msgEl = document.getElementById('pw-msg');
+  msgEl.style.display = 'none';
+  if(!oldPw||!newPw) { msgEl.textContent='비밀번호를 입력하세요'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; return; }
+  try {
+    await apiFetch('/api/auth/password','PUT',{old_password:oldPw,new_password:newPw});
+    document.getElementById('old-pw').value = '';
+    document.getElementById('new-pw').value = '';
+    msgEl.textContent = '비밀번호가 변경됐습니다';
+    msgEl.style.color = 'var(--green)';
+    msgEl.style.display = 'block';
+  } catch(e) { msgEl.textContent=e.message||'변경 실패'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; }
+}
 
 function printCurrentTab() {
   const activeBtn = document.querySelector('.vnav-btn.active');
@@ -1100,6 +1286,8 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
 
 // ── INLINE EDIT HELPERS ──────────────────────────────────────
 function startEdit(span, ri, field, type) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal = FLEET[VID].jobs[ri][field] ?? '';
   const w = Math.max(span.offsetWidth, 80);
   const inp = document.createElement('input');
@@ -1131,6 +1319,8 @@ function startEdit(span, ri, field, type) {
 }
 
 function startEditSelect(span, ri, field, options) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal = FLEET[VID].jobs[ri][field] ?? '';
   const sel = document.createElement('select');
   sel.className = 'inline-select';
@@ -1159,6 +1349,8 @@ function startEditSelect(span, ri, field, options) {
 }
 
 async function addInlineRow() {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID) return;
 
   // 필터 초기화
@@ -1294,6 +1486,7 @@ function pNum(n){
 function openJobModal(idx){
   if(!VID)return;eJobIdx=idx;
   const isNew=idx===null;
+  if(isViewer() && isNew) { toast('읽기 전용 계정입니다', true); return; }
   document.getElementById('mj-title').textContent=isNew?'ADD JOB':'EDIT JOB';
   document.getElementById('mj-del').style.display=isNew?'none':'block';
   const j=isNew?{number:'',section:'GENERAL',category:'Shipyard',description:'',vendor:'',budget:0,consumption:0,start_date:'',end_date:'',remark:''}:FLEET[VID].jobs[idx];
@@ -1325,9 +1518,18 @@ function openJobModal(idx){
       updateProgPreview();
     };
   });
+  // viewer면 저장/삭제 버튼 숨김, 입력 비활성화
+  const vjMode = isViewer();
+  document.getElementById('mj-del').style.display = vjMode ? 'none' : (isNew?'none':'block');
+  document.querySelector('#m-job .btn-pri').style.display = vjMode ? 'none' : '';
+  document.querySelectorAll('#m-job input, #m-job select, #m-job textarea').forEach(el => {
+    el.disabled = vjMode;
+  });
   openM('m-job');
 }
 async function saveJob(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID)return;
   const st = document.getElementById('mj-st').value || document.getElementById('mj-st-txt').value.trim();
   const en = document.getElementById('mj-en').value || document.getElementById('mj-en-txt').value.trim();
@@ -1427,6 +1629,8 @@ function collectRemarks() {
 }
 
 async function deleteJob(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(eJobIdx===null||!VID)return;if(!confirm('Delete this job?'))return;
   const job = FLEET[VID].jobs[eJobIdx];
   setSS('saving');
@@ -1848,6 +2052,8 @@ function renderClass(){
 }
 
 function startEditC(span, ri, field, type){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal=FLEET[VID].classItems[ri][field]??'';
   const w=Math.max(span.offsetWidth,80);
   const inp=document.createElement('input');
@@ -1867,6 +2073,8 @@ function startEditC(span, ri, field, type){
 }
 
 function startEditSelectC(span, ri, field, options){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal=FLEET[VID].classItems[ri][field]??'';
   const sel=document.createElement('select');
   sel.className='inline-select';
@@ -1904,6 +2112,8 @@ function addClassRow(){
   toast('새 항목이 추가됐습니다. 셀을 클릭해서 바로 입력하세요.');
 }
 function openClassModal(idx){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   eClsIdx=idx;const isNew=idx===null;
   document.getElementById('mc-title').textContent=isNew?'ADD CLASS ITEM':'EDIT CLASS ITEM';
   document.getElementById('mc-del').style.display=isNew?'none':'block';
@@ -2052,6 +2262,8 @@ function _discRow(d, items) {
 }
 
 function startEditD(span, ri, field, type){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal=FLEET[VID].discussions[ri][field]??'';
   const w=Math.max(span.offsetWidth,80);
   const inp=document.createElement('input');
@@ -2067,6 +2279,8 @@ function startEditD(span, ri, field, type){
 }
 
 function startEditSelectD(span, ri, field, options){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const origVal=FLEET[VID].discussions[ri][field]??'';
   const sel=document.createElement('select');
   sel.className='inline-select';
@@ -2101,6 +2315,8 @@ function addDiscRow(){
   toast('새 로그가 추가됐습니다. 셀을 클릭해서 바로 입력하세요.');
 }
 function openDiscModal(idx){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   eDscIdx=idx;const isNew=idx===null;
   document.getElementById('md-title').textContent=isNew?'ADD DISCUSSION LOG':'EDIT LOG ITEM';
   document.getElementById('md-del').style.display=isNew?'none':'block';
@@ -2117,9 +2333,18 @@ function openDiscModal(idx){
   // Set priority radio
   const dpri = d.priority||'Normal';
   document.querySelectorAll('input[name="md-priority"]').forEach(r=>{ r.checked=(r.value===dpri); });
+  // viewer면 저장/삭제 버튼 숨김, 입력 비활성화
+  const viewerMode = isViewer();
+  document.getElementById('md-del').style.display = viewerMode ? 'none' : (isNew?'none':'block');
+  document.querySelector('#m-disc .btn-pri').style.display = viewerMode ? 'none' : '';
+  document.querySelectorAll('#m-disc input, #m-disc select, #m-disc textarea').forEach(el => {
+    el.disabled = viewerMode;
+  });
   openM('m-disc');
 }
 function saveDisc(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID)return;
   const items=FLEET[VID].discussions||[];
   const selPri = document.querySelector('input[name="md-priority"]:checked');
@@ -2140,6 +2365,8 @@ function saveDisc(){
   toast(eDscIdx===null?'Log added':'Log updated');
 }
 function deleteDisc(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(eDscIdx===null||!VID)return;if(!confirm('Delete?'))return;
   FLEET[VID].discussions.splice(eDscIdx,1);persist('disc',FLEET[VID].discussions);
   closeM('m-disc');buildDDF();renderDisc();toast('Log deleted');
@@ -2147,6 +2374,8 @@ function deleteDisc(){
 
 // ══ VESSEL ADD/EDIT ═══════════════════════════════════
 function openAddVesselModal(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   eVesselNew=true;
   document.getElementById('mv-title').textContent='ADD NEW VESSEL';
   document.getElementById('mv-del').style.display='none';
@@ -2155,6 +2384,8 @@ function openAddVesselModal(){
   openM('m-vessel');
 }
 function openVesselEditModal(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID)return;eVesselNew=false;
   const info=FLEET[VID].info;
   document.getElementById('mv-title').textContent='EDIT VESSEL INFO';
@@ -2352,6 +2583,8 @@ function _renderTrackingTable(key){
 
 // 캘린더로 날짜 직접 설정
 async function setTrackingDate(key, rowId, col, val){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const cfg = TRACKING_CFG[key];
   const row = (FLEET[VID][cfg.key]||[]).find(r=>String(r.id)===String(rowId));
   if(!row) return;
@@ -2361,6 +2594,8 @@ async function setTrackingDate(key, rowId, col, val){
 
 // 인라인 편집
 function startTrackingEdit(span, key, rowId, col, type, optsOrKey){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const cfg = TRACKING_CFG[key];
   const row = (FLEET[VID][cfg.key]||[]).find(r=>String(r.id)===String(rowId));
   if(!row) return;
@@ -2397,6 +2632,8 @@ function startTrackingEdit(span, key, rowId, col, type, optsOrKey){
 
 // 저장
 async function saveTrackingRow(key, id, row){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   const cfg = TRACKING_CFG[key];
   setSS('saving');
   try {
@@ -2408,6 +2645,8 @@ async function saveTrackingRow(key, id, row){
 
 // 행 추가
 async function addTrackingRow(key){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID) return;
   const cfg = TRACKING_CFG[key];
   setSS('saving');
@@ -2422,6 +2661,8 @@ async function addTrackingRow(key){
 
 // 행 삭제
 async function deleteTrackingRow(key, rowId){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!confirm('이 행을 삭제하시겠습니까?')) return;
   const cfg = TRACKING_CFG[key];
   setSS('saving');
@@ -2435,9 +2676,13 @@ async function deleteTrackingRow(key, rowId){
 }
 
 // xlsx 업로드 모달
-function openTrackingXlsx(){ openM('m-tracking-xlsx'); }
+function openTrackingXlsx(){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+ openM('m-tracking-xlsx'); }
 
 async function uploadTrackingXlsx(input){
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
   if(!VID){ toast('선박을 먼저 선택하세요', true); return; }
   if(!input.files.length) return;
 
