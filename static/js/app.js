@@ -1228,9 +1228,9 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
-    // 자식 있는 항목은 _autoSum.completion 우선, 단 직접 입력값 있으면 날짜 기반
-    const livePct = (hasAutoSum && !hasManualBudget) ? null : calcProgress(effStart, effEnd);
-    const pct = (hasAutoSum && !hasManualBudget) ? j._autoSum.completion
+    // Progress는 항상 자식 평균 사용 (Budget 직접입력 여부 무관)
+    const livePct = hasAutoSum ? null : calcProgress(effStart, effEnd);
+    const pct = hasAutoSum ? j._autoSum.completion
               : livePct !== null ? livePct
               : (j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
