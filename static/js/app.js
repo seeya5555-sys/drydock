@@ -1149,8 +1149,8 @@ function renderJobs(){
           <div style="min-width:160px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
               <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">📅 스케줄</span>
-              <div style="flex:1;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden">
-                <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:4px"></div>
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
+                <div style="width:${avgPct}%;height:100%;background:${pctCol};border-radius:3px"></div>
               </div>
               <span style="font-size:12px;font-weight:700;color:${pctCol};min-width:36px">${avgPct}%</span>
             </div>
@@ -1159,7 +1159,7 @@ function renderJobs(){
               <div style="flex:1;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">
                 <div style="width:${actPct}%;height:100%;background:${actCol};border-radius:3px"></div>
               </div>
-              <span style="font-size:11px;font-weight:600;color:${actCol};min-width:36px">${actPct}%</span>
+              <span style="font-size:12px;font-weight:700;color:${actCol};min-width:36px">${actPct}%</span>
             </div>
           </div>
         </div>
@@ -1232,19 +1232,19 @@ function renderJobs(){
                 <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL CONSUMED</div>
               </div>
               <div style="min-width:130px">
-                <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-                  <span style="font-size:8px;color:rgba(255,255,255,.45);white-space:nowrap;min-width:28px">📅 스케줄</span>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                  <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">📅 스케줄</span>
                   <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
                     <div style="width:${sAvgPct}%;height:100%;background:${sPctCol};border-radius:3px"></div>
                   </div>
-                  <span style="font-size:11px;font-weight:600;color:${sPctCol};min-width:30px">${sAvgPct}%</span>
+                  <span style="font-size:12px;font-weight:700;color:${sPctCol};min-width:36px">${sAvgPct}%</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:5px">
-                  <span style="font-size:8px;color:rgba(255,255,255,.45);white-space:nowrap;min-width:28px">✏ 공정률</span>
-                  <div style="flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">✏ 공정률</span>
+                  <div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
                     <div style="width:${sActPct}%;height:100%;background:${sActCol};border-radius:3px"></div>
                   </div>
-                  <span style="font-size:10px;font-weight:600;color:${sActCol};min-width:30px">${sActPct}%</span>
+                  <span style="font-size:12px;font-weight:700;color:${sActCol};min-width:36px">${sActPct}%</span>
                 </div>
               </div>
             </div>
@@ -1393,8 +1393,8 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         </div>
         <div style="display:flex;align-items:center;gap:4px;margin-top:3px" title="실제 공정률 (클릭하여 수정)">
           <span style="font-size:9px;color:#7c3aed;white-space:nowrap;min-width:36px">✏ 공정률</span>
-          <div style="flex:1;background:#e2e8f0">
-            <div class="prog-bar" style="background:#e2e8f0">
+          <div class="prog-wrap" style="flex:1">
+            <div class="prog-bar" style="background:#e8e0f0;border-color:#d8c8f0">
               <div class="prog-fill" style="width:${effCompletion}%;background:${actBarCol}"></div>
             </div>
             ${isAutoCompletion
