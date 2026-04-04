@@ -1357,6 +1357,16 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
           <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
           <div class="prog-pct" style="color:${col}">${pct}%</div>
         </div>
+        <div class="prog-wrap" style="margin-top:3px" title="실제 공정률 (클릭하여 수정)">
+          <div class="prog-bar" style="background:#e2e8f0">
+            <div class="prog-fill" style="width:${j.completion||0}%;background:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'#cbd5e1'}"></div>
+          </div>
+          <div class="prog-pct cell-edit" onclick="startEdit(this,${ri},'completion','number')" style="color:${(j.completion||0)>=100?'#0d9488':(j.completion||0)>0?'#7c3aed':'var(--txt-m)'};cursor:pointer" title="클릭하여 실제 공정률 입력">${j.completion||0}%</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:2px">
+          <span style="font-size:9px;color:var(--txt-m)">📅 예정</span>
+          <span style="font-size:9px;color:#7c3aed">✏ 실제</span>
+        </div>
         ${dateInfo}
       </td>
       <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
