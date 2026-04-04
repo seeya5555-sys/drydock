@@ -8,12 +8,14 @@ Run:
 Open: http://localhost:5000
 """
 
-import sqlite3, os, io, json
-from flask import Flask, g, jsonify, request, render_template, abort, send_file
+import sqlite3, os, io, json, hashlib, secrets
+from flask import Flask, g, jsonify, request, render_template, abort, send_file, session, redirect, url_for
 
 app = Flask(__name__)
 app.config["DATABASE"] = os.path.join(app.instance_path, "fleet.db")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024   # 50 MB
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "drydock-secret-key-2026")
+app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7일
 os.makedirs(app.instance_path, exist_ok=True)
 
 
@@ -46,6 +48,72 @@ def row(sql, *args):
 
 with app.app_context():
     init_db()
+    db = get_db()
+    # 사용자 테이블 생성 (role, vessels 포함)
+    db.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'editor',
+        vessels TEXT DEFAULT '[]',
+        created_at DATETIME DEFAULT (datetime('now'))
+    )""")
+    # 기존 테이블에 컬럼 추가 (마이그레이션)
+    for col, default in [('role',"'editor'"), ('vessels',"'[]'")]:
+        try:
+            db.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}")
+        except: pass
+    # 기본 admin 계정
+    def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
+    if not db.execute("SELECT 1 FROM users WHERE username='admin'").fetchone():
+        db.execute("INSERT INTO users(username,password_hash,role,vessels) VALUES(?,?,?,?)",
+                   ('admin', hash_pw('drydock2026'), 'admin', '[]'))
+    else:
+        db.execute("UPDATE users SET role='admin' WHERE username='admin'")
+    db.commit()
+
+def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
+
+def get_current_user():
+    if not session.get('logged_in'): return None
+    return get_db().execute("SELECT * FROM users WHERE username=?",
+                            (session['username'],)).fetchone()
+
+def is_admin():
+    u = get_current_user()
+    return u and u['role'] == 'admin'
+
+def can_access_vessel(vid):
+    u = get_current_user()
+    if not u: return False
+    if u['role'] == 'admin': return True
+    allowed = json.loads(u['vessels'] or '[]')
+    return vid in allowed
+
+def is_viewer():
+    u = get_current_user()
+    return u and u['role'] == 'viewer'
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('logged_in'):
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated
+
+def viewer_forbidden(f):
+    """읽기 전용(viewer) 계정은 쓰기 불가"""
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if is_viewer():
+            return jsonify({"error": "읽기 전용 계정입니다"}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ── JSON column helpers ───────────────────────────────────────
@@ -97,7 +165,118 @@ def to_disc(r):
 
 
 # ── Frontend ──────────────────────────────────────────────────
+@app.route("/login", methods=["GET"])
+def login_page():
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
+    return render_template("login.html")
+
+@app.route("/login", methods=["POST"])
+def do_login():
+    data = request.get_json(force=True)
+    username = data.get("username","").strip()
+    password = data.get("password","")
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username=? AND password_hash=?",
+                      (username, hash_pw(password))).fetchone()
+    if user:
+        session.permanent = True
+        session['logged_in'] = True
+        session['username'] = username
+        session['role'] = user['role'] or 'editor'
+        session['vessels'] = user['vessels'] or '[]'
+        return jsonify({"ok": True, "role": session['role']})
+    return jsonify({"ok": False, "error": "아이디 또는 비밀번호가 틀렸습니다"}), 401
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for('login_page'))
+
+@app.route("/api/auth/me", methods=["GET"])
+@login_required
+def get_me():
+    u = get_current_user()
+    if not u: return jsonify({"error": "Not found"}), 404
+    return jsonify({"username": u['username'], "role": u['role'],
+                    "vessels": json.loads(u['vessels'] or '[]')})
+
+@app.route("/api/auth/users", methods=["GET"])
+@login_required
+def get_users():
+    users = rows("SELECT id, username, role, vessels, created_at FROM users ORDER BY id")
+    return jsonify(users)
+
+@app.route("/api/auth/users", methods=["POST"])
+@login_required
+def add_user():
+    if not is_admin():
+        return jsonify({"error": "관리자만 계정을 생성할 수 있습니다"}), 403
+    data = request.get_json(force=True)
+    username = data.get("username","").strip()
+    password = data.get("password","")
+    role = data.get("role","editor")
+    vessels = json.dumps(data.get("vessels", []))
+    if not username or not password:
+        return jsonify({"error": "아이디와 비밀번호를 입력하세요"}), 400
+    if role not in ('admin','editor','viewer'):
+        return jsonify({"error": "유효하지 않은 역할입니다"}), 400
+    try:
+        get_db().execute("INSERT INTO users(username,password_hash,role,vessels) VALUES(?,?,?,?)",
+                         (username, hash_pw(password), role, vessels))
+        get_db().commit()
+        return jsonify({"ok": True})
+    except:
+        return jsonify({"error": "이미 존재하는 아이디입니다"}), 409
+
+@app.route("/api/auth/users/<int:uid>", methods=["DELETE"])
+@login_required
+def delete_user(uid):
+    if not is_admin():
+        return jsonify({"error": "관리자만 계정을 삭제할 수 있습니다"}), 403
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not user: return jsonify({"error": "사용자 없음"}), 404
+    if user["username"] == "admin":
+        return jsonify({"error": "admin 계정은 삭제할 수 없습니다"}), 403
+    db.execute("DELETE FROM users WHERE id=?", (uid,))
+    db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/auth/users/<int:uid>", methods=["PUT"])
+@login_required
+def update_user(uid):
+    if not is_admin():
+        return jsonify({"error": "관리자만 계정을 수정할 수 있습니다"}), 403
+    data = request.get_json(force=True)
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not user: return jsonify({"error": "사용자 없음"}), 404
+    vessels = json.dumps(data.get("vessels", json.loads(user['vessels'] or '[]')))
+    role = data.get("role", user['role'])
+    db.execute("UPDATE users SET role=?, vessels=? WHERE id=?", (role, vessels, uid))
+    db.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/auth/password", methods=["PUT"])
+@login_required
+def change_password():
+    data = request.get_json(force=True)
+    username = session.get('username')
+    old_pw = data.get("old_password","")
+    new_pw = data.get("new_password","")
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username=? AND password_hash=?",
+                      (username, hash_pw(old_pw))).fetchone()
+    if not user:
+        return jsonify({"error": "현재 비밀번호가 틀렸습니다"}), 401
+    db.execute("UPDATE users SET password_hash=? WHERE username=?",
+               (hash_pw(new_pw), username))
+    db.commit()
+    return jsonify({"ok": True})
+
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
@@ -149,12 +328,16 @@ def delete_vessel(vid):
     return jsonify({"deleted": vid})
 
 @app.route("/api/fleet/summary")
+@login_required
 def fleet_summary():
     db = get_db()
+    u = get_current_user()
+    allowed = None if (u and u['role']=='admin') else json.loads(u['vessels'] or '[]') if u else []
     result = []
     for v in db.execute("SELECT * FROM vessels ORDER BY created_at").fetchall():
         vid = v["id"]
-        # 첨부파일 있는 ref_id 목록 (id, ref_type, ref_id만)
+        if allowed is not None and vid not in allowed:
+            continue
         attach_rows = db.execute(
             "SELECT ref_type, ref_id FROM attachments WHERE vessel_id=? GROUP BY ref_type, ref_id",
             (vid,)).fetchall()
