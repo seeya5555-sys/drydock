@@ -1005,13 +1005,10 @@ function computeParentSums(jobs) {
 
     const totalBudget   = desc.reduce((s,d) => s + (+d.budget||0), 0);
     const totalConsumed = desc.reduce((s,d) => s + (+d.consumption||0), 0);
+    // leaf 항목의 completion 값만으로 평균 계산 (날짜 기반 스케줄과 분리)
     const leaves = desc.filter(d => !hasChildren(d.number, jobs));
-    const pcts = leaves.map(d => {
-      const es = d._autoStart||d.start_date, ee = d._autoEnd||d.end_date;
-      const lp = calcProgress(es, ee);
-      return lp !== null ? lp : (d.completion||0);
-    });
-    const avgPct = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : (j.completion||0);
+    const compPcts = leaves.map(d => (+d.completion||0));
+    const avgPct = compPcts.length ? Math.round(compPcts.reduce((a,b)=>a+b,0)/compPcts.length) : 0;
     j._autoSum = { budget: totalBudget, consumption: totalConsumed, completion: avgPct };
   });
 }
