@@ -715,8 +715,43 @@ function computeParentDates(jobs) {
   });
 }
 
+// 상위항목 Budget/Consumed/Progress를 하위항목 합계로 자동 계산
+function computeParentSums(jobs) {
+  const numMap = {};
+  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+
+  function getAllDesc(num) {
+    const result = [];
+    jobs.forEach(j => {
+      if(j.number === num) return;
+      let p = getParentNumber(j.number);
+      while(p) {
+        if(p === num) { result.push(j); break; }
+        p = getParentNumber(p);
+      }
+    });
+    return result;
+  }
+
+  jobs.forEach(j => {
+    if(!hasChildren(j.number, jobs)) { j._autoSum = null; return; }
+    const desc = getAllDesc(j.number);
+    if(!desc.length) { j._autoSum = null; return; }
+
+    const totalBudget   = desc.reduce((s,d) => s + (+d.budget||0), 0);
+    const totalConsumed = desc.reduce((s,d) => s + (+d.consumption||0), 0);
+    const leaves = desc.filter(d => !hasChildren(d.number, jobs));
+    const pcts = leaves.map(d => {
+      const es = d._autoStart||d.start_date, ee = d._autoEnd||d.end_date;
+      const lp = calcProgress(es, ee);
+      return lp !== null ? lp : (d.completion||0);
+    });
+    const avgPct = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : (j.completion||0);
+    j._autoSum = { budget: totalBudget, consumption: totalConsumed, completion: avgPct };
+  });
+}
+
 function renderJobs(){
-  if(!VID)return;
   const jobs=FLEET[VID].jobs||[];
   const q=document.getElementById('j-q').value.toLowerCase();
   const sf=document.getElementById('j-sf').value,cf=document.getElementById('j-cf').value,pf=document.getElementById('j-pf').value;
@@ -757,6 +792,8 @@ function renderJobs(){
 
   // 상위항목 날짜 자동 계산
   computeParentDates(fil);
+  // 상위항목 Budget/Consumed/Progress 자동 계산
+  computeParentSums(fil);
 
   // Category/Section 그룹 기본 접힘 초기화 (전체 펼치기 상태면 건너뜀)
   const btn = document.getElementById('btn-expand-all');
@@ -924,9 +961,10 @@ function renderJobs(){
         // Section 하위 job들
         if(!isSecCollapsed) {
           const secSorted = sortJobTree(secJobs);
-          const secJobTreeMap = buildJobTree(secSorted).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{});
-          secSorted.filter(j=>isJobVisible(j,secSorted)).forEach(j=>{
-            html += _jobRow(j, jobs, secSorted, secJobTreeMap, 0, false);
+          // treeMap은 fil 전체 기준으로 계산된 것 사용 (부모-자식 관계 정확도)
+          const secJobTreeMap = buildJobTree(fil).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{});
+          secSorted.filter(j=>isJobVisible(j,fil)).forEach(j=>{
+            html += _jobRow(j, jobs, fil, secJobTreeMap, 0, false);
           });
         }
       });
@@ -986,11 +1024,16 @@ function expandCollapseAll() {
 
 function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const ri=jobs.indexOf(j);
-    // 상위항목은 자동 계산 날짜 사용
+    // 상위항목은 자동 계산 날짜/합계 사용
     const effStart = j._autoStart || j.start_date;
     const effEnd   = j._autoEnd   || j.end_date;
-    const livePct=calcProgress(effStart, effEnd);
-    const pct=livePct!==null?livePct:(j.completion||0);
+    const hasAutoSum = j._autoSum !== null && j._autoSum !== undefined;
+    const effBudget   = hasAutoSum ? j._autoSum.budget     : (+j.budget||0);
+    const effConsumed = hasAutoSum ? j._autoSum.consumption: (+j.consumption||0);
+    const livePct = calcProgress(effStart, effEnd);
+    const pct = livePct !== null ? livePct
+              : hasAutoSum ? j._autoSum.completion
+              : (j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=effStart&&effEnd
@@ -1030,8 +1073,13 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
       </span></td>
       <td data-label="Description"><span class="cell-edit" onclick="startEdit(this,${ri},'description','text')" style="display:block;max-width:260px;color:var(--txt-h);font-size:13px;font-weight:500">${j.description||'—'}</span></td>
       <td data-label="Vendor"><span class="cell-edit" onclick="startEdit(this,${ri},'vendor','text')" style="display:block;max-width:130px;font-size:12px;color:var(--txt-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.vendor||'—'}</span></td>
-      <td data-label="Budget" style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'budget','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--txt-h)">$${(+j.budget||0).toLocaleString()}</span></td>
-      <td data-label="Consumed" style="text-align:right"><span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${(+j.consumption||0).toLocaleString()}</span></td>
+      <td data-label="Budget" style="text-align:right">
+        <span class="cell-edit" onclick="startEdit(this,${ri},'budget','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--txt-h)">$${effBudget.toLocaleString()}</span>
+        ${hasAutoSum?'<div style="font-size:9px;color:var(--blue);text-align:right">auto</div>':''}
+      </td>
+      <td data-label="Consumed" style="text-align:right">
+        <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${effConsumed.toLocaleString()}</span>
+      </td>
       <td data-label="Progress">
         <div class="prog-wrap">
           <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
