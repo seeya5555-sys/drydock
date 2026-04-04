@@ -1331,10 +1331,17 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
-    // 스케줄 바: 자식 있으면 leaf 스케줄 평균, 없으면 날짜 기반
+    // 스케줄 바: 부모에 날짜 직접 입력 → 수동, 없으면 자식 평균
+    const hasManualDates = !!(j.start_date && j.end_date);
     const livePct = calcProgress(effStart, effEnd);
-    const pct = hasAutoSum ? (j._autoSum.schedule ?? 0) : (livePct !== null ? livePct : 0);
+    const pct = hasManualDates
+      ? (livePct !== null ? livePct : 0)
+      : hasAutoSum ? (j._autoSum.schedule ?? 0)
+      : (livePct !== null ? livePct : 0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
+
+    // 공정률 바: 부모에 completion 직접 입력(>0) → 수동, 없으면(0) 자식 평균
+    const hasManualCompletion = hasAutoSum && (+j.completion||0) > 0;
     const cc=j.category==='Shipyard'?'cat-sy':j.category==='Shore Repair'?'cat-sh':j.category==='Spare'?'cat-sp':j.category==='Store'?'cat-st':j.category==='Paint'?'cat-pt':'cat-cr';
     const dateInfo=effStart&&effEnd
       ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${effStart} → ${effEnd}${j._autoStart?'<span style="font-size:9px;color:var(--blue);margin-left:4px">auto</span>':''}</div>`
@@ -1346,8 +1353,11 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
 
     // 공정률: 자식 있으면 autoSum.completion 자동계산, 없으면 수동입력
-    const effCompletion = hasAutoSum ? j._autoSum.completion : (j.completion||0);
-    const isAutoCompletion = hasAutoSum; // 자동계산 여부
+    // 단, 부모에 completion 직접 입력(>0)이면 수동값 우선
+    const effCompletion = hasManualCompletion ? (+j.completion||0)
+                        : hasAutoSum ? j._autoSum.completion
+                        : (j.completion||0);
+    const isAutoCompletion = hasAutoSum && !hasManualCompletion;
     const actBarCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'#cbd5e1';
     const actPctCol = effCompletion>=100?'#0d9488':effCompletion>0?'#7c3aed':'var(--txt-m)';
     const depth = isFiltering ? 0 : (treeMap[j._id] || 0);
