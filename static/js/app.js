@@ -190,7 +190,7 @@ function renderFleet(){
 
     // Duration 자동계산 + 소요일
     const autoDur = (info.dockIn && info.dockOut)
-      ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000)
+      ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000) + 1
       : (info.duration || null);
     let elapsedTag = '';
     if(info.dockIn && autoDur) {
@@ -525,7 +525,7 @@ function renderDash(){
 
   // Duration 자동계산 (DB 저장값 없으면 날짜로 계산)
   const autoDur = (info.dockIn && info.dockOut)
-    ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000)
+    ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000) + 1
     : (info.duration || null);
 
   // D-day / 소요일 계산
@@ -598,7 +598,7 @@ function calcVesselDuration() {
   if(inVal && outVal) {
     const sd = new Date(inVal), ed = new Date(outVal);
     if(!isNaN(sd) && !isNaN(ed) && ed >= sd) {
-      durEl.value = Math.round((ed - sd) / 86400000);
+      durEl.value = Math.round((ed - sd) / 86400000) + 1;
       return;
     }
   }
