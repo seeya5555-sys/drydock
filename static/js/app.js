@@ -1128,54 +1128,88 @@ async function addInlineRow() {
   buildJFilters();
   renderJobs();
 
-  // 테이블 맨 아래에 임시 입력 행 추가 (DB 저장 없음)
+  const SECTIONS = ['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ETC','REPAIR','STORE','SPARE'];
+  const CATS = ['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
+
   const tb = document.getElementById('j-body');
   const tempTr = document.createElement('tr');
   tempTr.id = 'inline-temp-row';
   tempTr.style.background = 'var(--blue-light)';
   tempTr.innerHTML = `
-    <td style="padding:6px 8px">
-      <input id="inline-num-inp" class="inline-input" type="text" placeholder="No." style="width:70px">
+    <td style="padding:4px 6px">
+      <input id="il-num" class="inline-input" type="text" placeholder="No." style="width:70px">
     </td>
-    <td colspan="9" style="padding:6px 8px;color:var(--txt-m);font-size:12px">번호 입력 후 Enter — Esc로 취소</td>`;
+    <td style="padding:4px 6px">
+      <select id="il-sec" class="inline-select" style="width:100px">
+        ${SECTIONS.map(s=>`<option${s==='GENERAL'?' selected':''}>${s}</option>`).join('')}
+      </select>
+    </td>
+    <td style="padding:4px 6px">
+      <select id="il-cat" class="inline-select" style="width:110px">
+        ${CATS.map(c=>`<option${c==='Shipyard'?' selected':''}>${c}</option>`).join('')}
+      </select>
+    </td>
+    <td style="padding:4px 6px">
+      <input id="il-desc" class="inline-input" type="text" placeholder="Description" style="width:180px">
+    </td>
+    <td style="padding:4px 6px">
+      <input id="il-vend" class="inline-input" type="text" placeholder="Vendor" style="width:100px">
+    </td>
+    <td style="padding:4px 6px">
+      <input id="il-bud" class="inline-input" type="number" placeholder="Budget" style="width:90px">
+    </td>
+    <td colspan="4" style="padding:4px 8px;color:var(--txt-m);font-size:11px">
+      Enter 저장 — Esc 취소
+    </td>`;
   tb.appendChild(tempTr);
 
-  const inp = document.getElementById('inline-num-inp');
-  inp.focus();
+  const numInp = document.getElementById('il-num');
+  numInp.focus();
   tempTr.scrollIntoView({ behavior:'smooth', block:'center' });
 
-  inp.addEventListener('keydown', async e => {
-    if(e.key === 'Escape') {
-      tempTr.remove();
-      return;
-    }
-    if(e.key === 'Enter') {
-      const num = inp.value.trim();
-      if(!num) { tempTr.remove(); return; }
-      tempTr.remove();
+  // Tab키로 필드 간 이동, Enter로 저장
+  const saveRow = async () => {
+    const num = document.getElementById('il-num')?.value.trim();
+    if(!num) { tempTr.remove(); return; }
+    tempTr.remove();
 
-      // DB에 저장
-      setSS('saving');
-      try {
-        const newJob = await apiFetch(`${API}/vessels/${VID}/jobs`, 'POST', {
-          number: num, section:'GENERAL', category:'Shipyard',
-          description:'', vendor:'', budget:0, consumption:0,
-          start_date:'', end_date:'', completion:0, remarks:[]
-        });
-        FLEET[VID].jobs = [...(FLEET[VID].jobs||[]), dbJ(newJob)];
-        setSS('synced');
-      } catch(err){ setSS('error'); toast('추가 실패: '+err.message, true); return; }
+    const sec   = document.getElementById('il-sec')?.value  || 'GENERAL';
+    const cat   = document.getElementById('il-cat')?.value  || 'Shipyard';
+    const desc  = document.getElementById('il-desc')?.value.trim() || '';
+    const vend  = document.getElementById('il-vend')?.value.trim() || '';
+    const bud   = parseFloat(document.getElementById('il-bud')?.value) || 0;
 
-      sKey = 'number'; sDir = 1;
-      buildJFilters(); renderJobs();
-      toast('Job 추가됐습니다');
-    }
+    setSS('saving');
+    try {
+      const newJob = await apiFetch(`${API}/vessels/${VID}/jobs`, 'POST', {
+        number:num, section:sec, category:cat,
+        description:desc, vendor:vend, budget:bud,
+        consumption:0, start_date:'', end_date:'', completion:0, remarks:[]
+      });
+      FLEET[VID].jobs = [...(FLEET[VID].jobs||[]), dbJ(newJob)];
+      setSS('synced');
+    } catch(err){ setSS('error'); toast('추가 실패: '+err.message, true); return; }
+
+    sKey = 'number'; sDir = 1;
+    buildJFilters(); renderJobs();
+    toast('Job 추가됐습니다');
+  };
+
+  // 모든 입력 필드에 이벤트 등록
+  tempTr.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('keydown', e => {
+      if(e.key === 'Escape') { tempTr.remove(); }
+      if(e.key === 'Enter')  { saveRow(); }
+    });
   });
 
-  inp.addEventListener('blur', () => {
+  // 포커스가 행 밖으로 나가면 취소
+  tempTr.addEventListener('focusout', e => {
     setTimeout(() => {
-      const row = document.getElementById('inline-temp-row');
-      if(row) row.remove();
+      if(!tempTr.contains(document.activeElement)) {
+        const row = document.getElementById('inline-temp-row');
+        if(row) row.remove();
+      }
     }, 200);
   });
 }
