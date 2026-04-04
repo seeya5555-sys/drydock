@@ -1222,11 +1222,15 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effStart = j._autoStart || j.start_date;
     const effEnd   = j._autoEnd   || j.end_date;
     const hasAutoSum = j._autoSum !== null && j._autoSum !== undefined;
-    const effBudget   = hasAutoSum ? j._autoSum.budget     : (+j.budget||0);
-    const effConsumed = hasAutoSum ? j._autoSum.consumption: (+j.consumption||0);
-    // 자식 있는 항목은 _autoSum.completion 우선 (날짜 기반 덮어쓰기 방지)
-    const livePct = hasAutoSum ? null : calcProgress(effStart, effEnd);
-    const pct = hasAutoSum ? j._autoSum.completion
+    // 부모 항목에 직접 입력값이 있으면 우선 사용, 없으면(0) 자동 계산값 사용
+    const hasManualBudget   = hasAutoSum && (+j.budget||0) > 0;
+    const hasManualConsumed = hasAutoSum && (+j.consumption||0) > 0;
+    const effBudget   = hasManualBudget   ? (+j.budget||0)          : hasAutoSum ? j._autoSum.budget      : (+j.budget||0);
+    const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
+    const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
+    // 자식 있는 항목은 _autoSum.completion 우선, 단 직접 입력값 있으면 날짜 기반
+    const livePct = (hasAutoSum && !hasManualBudget) ? null : calcProgress(effStart, effEnd);
+    const pct = (hasAutoSum && !hasManualBudget) ? j._autoSum.completion
               : livePct !== null ? livePct
               : (j.completion||0);
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
@@ -1270,7 +1274,7 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
       <td data-label="Vendor"><span class="cell-edit" onclick="startEdit(this,${ri},'vendor','text')" style="display:block;max-width:130px;font-size:12px;color:var(--txt-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.vendor||'—'}</span></td>
       <td data-label="Budget" style="text-align:right">
         <span class="cell-edit" onclick="startEdit(this,${ri},'budget','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--txt-h)">$${effBudget.toLocaleString()}</span>
-        ${hasAutoSum?'<div style="font-size:9px;color:var(--blue);text-align:right">auto</div>':''}
+        ${showAuto?'<div style="font-size:9px;color:var(--blue);text-align:right">auto</div>':''}
       </td>
       <td data-label="Consumed" style="text-align:right">
         <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${effConsumed.toLocaleString()}</span>
