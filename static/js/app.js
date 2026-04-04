@@ -181,7 +181,8 @@ function renderFleet(){
     const v=FLEET[id],info=v.info,jobs=v.jobs||[];
     const tb=jobs.reduce((s,j)=>s+(+j.budget||0),0),tc=jobs.reduce((s,j)=>s+(+j.consumption||0),0);
     const pct=tb?Math.min(100,(tc/tb)*100):0;
-    const done2=jobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);return(p!==null?p:j.completion||0)>=100;}).length;
+    const done2=jobs.filter(j=>{if(hasChildren(j.number,jobs))return false;const p=calcProgress(j.start_date,j.end_date);return(p!==null?p:j.completion||0)>=100;}).length;
+    const leafCount=jobs.filter(j=>!hasChildren(j.number,jobs)).length;
     const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
     const st=vesselStatus(info);
     const stripeCls=st==='IN DOCK'?'amber':st==='COMPLETED'?'green':'grey';
@@ -208,7 +209,7 @@ function renderFleet(){
         <div class="vc-money">$${tc.toLocaleString()} consumed of $${tb.toLocaleString()}</div>
       </div>
       <div class="vc-stats">
-        <div class="vc-stat"><div class="vc-stat-n">${jobs.length}</div><div class="vc-stat-l">Jobs</div></div>
+        <div class="vc-stat"><div class="vc-stat-n">${leafCount}</div><div class="vc-stat-l">Jobs</div></div>
         <div class="vc-stat"><div class="vc-stat-n" style="color:var(--green)">${done2}</div><div class="vc-stat-l">Done</div></div>
         <div class="vc-stat"><div class="vc-stat-n" style="color:${oc>0?'var(--red)':'var(--green)'}">${oc}</div><div class="vc-stat-l">Class</div></div>
       </div>
@@ -491,11 +492,12 @@ function renderDash(){
   if(!VID)return;
   const v=FLEET[VID],info=v.info,jobs=v.jobs||[];
   const tb=jobs.reduce((s,j)=>s+(+j.budget||0),0),tc=jobs.reduce((s,j)=>s+(+j.consumption||0),0);
-  const done=jobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);return (p!==null?p:j.completion||0)>=100;}).length;
-  const prog=jobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);const pct=p!==null?p:j.completion||0;return pct>0&&pct<100;}).length;
+  const leafJobs = jobs.filter(j => !hasChildren(j.number, jobs));
+  const done=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);return (p!==null?p:j.completion||0)>=100;}).length;
+  const prog=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);const pct=p!==null?p:j.completion||0;return pct>0&&pct<100;}).length;
   const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
   document.getElementById('vb-name').textContent=info.name;
-  document.getElementById('vs-total').textContent=jobs.length;
+  document.getElementById('vs-total').textContent=leafJobs.length;
   document.getElementById('vs-done').textContent=done;
   document.getElementById('vs-prog').textContent=prog;
   document.getElementById('vs-bud').textContent=fmtK(tb);
@@ -977,7 +979,9 @@ function renderJobs(){
     fil = sortJobTree(fil);
   }
 
-  document.getElementById('j-cnt').textContent=`${fil.length} / ${jobs.length} jobs`;
+  const leafFilCount = fil.filter(j => !hasChildren(j.number, fil)).length;
+  const leafTotalCount = jobs.filter(j => !hasChildren(j.number, jobs)).length;
+  document.getElementById('j-cnt').textContent=`${leafFilCount} / ${leafTotalCount} jobs`;
   const tb=document.getElementById('j-body');
   if(!fil.length){tb.innerHTML='<tr><td colspan="10" class="empty-state">No jobs match the filters</td></tr>';return;}
 
