@@ -758,14 +758,17 @@ function renderJobs(){
   // 상위항목 날짜 자동 계산
   computeParentDates(fil);
 
-  // Category/Section 그룹 기본 접힘 초기화
-  const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
-  allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
-  // Section 중분류도 기본 접힘
-  allCats.forEach(c => {
-    const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
-    secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k+'_opened')) catCollapsed.add(k); });
-  });
+  // Category/Section 그룹 기본 접힘 초기화 (전체 펼치기 상태면 건너뜀)
+  const btn = document.getElementById('btn-expand-all');
+  const isFullyExpanded = btn && btn.textContent.includes('접기');
+  if(!isFullyExpanded) {
+    const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
+    allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
+    allCats.forEach(c => {
+      const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+      secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k+'_opened')) catCollapsed.add(k); });
+    });
+  }
 
   // 필터 중이면 그냥 평면 표시
   if(isFiltering) {
@@ -959,31 +962,24 @@ function toggleSecGroup(secKey) {
 function expandCollapseAll() {
   const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
   const btn = document.getElementById('btn-expand-all');
-
-  // 현재 접힌 게 있으면 → 전체 펼치기, 없으면 → 전체 접기
-  const hasCollapsed = catCollapsed.size > 0;
+  const isExpanding = btn && btn.textContent.includes('펼치기');
 
   catCollapsed.clear();
   jobCollapsed.clear();
 
-  if(hasCollapsed) {
-    // 전체 펼치기 상태
-    if(btn) btn.textContent = '▼ 전체 접기';
-  } else {
-    // 전체 접기 - Category, Section, Job 모두 접기
+  if(!isExpanding) {
+    // 전체 접기
     const cats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
     cats.forEach(c => {
       catCollapsed.add(c);
       const secs = [...new Set(jobs.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
       secs.forEach(s => catCollapsed.add(c+'::'+s));
     });
-    // Job No. 계층도 접기
-    const numMap = {};
-    jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
-    jobs.forEach(j => {
-      if(j.number && hasChildren(j.number, jobs)) jobCollapsed.add(j.number);
-    });
+    jobs.forEach(j => { if(j.number && hasChildren(j.number, jobs)) jobCollapsed.add(j.number); });
     if(btn) btn.textContent = '▶ 전체 펼치기';
+  } else {
+    // 전체 펼치기 - catCollapsed/jobCollapsed 비워두면 전부 펼쳐짐
+    if(btn) btn.textContent = '▼ 전체 접기';
   }
   renderJobs();
 }
