@@ -290,7 +290,8 @@ def change_password():
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html")
+    import time
+    return render_template("index.html", version=int(time.time()))
 
 
 # ══════════════════════════════════════════════════════════════
