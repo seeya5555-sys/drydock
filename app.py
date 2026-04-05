@@ -454,51 +454,77 @@ def upload_jobs_csv(vid):
 
     db = get_db()
     inserted = 0
+    updated = 0
     errors = []
+
+    # 기존 번호 목록 미리 로드
+    existing = {r["number"]: r["id"] for r in db.execute(
+        "SELECT id, number FROM jobs WHERE vessel_id=?", (vid,)).fetchall()}
 
     for i, row_data in enumerate(reader, start=2):
         r = {k.strip().lower(): v.strip() for k, v in row_data.items()}
         raw_budget = r.get("budget", "0") or "0"
         clean_budget = raw_budget.replace("$", "").replace(",", "").strip()
 
-        # 날짜 정규화
         def clean_date(v):
             v = (v or "").strip()
             return v if v else None
 
-        # completion 정규화 (숫자만)
         raw_comp = r.get("completion", "0") or "0"
         try:
             completion = int(float(raw_comp.replace("%","").strip()))
         except:
             completion = 0
 
+        number = r.get("number", "")
+        start_date = clean_date(r.get("start_date"))
+        end_date   = clean_date(r.get("end_date"))
+        budget     = float(clean_budget or 0)
+
         try:
-            db.execute(
-                "INSERT INTO jobs(vessel_id, number, section, category, description, "
-                "vendor, budget, consumption, start_date, end_date, completion, remarks) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    vid,
-                    r.get("number", ""),
-                    r.get("section", "GENERAL").upper(),
-                    r.get("category", "Shipyard"),
-                    r.get("description", ""),
-                    r.get("vendor", ""),
-                    float(clean_budget or 0),
-                    0,
-                    clean_date(r.get("start_date")),
-                    clean_date(r.get("end_date")),
-                    completion,
-                    "[]",
+            if number in existing:
+                # 기존 번호 → 날짜/Budget/Consumed만 업데이트 (입력값이 있을 때만)
+                updates = []
+                params  = []
+                if start_date:
+                    updates.append("start_date=?"); params.append(start_date)
+                if end_date:
+                    updates.append("end_date=?"); params.append(end_date)
+                if budget > 0:
+                    updates.append("budget=?"); params.append(budget)
+                if completion > 0:
+                    updates.append("completion=?"); params.append(completion)
+                if updates:
+                    params.append(existing[number])
+                    db.execute(f"UPDATE jobs SET {','.join(updates)} WHERE id=?", params)
+                    updated += 1
+            else:
+                # 신규 번호 → INSERT
+                db.execute(
+                    "INSERT INTO jobs(vessel_id, number, section, category, description, "
+                    "vendor, budget, consumption, start_date, end_date, completion, remarks) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        vid,
+                        number,
+                        r.get("section", "GENERAL").upper(),
+                        r.get("category", "Shipyard"),
+                        r.get("description", ""),
+                        r.get("vendor", ""),
+                        budget,
+                        0,
+                        start_date,
+                        end_date,
+                        completion,
+                        "[]",
+                    )
                 )
-            )
-            inserted += 1
+                inserted += 1
         except Exception as e:
             errors.append(f"Row {i}: {e}")
 
     db.commit()
-    return jsonify({"inserted": inserted, "errors": errors}), 201
+    return jsonify({"inserted": inserted, "updated": updated, "errors": errors}), 201
 
 @app.route("/api/vessels/<vid>/jobs", methods=["GET"])
 def get_jobs(vid):
