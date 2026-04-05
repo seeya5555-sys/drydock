@@ -99,11 +99,11 @@ function applyRoleUI() {
       style.id = 'viewer-style';
       style.textContent = `
         .btn-add, .add-btn, .edit-btn, .attach-btn, .btn-edit,
-        #j-add-row-btn, .upload-btn, .btn-sec[onclick*="CSV"],
-        .j-toolbar .btn-sec, .c-toolbar .btn-sec, .d-toolbar .btn-sec,
+        #j-add-row-btn, .upload-btn, .btn-sec[onclick*="CSV"]:not([onclick*="downloadCSVTemplate"]),
+        .j-toolbar .btn-sec:not([onclick*="downloadCSVTemplate"]), .c-toolbar .btn-sec, .d-toolbar .btn-sec,
         button[onclick*="openJobModal(null)"], button[onclick*="openAddVesselModal"],
         button[onclick*="addDiscRow"], button[onclick*="addInlineRow"],
-        button[onclick*="uploadJobsCSV"], button[onclick*="downloadCSVTemplate"],
+        button[onclick*="uploadJobsCSV"],
         button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
         button[onclick*="openTrackingXlsx"]
         { display: none !important; }
@@ -747,13 +747,13 @@ function renderActionsCell(actions, legacyAction) {
 
 // ══ CSV 업로드 ════════════════════════════════════════
 function downloadCSVTemplate() {
-  const headers = 'number,section,category,description,vendor,budget';
+  const headers = 'number,section,category,description,vendor,budget,start_date,end_date,completion';
   const sample = [
-    '1.1,GENERAL,Shipyard,Fixed fire fighting system isolation,,0',
-    '1.2,GENERAL,Shipyard,Ventilation fan,,0',
-    '2.1,PAINT,Shipyard,Hull blasting & painting,,0',
-    '3.1,STEEL,Shipyard,Hull steel renewal,,0',
-    '5.1,ENGINE,Shore Repair,Main engine inspection,,0',
+    '1.1,GENERAL,Shipyard,Fixed fire fighting system isolation,,0,2026-03-24,2026-04-10,0',
+    '1.2,GENERAL,Shipyard,Ventilation fan,,0,,,0',
+    '2.1,PAINT,Shipyard,Hull blasting & painting,,0,2026-03-24,2026-05-05,0',
+    '3.1,STEEL,Shipyard,Hull steel renewal,,0,,,0',
+    '5.1,ENGINE,Shore Repair,Main engine inspection,,0,2026-04-01,2026-04-15,50',
   ].join('\n');
   const csv = headers + '\n' + sample;
   const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
@@ -1072,24 +1072,24 @@ function renderJobs(){
   computeParentDates(jobs);
   computeParentSums(jobs);
 
-  // Category/Section 그룹 - 아직 catCollapsed에 없는 신규 항목만 기본 접힘 추가
-  // (이미 사용자가 열었거나 닫은 항목은 건드리지 않음)
-  const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
-  allCats.forEach(c => {
-    // 한번도 등장하지 않은 카테고리만 기본 접힘
-    if(!catCollapsed.has(c) && !_catEverSeen.has(c)) {
-      catCollapsed.add(c);
-    }
-    _catEverSeen.add(c);
-    const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
-    secs.forEach(s => {
-      const k = c+'::'+s;
-      if(!catCollapsed.has(k) && !_catEverSeen.has(k)) {
-        catCollapsed.add(k);
+  // Category/Section 그룹 - 전체 펼치기 상태면 건너뜀
+  if(!_expandAll) {
+    const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
+    allCats.forEach(c => {
+      if(!catCollapsed.has(c) && !_catEverSeen.has(c)) {
+        catCollapsed.add(c);
       }
-      _catEverSeen.add(k);
+      _catEverSeen.add(c);
+      const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+      secs.forEach(s => {
+        const k = c+'::'+s;
+        if(!catCollapsed.has(k) && !_catEverSeen.has(k)) {
+          catCollapsed.add(k);
+        }
+        _catEverSeen.add(k);
+      });
     });
-  });
+  }
 
   // 필터 중이면 그냥 평면 표시
   if(isFiltering) {
@@ -1383,6 +1383,7 @@ function renderJobs(){
 
 const catCollapsed = window.catCollapsed || new Set();
 const _catEverSeen = new Set();
+let _expandAll = false; // 전체 펼치기 상태 플래그
 
 // STORE 섹션 수동 Budget/Consumed 저장
 window._secManualBudget = window._secManualBudget || {};
@@ -1429,18 +1430,19 @@ async function setSecManualBudget(key, field, value) {
 } // 한번이라도 렌더된 cat/sec 추적
 
 function toggleCatGroup(cat) {
+  _expandAll = false;
   if(catCollapsed.has(cat)) catCollapsed.delete(cat);
   else catCollapsed.add(cat);
   renderJobs();
 }
 
 function toggleSecGroup(secKey) {
+  _expandAll = false;
   if(catCollapsed.has(secKey)) {
     catCollapsed.delete(secKey);
   } else {
     catCollapsed.add(secKey);
   }
-  // _opened 마커 제거 (혼란 방지)
   catCollapsed.delete(secKey+'_opened');
   renderJobs();
 }
@@ -1452,10 +1454,11 @@ function expandCollapseAll() {
 
   catCollapsed.clear();
   jobCollapsed.clear();
-  _catEverSeen.clear(); // 전체 펼치기/접기 시 초기화
+  _catEverSeen.clear();
 
   if(!isExpanding) {
     // 전체 접기
+    _expandAll = false;
     const cats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
     cats.forEach(c => {
       catCollapsed.add(c);
@@ -1465,7 +1468,8 @@ function expandCollapseAll() {
     jobs.forEach(j => { if(j.number && hasChildren(j.number, jobs)) jobCollapsed.add(j.number); });
     if(btn) btn.textContent = '▶ 전체 펼치기';
   } else {
-    // 전체 펼치기 - catCollapsed/jobCollapsed 비워두면 전부 펼쳐짐
+    // 전체 펼치기
+    _expandAll = true;
     if(btn) btn.textContent = '▼ 전체 접기';
   }
   renderJobs();
