@@ -1385,11 +1385,13 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
     const effConsumed = hasManualConsumed ? (+j.consumption||0)      : hasAutoSum ? j._autoSum.consumption : (+j.consumption||0);
     const showAuto = hasAutoSum && !hasManualBudget; // auto 뱃지 표시 여부
     // 스케줄 바: 수동 날짜 있으면 수동 기반, 없으면 자식 평균
+    // 날짜도 없고 자식도 없으면 → 수동 공정률(completion)과 동일하게
     const livePct = calcProgress(effStart, effEnd);
     const pct = hasManualDates
       ? (livePct !== null ? livePct : 0)
       : hasAutoSum ? (j._autoSum.schedule ?? 0)
-      : (livePct !== null ? livePct : 0);
+      : livePct !== null ? livePct
+      : (j.completion||0); // 날짜 미입력 시 completion으로 fallback
     const col=pct>=100?'var(--green)':pct>0?'var(--amber)':'var(--txt-m)';
 
     // 공정률 바: completion > 0 이면 수동값 우선, 0이면 자식 평균
