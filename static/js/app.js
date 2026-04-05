@@ -479,7 +479,11 @@ function showTab(tab,btn){
     }
     renderJobs();
   }
-  if(tab==='gantt')renderGantt();
+  if(tab==='gantt'){
+    const btn = document.getElementById('btn-gantt-expand');
+    if(btn) btn.textContent = _expandAll ? '▼ 전체 접기' : '▶ 전체 펼치기';
+    renderGantt();
+  }
   if(tab==='class')renderClass();
   if(tab==='daily'){buildDDF();renderDisc();}
   if(tab==='steel')renderTracking('steel');
@@ -952,8 +956,11 @@ function toggleJobCollapse(num) {
 }
 
 function toggleGanttCollapse(num) {
+  _expandAll = false;
   if(jobCollapsed.has(num)) jobCollapsed.delete(num);
   else jobCollapsed.add(num);
+  const btn = document.getElementById('btn-gantt-expand');
+  if(btn) btn.textContent = '▶ 전체 펼치기';
   buildGantt(null, null, null);
 }
 
@@ -1447,7 +1454,35 @@ function toggleSecGroup(secKey) {
   renderJobs();
 }
 
-function expandCollapseAll() {
+function expandCollapseAllGantt() {
+  const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
+  const btn = document.getElementById('btn-gantt-expand');
+  const isExpanding = btn && btn.textContent.includes('펼치기');
+
+  catCollapsed.clear();
+  jobCollapsed.clear();
+  _catEverSeen.clear();
+
+  if(!isExpanding) {
+    // 전체 접기
+    _expandAll = false;
+    const cats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
+    cats.forEach(c => {
+      catCollapsed.add(c);
+      const secs = [...new Set(jobs.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+      secs.forEach(s => catCollapsed.add(c+'::'+s));
+    });
+    jobs.forEach(j => { if(j.number && hasChildren(j.number, jobs)) jobCollapsed.add(j.number); });
+    if(btn) btn.textContent = '▶ 전체 펼치기';
+  } else {
+    _expandAll = true;
+    if(btn) btn.textContent = '▼ 전체 접기';
+  }
+  // Job Progress 버튼도 동기화
+  const jpBtn = document.getElementById('btn-expand-all');
+  if(jpBtn) jpBtn.textContent = isExpanding ? '▼ 전체 접기' : '▶ 전체 펼치기';
+  buildGantt(null, null, null);
+}
   const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
   const btn = document.getElementById('btn-expand-all');
   const isExpanding = btn && btn.textContent.includes('펼치기');
