@@ -1214,6 +1214,12 @@ function renderJobs(){
         if(!secGroups[sec]) { secGroups[sec] = []; secOrder.push(sec); }
         secGroups[sec].push(j);
       });
+      // CANCEL을 맨 뒤로 정렬
+      secOrder.sort((a,b) => {
+        if(a==='CANCEL') return 1;
+        if(b==='CANCEL') return -1;
+        return 0;
+      });
 
       secOrder.forEach(sec => {
         const secJobs = secGroups[sec];
@@ -1443,7 +1449,12 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${effConsumed.toLocaleString()}</span>
       </td>
       <td data-label="Progress">
-        <div style="display:flex;align-items:center;gap:4px">
+        ${j.section === 'CANCEL'
+          ? `<div style="display:flex;align-items:center;gap:6px;opacity:.4">
+               <span style="font-size:16px">🚫</span>
+               <span style="font-size:11px;color:var(--txt-m);font-weight:600">CANCELLED</span>
+             </div>`
+          : `<div style="display:flex;align-items:center;gap:4px">
           <span style="font-size:9px;color:var(--txt-m);white-space:nowrap;min-width:36px">📅 스케줄</span>
           <div class="prog-wrap" style="flex:1">
             <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
@@ -1462,7 +1473,8 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
             }
           </div>
         </div>
-        ${dateInfo}
+        ${dateInfo}`
+        }
       </td>
       <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" onclick="openJobModal(${ri})" style="cursor:pointer;max-width:300px" title="클릭하여 Remark 편집">${renderRemarkCell(j)}</div></td>
       <td style="white-space:nowrap">
@@ -1977,6 +1989,8 @@ function buildGantt(sf,cf,btn){
         if(!secGroups[sec]) { secGroups[sec]=[]; secOrder.push(sec); }
         secGroups[sec].push(j);
       });
+      // CANCEL을 맨 뒤로 정렬
+      secOrder.sort((a,b) => { if(a==='CANCEL') return 1; if(b==='CANCEL') return -1; return 0; });
 
       secOrder.forEach(sec => {
         const secJobs = secGroups[sec];
