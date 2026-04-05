@@ -1054,7 +1054,7 @@ function renderJobs(){
   const tb=document.getElementById('j-body');
   if(!fil.length){tb.innerHTML='<tr><td colspan="10" class="empty-state">No jobs match the filters</td></tr>';return;}
 
-  const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE'];
+  const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE','CANCEL'];
   const CATS=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
 
   // 계층 트리 미리 계산 (depth 캐시)
@@ -1112,7 +1112,8 @@ function renderJobs(){
     // 계산 기준: 자식 없는 단독항목 그자체 + 자식 있는 부모항목 자체값
     // (중간 자식항목은 제외 - 최상위 부모가 있으면 최상위 부모만)
     const catRootJobs = catJobs.filter(j => {
-      if((j.section||'GENERAL') === 'GENERAL') return false; // GENERAL 제외
+      const sec = j.section||'GENERAL';
+      if(sec === 'GENERAL' || sec === 'CANCEL') return false; // GENERAL/CANCEL 제외
       const p = getParentNumber(j.number);
       return !p || !catJobs.some(x => x.number === p);
     });
@@ -1393,7 +1394,7 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
       ?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;margin-top:2px">${effStart} → ${effEnd}${j._autoStart?'<span style="font-size:9px;color:var(--blue);margin-left:4px">auto</span>':''}</div>`
       :`<div style="font-size:10px;color:var(--txt-m)">—</div>`;
 
-    const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE'];
+    const SECTIONS=['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE','CANCEL'];
     const CATS=['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
     const secOpts=SECTIONS.map(s=>`<option${s===j.section?' selected':''}>${s}</option>`).join('');
     const catOpts=CATS.map(c=>`<option${c===j.category?' selected':''}>${c}</option>`).join('');
@@ -1558,7 +1559,7 @@ async function addInlineRow() {
   buildJFilters();
   renderJobs();
 
-  const SECTIONS = ['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE'];
+  const SECTIONS = ['GENERAL','PAINT','STEEL','DECK','ENGINE','ELECTRIC','ADD','REPAIR','STORE','SPARE','CANCEL'];
   const CATS = ['Shipyard','Shore Repair','Crew','Spare','Store','Paint'];
 
   const tb = document.getElementById('j-body');
