@@ -476,7 +476,9 @@ def upload_jobs_csv(vid):
         except:
             completion = 0
 
-        number = r.get("number", "")
+        number = r.get("number", "").strip()
+        if not number:  # 빈 행 무시
+            continue
         start_date = clean_date(r.get("start_date"))
         end_date   = clean_date(r.get("end_date"))
         budget     = float(clean_budget or 0)
@@ -563,6 +565,8 @@ def update_job(jid):
     return jsonify(to_job(row("SELECT * FROM jobs WHERE id=?", jid)))
 
 @app.route("/api/jobs/<int:jid>", methods=["DELETE"])
+@login_required
+@viewer_forbidden
 def delete_job(jid):
     db = get_db()
     db.execute("DELETE FROM jobs WHERE id=?", (jid,))
