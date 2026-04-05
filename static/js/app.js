@@ -1119,7 +1119,7 @@ function renderJobs(){
       return !p || !catJobs.some(x => x.number === p);
     });
 
-    // 스케줄 바: Shipyard는 전체 공기(DockIn~DockOut) 기준, 나머지는 섹션과 동일하게 가장 빠른 시작~늦은 완료
+    // 스케줄 바: Shipyard는 전체 공기(DockIn~DockOut) 기준, 나머지는 날짜범위 or completion 기반
     let avgPct;
     if(cat === 'Shipyard') {
       const info = FLEET[VID]?.info;
@@ -1127,13 +1127,24 @@ function renderJobs(){
         ? (calcProgress(info.dockIn, info.dockOut) ?? 0)
         : 0;
     } else {
-      // GENERAL/CANCEL 제외한 항목들의 날짜 범위
+      // GENERAL/CANCEL 제외
       const calcJobs = catJobs.filter(j => (j.section||'GENERAL') !== 'GENERAL' && (j.section||'') !== 'CANCEL');
       const allStarts = calcJobs.map(j => j.start_date).filter(d => d && d.trim()).sort();
       const allEnds   = calcJobs.map(j => j.end_date).filter(d => d && d.trim()).sort();
       const earliest = allStarts.length ? allStarts[0] : null;
       const latest   = allEnds.length   ? allEnds[allEnds.length-1] : null;
-      avgPct = (earliest && latest) ? (calcProgress(earliest, latest) ?? 0) : 0;
+      if(earliest && latest) {
+        avgPct = calcProgress(earliest, latest) ?? 0;
+      } else {
+        // 날짜 없는 경우: 루트 항목의 effective schedule 평균
+        const effScheds = catRootJobs.map(j => {
+          const lp = calcProgress(j.start_date, j.end_date);
+          if(lp !== null) return lp;
+          if(hasChildren(j.number, fil)) return j._autoSum?.schedule ?? (j.completion||0);
+          return j.completion||0;
+        });
+        avgPct = effScheds.length ? Math.round(effScheds.reduce((a,b)=>a+b,0)/effScheds.length) : 0;
+      }
     }
     const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
 
@@ -1236,15 +1247,24 @@ function renderJobs(){
           const p = getParentNumber(j.number);
           return !p || !secJobs.some(x => x.number === p);
         });
-        // 스케줄 바: 섹션 내 모든 항목의 가장 빠른 시작일 ~ 가장 늦은 완료일로 계산
+        // 스케줄 바: 날짜 있으면 날짜범위 기반, 날짜 없으면 completion 기반으로 평균
         const allStarts = secJobs.map(j => j.start_date).filter(d => d && d.trim()).sort();
         const allEnds   = secJobs.map(j => j.end_date).filter(d => d && d.trim()).sort();
         const secEarliestStart = allStarts.length ? allStarts[0] : null;
         const secLatestEnd     = allEnds.length   ? allEnds[allEnds.length-1] : null;
-        const sSchedPct = (secEarliestStart && secLatestEnd)
-          ? (calcProgress(secEarliestStart, secLatestEnd) ?? 0)
-          : 0;
-        const sAvgPct = sSchedPct;
+        let sAvgPct;
+        if(secEarliestStart && secLatestEnd) {
+          sAvgPct = calcProgress(secEarliestStart, secLatestEnd) ?? 0;
+        } else {
+          // 날짜 없는 경우: 루트 항목의 effective schedule(날짜없으면 completion) 평균
+          const effScheds = secRootJobs.map(j => {
+            const lp = calcProgress(j.start_date, j.end_date);
+            if(lp !== null) return lp;
+            if(hasChildren(j.number, fil)) return j._autoSum?.schedule ?? (j.completion||0);
+            return j.completion||0;
+          });
+          sAvgPct = effScheds.length ? Math.round(effScheds.reduce((a,b)=>a+b,0)/effScheds.length) : 0;
+        }
         const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
         // 공정률 바: 루트 항목 completion 평균 (부모는 autoSum.completion 활용)
         const sActPct = secRootJobs.length
