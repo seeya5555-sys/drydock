@@ -1065,17 +1065,24 @@ function renderJobs(){
   computeParentDates(jobs);
   computeParentSums(jobs);
 
-  // Category/Section 그룹 기본 접힘 초기화 (전체 펼치기 상태면 건너뜀)
-  const btn = document.getElementById('btn-expand-all');
-  const isFullyExpanded = btn && btn.textContent.includes('접기');
-  if(!isFullyExpanded) {
-    const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
-    allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
-    allCats.forEach(c => {
-      const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
-      secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k)) catCollapsed.add(k); });
+  // Category/Section 그룹 - 아직 catCollapsed에 없는 신규 항목만 기본 접힘 추가
+  // (이미 사용자가 열었거나 닫은 항목은 건드리지 않음)
+  const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
+  allCats.forEach(c => {
+    // 한번도 등장하지 않은 카테고리만 기본 접힘
+    if(!catCollapsed.has(c) && !_catEverSeen.has(c)) {
+      catCollapsed.add(c);
+    }
+    _catEverSeen.add(c);
+    const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+    secs.forEach(s => {
+      const k = c+'::'+s;
+      if(!catCollapsed.has(k) && !_catEverSeen.has(k)) {
+        catCollapsed.add(k);
+      }
+      _catEverSeen.add(k);
     });
-  }
+  });
 
   // 필터 중이면 그냥 평면 표시
   if(isFiltering) {
@@ -1271,15 +1278,11 @@ function renderJobs(){
 }
 
 const catCollapsed = window.catCollapsed || new Set();
+const _catEverSeen = new Set(); // 한번이라도 렌더된 cat/sec 추적
 
 function toggleCatGroup(cat) {
-  if(catCollapsed.has(cat)) {
-    catCollapsed.delete(cat);
-    catCollapsed.add(cat+'_opened'); // 한번 열었음을 기억
-  } else {
-    catCollapsed.add(cat);
-    catCollapsed.delete(cat+'_opened');
-  }
+  if(catCollapsed.has(cat)) catCollapsed.delete(cat);
+  else catCollapsed.add(cat);
   renderJobs();
 }
 
@@ -1301,6 +1304,7 @@ function expandCollapseAll() {
 
   catCollapsed.clear();
   jobCollapsed.clear();
+  _catEverSeen.clear(); // 전체 펼치기/접기 시 초기화
 
   if(!isExpanding) {
     // 전체 접기
@@ -1907,7 +1911,7 @@ function buildGantt(sf,cf,btn){
   let ji = 0;
   Object.entries(catGroups).forEach(([cat, catJobs]) => {
     if(!catJobs.length) return;
-    const isCatColl = catCollapsed.has(cat) && !catCollapsed.has(cat+'_opened');
+    const isCatColl = catCollapsed.has(cat);
     const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
 
     // Category 헤더 행
