@@ -1312,44 +1312,22 @@ function renderJobs(){
           </td>
           <td colspan="2" style="padding:8px"></td>
           <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
-            <div id="store-bud-disp-${secKey.replace(/:/g,'_')}"
-              style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);cursor:${sec==='STORE'?'pointer':''}"
-              ${sec==='STORE'?`ondblclick="
-                this.style.display='none';
-                document.getElementById('store-bud-inp-${secKey.replace(/:/g,'_')}').style.display='block';
-                document.getElementById('store-bud-inp-${secKey.replace(/:/g,'_')}').focus()
-              " title="더블클릭하여 수정"`:''}>
-              $${dispBudget.toLocaleString()}
-            </div>
-            ${sec==='STORE'?`<input id="store-bud-inp-${secKey.replace(/:/g,'_')}" type="number"
-              value="${storeData.budget>0?storeData.budget:''}"
-              style="display:none;width:90px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 6px;text-align:right;outline:none"
-              onblur="
-                this.style.display='none';
-                document.getElementById('store-bud-disp-${secKey.replace(/:/g,'_')}').style.display='block';
-                setSecManualBudget('${storeKey}','budget',this.value)
-              "
-              onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur()">`:''}
+            ${sec==='STORE'
+              ? `<div class="cell-edit" onclick="event.stopPropagation();startStoreEdit(this,'${storeKey}','budget',${dispBudget})"
+                   style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);display:inline-block">
+                   $${dispBudget.toLocaleString()}
+                 </div>`
+              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${dispBudget.toLocaleString()}</div>`
+            }
           </td>
           <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
-            <div id="store-con-disp-${secKey.replace(/:/g,'_')}"
-              style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);cursor:${sec==='STORE'?'pointer':''}"
-              ${sec==='STORE'?`ondblclick="
-                this.style.display='none';
-                document.getElementById('store-con-inp-${secKey.replace(/:/g,'_')}').style.display='block';
-                document.getElementById('store-con-inp-${secKey.replace(/:/g,'_')}').focus()
-              " title="더블클릭하여 수정"`:''}>
-              $${dispConsumed.toLocaleString()}
-            </div>
-            ${sec==='STORE'?`<input id="store-con-inp-${secKey.replace(/:/g,'_')}" type="number"
-              value="${storeData.consumed>0?storeData.consumed:''}"
-              style="display:none;width:90px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);background:rgba(255,255,255,.1);border:1px solid rgba(16,185,129,.3);border-radius:4px;padding:2px 6px;text-align:right;outline:none"
-              onblur="
-                this.style.display='none';
-                document.getElementById('store-con-disp-${secKey.replace(/:/g,'_')}').style.display='block';
-                setSecManualBudget('${storeKey}','consumed',this.value)
-              "
-              onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur()">`:''}
+            ${sec==='STORE'
+              ? `<div class="cell-edit" onclick="event.stopPropagation();startStoreEdit(this,'${storeKey}','consumed',${dispConsumed})"
+                   style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);display:inline-block">
+                   $${dispConsumed.toLocaleString()}
+                 </div>`
+              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${dispConsumed.toLocaleString()}</div>`
+            }
           </td>
           <td colspan="2" style="padding:8px 14px">
             <div style="display:flex;gap:16px">
@@ -1408,6 +1386,28 @@ const _catEverSeen = new Set();
 
 // STORE 섹션 수동 Budget/Consumed 저장
 window._secManualBudget = window._secManualBudget || {};
+
+function startStoreEdit(span, key, field, currentVal) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+  const w = Math.max(span.offsetWidth, 80);
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.className = 'inline-input';
+  inp.value = currentVal || '';
+  inp.style.width = w + 'px';
+  inp.style.color = field === 'consumed' ? 'var(--green)' : 'rgba(255,255,255,.9)';
+  span.replaceWith(inp);
+  inp.focus();
+  inp.select();
+  const save = () => {
+    setSecManualBudget(key, field, inp.value);
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter') inp.blur();
+    if(e.key === 'Escape') inp.blur();
+  });
+}
 
 async function setSecManualBudget(key, field, value) {
   if(!window._secManualBudget) window._secManualBudget = {};
