@@ -139,6 +139,12 @@ async function loadAll(){
         const id=e.info.id; IDX.push(id);
         FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],
           attachSet: new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`))};
+        // secBudget 로드
+        (e.secBudget||[]).forEach(sb => {
+          const key = `${id}::${sb.category}::${sb.section}`;
+          if(!window._secManualBudget) window._secManualBudget = {};
+          window._secManualBudget[key] = {budget: sb.budget||0, consumed: sb.consumed||0};
+        });
       }
     }
   }catch(e){toast('로드 실패: '+e.message,true);IDX=[];FLEET={};}
@@ -1106,9 +1112,21 @@ function renderJobs(){
     if(!catJobs.length) return;
     const isCollapsed = catCollapsed.has(cat);
 
-    // 집계
-    const totalBudget   = catJobs.reduce((s,j) => s + (+j.budget||0), 0);
-    const totalConsumed = catJobs.reduce((s,j) => s + (+j.consumption||0), 0);
+    // 집계 (STORE 섹션은 수동입력값 우선)
+    let totalBudget = 0, totalConsumed = 0;
+    const secMap = {};
+    catJobs.forEach(j => { const s = j.section||'GENERAL'; if(!secMap[s]) secMap[s]=[]; secMap[s].push(j); });
+    Object.entries(secMap).forEach(([sec, sJobs]) => {
+      const sk = `${VID}::${cat}::${sec}`;
+      const sd = window._secManualBudget?.[sk] || {};
+      if(sec === 'STORE' && (sd.budget > 0 || sd.consumed > 0)) {
+        totalBudget   += sd.budget   || 0;
+        totalConsumed += sd.consumed || 0;
+      } else {
+        totalBudget   += sJobs.reduce((s,j) => s + (+j.budget||0), 0);
+        totalConsumed += sJobs.reduce((s,j) => s + (+j.consumption||0), 0);
+      }
+    });
 
     // 계산 기준: 자식 없는 단독항목 그자체 + 자식 있는 부모항목 자체값
     // (중간 자식항목은 제외 - 최상위 부모가 있으면 최상위 부모만)
@@ -1277,6 +1295,12 @@ function renderJobs(){
           : 0;
         const sActCol = sActPct>=100?'#0d9488':sActPct>0?'#7c3aed':'rgba(255,255,255,.15)';
 
+        // STORE 섹션은 Budget/Consumed 수동 입력 가능
+        const storeKey = `${VID}::${cat}::${sec}`;
+        const storeData = window._secManualBudget?.[storeKey] || {budget:0, consumed:0};
+        const dispBudget   = sec === 'STORE' && storeData.budget   > 0 ? storeData.budget   : sBudget;
+        const dispConsumed = sec === 'STORE' && storeData.consumed > 0 ? storeData.consumed : sConsumed;
+
         // Section 헤더 행 (파란색 계열)
         html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}')">
           <td colspan="2" style="padding:8px 14px 8px 28px">
@@ -1288,10 +1312,22 @@ function renderJobs(){
           </td>
           <td colspan="2" style="padding:8px"></td>
           <td style="padding:8px;text-align:right">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${sBudget.toLocaleString()}</div>
+            ${sec === 'STORE'
+              ? `<input type="number" value="${storeData.budget||''}" placeholder="Budget"
+                   onclick="event.stopPropagation()"
+                   onchange="setSecManualBudget('${storeKey}','budget',this.value)"
+                   style="width:90px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:#fff;font-family:'IBM Plex Mono',monospace;text-align:right">`
+              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${dispBudget.toLocaleString()}</div>`
+            }
           </td>
           <td style="padding:8px;text-align:right">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${sConsumed.toLocaleString()}</div>
+            ${sec === 'STORE'
+              ? `<input type="number" value="${storeData.consumed||''}" placeholder="Consumed"
+                   onclick="event.stopPropagation()"
+                   onchange="setSecManualBudget('${storeKey}','consumed',this.value)"
+                   style="width:90px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:var(--green);font-family:'IBM Plex Mono',monospace;text-align:right">`
+              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${dispConsumed.toLocaleString()}</div>`
+            }
           </td>
           <td colspan="2" style="padding:8px 14px">
             <div style="display:flex;gap:16px">
@@ -1346,7 +1382,29 @@ function renderJobs(){
 }
 
 const catCollapsed = window.catCollapsed || new Set();
-const _catEverSeen = new Set(); // 한번이라도 렌더된 cat/sec 추적
+const _catEverSeen = new Set();
+
+// STORE 섹션 수동 Budget/Consumed 저장
+window._secManualBudget = window._secManualBudget || {};
+
+async function setSecManualBudget(key, field, value) {
+  if(!window._secManualBudget) window._secManualBudget = {};
+  if(!window._secManualBudget[key]) window._secManualBudget[key] = {budget:0, consumed:0};
+  window._secManualBudget[key][field] = parseFloat(value) || 0;
+
+  // API 저장
+  const parts = key.split('::'); // VID::category::section
+  const [vid, cat, sec] = parts;
+  try {
+    await apiFetch(`${API}/vessels/${vid}/sec_budget`, 'PUT', {
+      category: cat,
+      section: sec,
+      budget:   window._secManualBudget[key].budget,
+      consumed: window._secManualBudget[key].consumed
+    });
+  } catch(e) { toast('저장 실패: '+e.message, true); }
+  renderJobs();
+} // 한번이라도 렌더된 cat/sec 추적
 
 function toggleCatGroup(cat) {
   if(catCollapsed.has(cat)) catCollapsed.delete(cat);
