@@ -1311,23 +1311,45 @@ function renderJobs(){
             </div>
           </td>
           <td colspan="2" style="padding:8px"></td>
-          <td style="padding:8px;text-align:right">
-            ${sec === 'STORE'
-              ? `<input type="number" value="${storeData.budget > 0 ? storeData.budget : ''}" placeholder="$${sBudget.toLocaleString()}"
-                   onclick="event.stopPropagation()"
-                   onchange="setSecManualBudget('${storeKey}','budget',this.value)"
-                   style="width:100px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:#fff;font-family:'IBM Plex Mono',monospace;text-align:right" title="비우면 소분류 합계 자동사용">`
-              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${dispBudget.toLocaleString()}</div>`
-            }
+          <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
+            <div id="store-bud-disp-${secKey.replace(/:/g,'_')}"
+              style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);cursor:${sec==='STORE'?'pointer':''}"
+              ${sec==='STORE'?`ondblclick="
+                this.style.display='none';
+                document.getElementById('store-bud-inp-${secKey.replace(/:/g,'_')}').style.display='block';
+                document.getElementById('store-bud-inp-${secKey.replace(/:/g,'_')}').focus()
+              " title="더블클릭하여 수정"`:''}>
+              $${dispBudget.toLocaleString()}
+            </div>
+            ${sec==='STORE'?`<input id="store-bud-inp-${secKey.replace(/:/g,'_')}" type="number"
+              value="${storeData.budget>0?storeData.budget:''}"
+              style="display:none;width:90px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 6px;text-align:right;outline:none"
+              onblur="
+                this.style.display='none';
+                document.getElementById('store-bud-disp-${secKey.replace(/:/g,'_')}').style.display='block';
+                setSecManualBudget('${storeKey}','budget',this.value)
+              "
+              onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur()">`:''}
           </td>
-          <td style="padding:8px;text-align:right">
-            ${sec === 'STORE'
-              ? `<input type="number" value="${storeData.consumed > 0 ? storeData.consumed : ''}" placeholder="$${sConsumed.toLocaleString()}"
-                   onclick="event.stopPropagation()"
-                   onchange="setSecManualBudget('${storeKey}','consumed',this.value)"
-                   style="width:100px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:var(--green);font-family:'IBM Plex Mono',monospace;text-align:right" title="비우면 소분류 합계 자동사용">`
-              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${dispConsumed.toLocaleString()}</div>`
-            }
+          <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
+            <div id="store-con-disp-${secKey.replace(/:/g,'_')}"
+              style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);cursor:${sec==='STORE'?'pointer':''}"
+              ${sec==='STORE'?`ondblclick="
+                this.style.display='none';
+                document.getElementById('store-con-inp-${secKey.replace(/:/g,'_')}').style.display='block';
+                document.getElementById('store-con-inp-${secKey.replace(/:/g,'_')}').focus()
+              " title="더블클릭하여 수정"`:''}>
+              $${dispConsumed.toLocaleString()}
+            </div>
+            ${sec==='STORE'?`<input id="store-con-inp-${secKey.replace(/:/g,'_')}" type="number"
+              value="${storeData.consumed>0?storeData.consumed:''}"
+              style="display:none;width:90px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);background:rgba(255,255,255,.1);border:1px solid rgba(16,185,129,.3);border-radius:4px;padding:2px 6px;text-align:right;outline:none"
+              onblur="
+                this.style.display='none';
+                document.getElementById('store-con-disp-${secKey.replace(/:/g,'_')}').style.display='block';
+                setSecManualBudget('${storeKey}','consumed',this.value)
+              "
+              onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur()">`:''}
           </td>
           <td colspan="2" style="padding:8px 14px">
             <div style="display:flex;gap:16px">
