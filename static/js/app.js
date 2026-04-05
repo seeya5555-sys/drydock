@@ -1118,8 +1118,17 @@ function renderJobs(){
     });
 
     // 스케줄 바: 루트 항목의 날짜 기반 스케줄 평균
+    // 부모항목은 _autoSum.schedule(자식 평균), 단독항목은 날짜 기반
     const avgPct = catRootJobs.length ? Math.round(
       catRootJobs.map(j => {
+        if(hasChildren(j.number, fil)) {
+          // 부모: 수동 날짜 있으면 수동, 없으면 자식 평균
+          if(j.start_date && j.end_date) {
+            const lp = calcProgress(j.start_date, j.end_date);
+            return lp !== null ? lp : 0;
+          }
+          return j._autoSum?.schedule ?? 0;
+        }
         const lp = calcProgress(j.start_date, j.end_date);
         return lp !== null ? lp : 0;
       }).reduce((a,b)=>a+b,0) / catRootJobs.length
@@ -1127,8 +1136,14 @@ function renderJobs(){
     const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
 
     // 공정률 바: 루트 항목의 completion 평균
+    // 부모항목은 수동입력(>0)이면 수동, 없으면 _autoSum.completion
     const actPct = catRootJobs.length
-      ? Math.round(catRootJobs.reduce((s,j)=>s+(+j.completion||0),0) / catRootJobs.length)
+      ? Math.round(catRootJobs.map(j => {
+          if(hasChildren(j.number, fil)) {
+            return (+j.completion||0) > 0 ? (+j.completion) : (j._autoSum?.completion ?? 0);
+          }
+          return (+j.completion||0);
+        }).reduce((a,b)=>a+b,0) / catRootJobs.length)
       : 0;
     const leafCatJobs = catRootJobs; // Budget/Consumed는 전체 합산 유지
     const actCol = actPct>=100?'#0d9488':actPct>0?'#7c3aed':'rgba(255,255,255,.2)';
@@ -1214,15 +1229,29 @@ function renderJobs(){
           const p = getParentNumber(j.number);
           return !p || !secJobs.some(x => x.number === p);
         });
-        // 스케줄 바: 루트 항목 날짜 기반 평균
+        // 스케줄 바: 루트 항목 날짜 기반 평균 (부모는 autoSum.schedule 활용)
         const sAvgPct = secRootJobs.length ? Math.round(
-          secRootJobs.map(j => { const lp=calcProgress(j.start_date,j.end_date); return lp!==null?lp:0; })
-          .reduce((a,b)=>a+b,0) / secRootJobs.length
+          secRootJobs.map(j => {
+            if(hasChildren(j.number, fil)) {
+              if(j.start_date && j.end_date) {
+                const lp = calcProgress(j.start_date, j.end_date);
+                return lp !== null ? lp : 0;
+              }
+              return j._autoSum?.schedule ?? 0;
+            }
+            const lp = calcProgress(j.start_date, j.end_date);
+            return lp !== null ? lp : 0;
+          }).reduce((a,b)=>a+b,0) / secRootJobs.length
         ) : 0;
         const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
-        // 공정률 바: 루트 항목 completion 평균
+        // 공정률 바: 루트 항목 completion 평균 (부모는 autoSum.completion 활용)
         const sActPct = secRootJobs.length
-          ? Math.round(secRootJobs.reduce((s,j)=>s+(+j.completion||0),0) / secRootJobs.length)
+          ? Math.round(secRootJobs.map(j => {
+              if(hasChildren(j.number, fil)) {
+                return (+j.completion||0) > 0 ? (+j.completion) : (j._autoSum?.completion ?? 0);
+              }
+              return (+j.completion||0);
+            }).reduce((a,b)=>a+b,0) / secRootJobs.length)
           : 0;
         const sActCol = sActPct>=100?'#0d9488':sActPct>0?'#7c3aed':'rgba(255,255,255,.15)';
 
