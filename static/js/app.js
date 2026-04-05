@@ -1236,20 +1236,15 @@ function renderJobs(){
           const p = getParentNumber(j.number);
           return !p || !secJobs.some(x => x.number === p);
         });
-        // 스케줄 바: 루트 항목 날짜 기반 평균 (부모는 autoSum.schedule 활용)
-        const sAvgPct = secRootJobs.length ? Math.round(
-          secRootJobs.map(j => {
-            if(hasChildren(j.number, fil)) {
-              if(j.start_date && j.end_date) {
-                const lp = calcProgress(j.start_date, j.end_date);
-                return lp !== null ? lp : 0;
-              }
-              return j._autoSum?.schedule ?? 0;
-            }
-            const lp = calcProgress(j.start_date, j.end_date);
-            return lp !== null ? lp : 0;
-          }).reduce((a,b)=>a+b,0) / secRootJobs.length
-        ) : 0;
+        // 스케줄 바: 섹션 내 모든 항목의 가장 빠른 시작일 ~ 가장 늦은 완료일로 계산
+        const allStarts = secJobs.map(j => j.start_date).filter(d => d && d.trim()).sort();
+        const allEnds   = secJobs.map(j => j.end_date).filter(d => d && d.trim()).sort();
+        const secEarliestStart = allStarts.length ? allStarts[0] : null;
+        const secLatestEnd     = allEnds.length   ? allEnds[allEnds.length-1] : null;
+        const sSchedPct = (secEarliestStart && secLatestEnd)
+          ? (calcProgress(secEarliestStart, secLatestEnd) ?? 0)
+          : 0;
+        const sAvgPct = sSchedPct;
         const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
         // 공정률 바: 루트 항목 completion 평균 (부모는 autoSum.completion 활용)
         const sActPct = secRootJobs.length
