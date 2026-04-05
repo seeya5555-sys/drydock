@@ -919,9 +919,10 @@ function isJobVisible(job, jobs) {
 
   let p = getParentNumber(job.number);
   while(p) {
-    if(jobCollapsed.has(p)) return false;
+    // 부모가 실제로 jobs 배열에 존재하고 접혀있으면 숨김
+    if(numMap[p] && jobCollapsed.has(p)) return false;
+    if(!numMap[p]) break; // 실제 존재하지 않는 부모면 중단
     p = getParentNumber(p);
-    if(p && !numMap[p]) break;
   }
   return true;
 }
