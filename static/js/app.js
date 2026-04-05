@@ -1109,22 +1109,28 @@ function renderJobs(){
     const totalBudget   = catJobs.reduce((s,j) => s + (+j.budget||0), 0);
     const totalConsumed = catJobs.reduce((s,j) => s + (+j.consumption||0), 0);
 
-    // leaf 항목만 기준 (자식 없는 최하위 항목)
-    const leafCatJobs = catJobs.filter(j => !hasChildren(j.number, fil));
+    // 계산 기준: 자식 없는 단독항목 그자체 + 자식 있는 부모항목 자체값
+    // (중간 자식항목은 제외 - 최상위 부모가 있으면 최상위 부모만)
+    const catRootJobs = catJobs.filter(j => {
+      const p = getParentNumber(j.number);
+      // 부모가 같은 catJobs 안에 없으면 루트(최상위)
+      return !p || !catJobs.some(x => x.number === p);
+    });
 
-    // 스케줄 바: leaf 항목의 날짜 기반 스케줄 평균
-    const avgPct = leafCatJobs.length ? Math.round(
-      leafCatJobs.map(j => {
+    // 스케줄 바: 루트 항목의 날짜 기반 스케줄 평균
+    const avgPct = catRootJobs.length ? Math.round(
+      catRootJobs.map(j => {
         const lp = calcProgress(j.start_date, j.end_date);
         return lp !== null ? lp : 0;
-      }).reduce((a,b)=>a+b,0) / leafCatJobs.length
+      }).reduce((a,b)=>a+b,0) / catRootJobs.length
     ) : 0;
     const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
 
-    // 공정률 바: leaf 항목의 completion 평균
-    const actPct = leafCatJobs.length
-      ? Math.round(leafCatJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafCatJobs.length)
+    // 공정률 바: 루트 항목의 completion 평균
+    const actPct = catRootJobs.length
+      ? Math.round(catRootJobs.reduce((s,j)=>s+(+j.completion||0),0) / catRootJobs.length)
       : 0;
+    const leafCatJobs = catRootJobs; // Budget/Consumed는 전체 합산 유지
     const actCol = actPct>=100?'#0d9488':actPct>0?'#7c3aed':'rgba(255,255,255,.2)';
 
     const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
@@ -1203,17 +1209,20 @@ function renderJobs(){
         const sBudget   = secJobs.reduce((s,j)=>s+(+j.budget||0),0);
         const sConsumed = secJobs.reduce((s,j)=>s+(+j.consumption||0),0);
         const sConsPct = sBudget>0?Math.min(100,Math.round(sConsumed/sBudget*100)):0;
-        // leaf 항목만 기준
-        const leafSecJobs = secJobs.filter(j => !hasChildren(j.number, fil));
-        // 스케줄 바: leaf 날짜 기반 평균
-        const sAvgPct = leafSecJobs.length ? Math.round(
-          leafSecJobs.map(j => { const lp=calcProgress(j.start_date,j.end_date); return lp!==null?lp:0; })
-          .reduce((a,b)=>a+b,0) / leafSecJobs.length
+        // 계산 기준: 자식 없는 단독항목 + 자식 있는 부모항목 자체값
+        const secRootJobs = secJobs.filter(j => {
+          const p = getParentNumber(j.number);
+          return !p || !secJobs.some(x => x.number === p);
+        });
+        // 스케줄 바: 루트 항목 날짜 기반 평균
+        const sAvgPct = secRootJobs.length ? Math.round(
+          secRootJobs.map(j => { const lp=calcProgress(j.start_date,j.end_date); return lp!==null?lp:0; })
+          .reduce((a,b)=>a+b,0) / secRootJobs.length
         ) : 0;
         const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
-        // 공정률 바: leaf completion 평균
-        const sActPct = leafSecJobs.length
-          ? Math.round(leafSecJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafSecJobs.length)
+        // 공정률 바: 루트 항목 completion 평균
+        const sActPct = secRootJobs.length
+          ? Math.round(secRootJobs.reduce((s,j)=>s+(+j.completion||0),0) / secRootJobs.length)
           : 0;
         const sActCol = sActPct>=100?'#0d9488':sActPct>0?'#7c3aed':'rgba(255,255,255,.15)';
 
