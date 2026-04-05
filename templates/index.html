@@ -155,7 +155,13 @@
 
   <!-- Gantt -->
   <div id="vt-gantt" class="page"><main>
-    <div class="sec-hdr"><div class="sec-title">Gantt Chart</div><span style="font-size:13px;color:var(--txt-m)">Set start/end dates in Job Progress to display bars</span></div>
+    <div class="sec-hdr">
+      <div class="sec-title">Gantt Chart</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:13px;color:var(--txt-m)">Set start/end dates in Job Progress to display bars</span>
+        <button class="btn-sec" onclick="expandCollapseAllGantt()" id="btn-gantt-expand" style="font-size:11px;padding:5px 10px">▶ 전체 펼치기</button>
+      </div>
+    </div>
     <div class="g-chips" id="g-chips"></div>
     <div class="gantt-outer" id="g-wrap"></div>
   </main></div>
