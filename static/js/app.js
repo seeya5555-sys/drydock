@@ -1112,8 +1112,8 @@ function renderJobs(){
     // 계산 기준: 자식 없는 단독항목 그자체 + 자식 있는 부모항목 자체값
     // (중간 자식항목은 제외 - 최상위 부모가 있으면 최상위 부모만)
     const catRootJobs = catJobs.filter(j => {
+      if((j.section||'GENERAL') === 'GENERAL') return false; // GENERAL 제외
       const p = getParentNumber(j.number);
-      // 부모가 같은 catJobs 안에 없으면 루트(최상위)
       return !p || !catJobs.some(x => x.number === p);
     });
 
