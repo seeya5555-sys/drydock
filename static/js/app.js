@@ -1109,17 +1109,19 @@ function renderJobs(){
     const totalBudget   = catJobs.reduce((s,j) => s + (+j.budget||0), 0);
     const totalConsumed = catJobs.reduce((s,j) => s + (+j.consumption||0), 0);
 
-    // Progress: 날짜 기반 자동 평균
-    const pcts = catJobs.map(j => {
-      const es = j._autoStart||j.start_date, ee = j._autoEnd||j.end_date;
-      const lp = calcProgress(es, ee);
-      return lp !== null ? lp : (j.completion||0);
-    });
-    const avgPct = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : 0;
+    // leaf 항목만 기준 (자식 없는 최하위 항목)
+    const leafCatJobs = catJobs.filter(j => !hasChildren(j.number, fil));
+
+    // 스케줄 바: leaf 항목의 날짜 기반 스케줄 평균
+    const avgPct = leafCatJobs.length ? Math.round(
+      leafCatJobs.map(j => {
+        const lp = calcProgress(j.start_date, j.end_date);
+        return lp !== null ? lp : 0;
+      }).reduce((a,b)=>a+b,0) / leafCatJobs.length
+    ) : 0;
     const pctCol = avgPct>=100?'var(--green)':avgPct>0?'var(--amber)':'#cbd5e1';
 
-    // 실제 공정률: leaf 항목 completion 평균
-    const leafCatJobs = catJobs.filter(j => !hasChildren(j.number, fil));
+    // 공정률 바: leaf 항목의 completion 평균
     const actPct = leafCatJobs.length
       ? Math.round(leafCatJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafCatJobs.length)
       : 0;
@@ -1200,15 +1202,16 @@ function renderJobs(){
         // Section 집계
         const sBudget   = secJobs.reduce((s,j)=>s+(+j.budget||0),0);
         const sConsumed = secJobs.reduce((s,j)=>s+(+j.consumption||0),0);
-        const sPcts = secJobs.map(j=>{
-          const es=j._autoStart||j.start_date, ee=j._autoEnd||j.end_date;
-          const lp=calcProgress(es,ee); return lp!==null?lp:(j.completion||0);
-        });
-        const sAvgPct = sPcts.length?Math.round(sPcts.reduce((a,b)=>a+b,0)/sPcts.length):0;
-        const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
         const sConsPct = sBudget>0?Math.min(100,Math.round(sConsumed/sBudget*100)):0;
-        // 실제 공정률: leaf 항목 completion 평균
+        // leaf 항목만 기준
         const leafSecJobs = secJobs.filter(j => !hasChildren(j.number, fil));
+        // 스케줄 바: leaf 날짜 기반 평균
+        const sAvgPct = leafSecJobs.length ? Math.round(
+          leafSecJobs.map(j => { const lp=calcProgress(j.start_date,j.end_date); return lp!==null?lp:0; })
+          .reduce((a,b)=>a+b,0) / leafSecJobs.length
+        ) : 0;
+        const sPctCol = sAvgPct>=100?'var(--green)':sAvgPct>0?'var(--amber)':'#cbd5e1';
+        // 공정률 바: leaf completion 평균
         const sActPct = leafSecJobs.length
           ? Math.round(leafSecJobs.reduce((s,j)=>s+(+j.completion||0),0) / leafSecJobs.length)
           : 0;
