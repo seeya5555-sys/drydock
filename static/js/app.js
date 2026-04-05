@@ -1073,7 +1073,7 @@ function renderJobs(){
     allCats.forEach(c => { if(!catCollapsed.has(c+'_opened')) catCollapsed.add(c); });
     allCats.forEach(c => {
       const secs = [...new Set(fil.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
-      secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k+'_opened')) catCollapsed.add(k); });
+      secs.forEach(s => { const k=c+'::'+s; if(!catCollapsed.has(k)) catCollapsed.add(k); });
     });
   }
 
@@ -1188,7 +1188,7 @@ function renderJobs(){
         const secJobs = secGroups[sec];
         if(!secJobs.length) return;
         const secKey = cat + '::' + sec;
-        const isSecCollapsed = catCollapsed.has(secKey) && !catCollapsed.has(secKey+'_opened');
+        const isSecCollapsed = catCollapsed.has(secKey);
 
         // Section 집계
         const sBudget   = secJobs.reduce((s,j)=>s+(+j.budget||0),0);
@@ -1286,11 +1286,11 @@ function toggleCatGroup(cat) {
 function toggleSecGroup(secKey) {
   if(catCollapsed.has(secKey)) {
     catCollapsed.delete(secKey);
-    catCollapsed.add(secKey+'_opened');
   } else {
     catCollapsed.add(secKey);
-    catCollapsed.delete(secKey+'_opened');
   }
+  // _opened 마커 제거 (혼란 방지)
+  catCollapsed.delete(secKey+'_opened');
   renderJobs();
 }
 
@@ -1935,7 +1935,7 @@ function buildGantt(sf,cf,btn){
       secOrder.forEach(sec => {
         const secJobs = secGroups[sec];
         const secKey = cat+'::'+sec;
-        const isSecColl = catCollapsed.has(secKey) && !catCollapsed.has(secKey+'_opened');
+        const isSecColl = catCollapsed.has(secKey);
 
         // Section 헤더 행
         html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:34px;background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');buildGantt(null,null,null)">
