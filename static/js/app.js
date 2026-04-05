@@ -790,7 +790,10 @@ async function uploadJobsCSV(input) {
 
     setSS('synced');
     const errMsg = data.errors && data.errors.length ? ` (오류 ${data.errors.length}건)` : '';
-    toast(`✓ ${data.inserted}개 Job이 추가됐습니다${errMsg}`);
+    const parts = [];
+    if(data.inserted > 0) parts.push(`${data.inserted}개 추가`);
+    if(data.updated  > 0) parts.push(`${data.updated}개 업데이트`);
+    toast(`✓ ${parts.join(', ')}됐습니다${errMsg}`);
 
     // 새로 추가된 Job 반영
     const newJobs = await apiFetch(`${API}/vessels/${VID}/jobs`);
