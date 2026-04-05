@@ -1290,7 +1290,12 @@ function renderJobs(){
                 <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL CONSUMED</div>
               </div>
               <div style="min-width:130px">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                ${sec === 'CANCEL'
+                  ? `<div style="display:flex;align-items:center;gap:6px;opacity:.5">
+                       <span style="font-size:14px">🚫</span>
+                       <span style="font-size:11px;color:rgba(255,255,255,.7);font-weight:600">CANCELLED</span>
+                     </div>`
+                  : `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
                   <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap;min-width:32px">📅 스케줄</span>
                   <div style="flex:1;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden">
                     <div style="width:${sAvgPct}%;height:100%;background:${sPctCol};border-radius:3px"></div>
@@ -1303,7 +1308,8 @@ function renderJobs(){
                     <div style="width:${sActPct}%;height:100%;background:${sActCol};border-radius:3px"></div>
                   </div>
                   <span style="font-size:12px;font-weight:700;color:${sActCol};min-width:36px">${sActPct}%</span>
-                </div>
+                </div>`
+                }
               </div>
             </div>
           </td>
