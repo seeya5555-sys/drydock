@@ -1314,9 +1314,8 @@ function renderJobs(){
         // Section 하위 job들
         if(!isSecCollapsed) {
           const secSorted = sortJobTree(secJobs);
-          // treeMap은 fil 전체 기준으로 계산된 것 사용 (부모-자식 관계 정확도)
           const secJobTreeMap = buildJobTree(fil).reduce((m,x)=>{m[x._id]=x._depth||0;return m;},{});
-          secSorted.filter(j=>isJobVisible(j,fil)).forEach(j=>{
+          secSorted.filter(j=>isJobVisible(j,secSorted)).forEach(j=>{
             html += _jobRow(j, jobs, fil, secJobTreeMap, 0, false);
           });
         }
