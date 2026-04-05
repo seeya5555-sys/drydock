@@ -1185,8 +1185,8 @@ function renderJobs(){
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:10px;color:#fff;user-select:none">${isCollapsed?'▶':'▼'}</span>
-          <span class="cat-badge ${catCls}" style="font-size:12px">${cat}</span>
-          <span style="font-size:11px;color:rgba(255,255,255,.6)">${catJobs.length} jobs</span>
+          <span class="cat-badge ${catCls}" style="font-size:12px;flex-shrink:0">${cat}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;flex-shrink:0">${catJobs.length} jobs</span>
         </div>
       </td>
       <td colspan="2" style="padding:10px 8px;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.5px"></td>
