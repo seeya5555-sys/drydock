@@ -395,7 +395,7 @@ def fleet_summary():
 @app.route("/api/vessels/<vid>/jobs/csv", methods=["POST"])
 def upload_jobs_csv(vid):
     """CSV 파일로 Job 일괄 등록
-    컬럼: number, section, category, description, vendor, budget
+    컬럼: number, section, category, description, vendor, budget, start_date, end_date, completion
     """
     import csv, io as _io
 
@@ -406,11 +406,9 @@ def upload_jobs_csv(vid):
     if not f.filename.endswith(".csv"):
         return jsonify({"error": "CSV 파일만 업로드 가능합니다"}), 400
 
-    # ── CSV 읽기 ──────────────────────────────────────────────
-    stream = _io.StringIO(f.stream.read().decode("utf-8-sig"))  # BOM 처리
+    stream = _io.StringIO(f.stream.read().decode("utf-8-sig"))
     reader = csv.DictReader(stream)
 
-    # 필수 컬럼 확인
     required = {"number", "section", "category", "description"}
     if not required.issubset({c.strip().lower() for c in (reader.fieldnames or [])}):
         return jsonify({"error": f"필수 컬럼 누락: {required}"}), 400
@@ -420,11 +418,22 @@ def upload_jobs_csv(vid):
     errors = []
 
     for i, row_data in enumerate(reader, start=2):
-        # 컬럼명 소문자 정규화
         r = {k.strip().lower(): v.strip() for k, v in row_data.items()}
-        # budget 정규화: $, 쉼표, 공백 제거
         raw_budget = r.get("budget", "0") or "0"
         clean_budget = raw_budget.replace("$", "").replace(",", "").strip()
+
+        # 날짜 정규화
+        def clean_date(v):
+            v = (v or "").strip()
+            return v if v else None
+
+        # completion 정규화 (숫자만)
+        raw_comp = r.get("completion", "0") or "0"
+        try:
+            completion = int(float(raw_comp.replace("%","").strip()))
+        except:
+            completion = 0
+
         try:
             db.execute(
                 "INSERT INTO jobs(vessel_id, number, section, category, description, "
@@ -438,11 +447,11 @@ def upload_jobs_csv(vid):
                     r.get("description", ""),
                     r.get("vendor", ""),
                     float(clean_budget or 0),
-                    0,       # consumption
-                    None,    # start_date (사이트에서 직접 입력)
-                    None,    # end_date   (사이트에서 직접 입력)
-                    0,       # completion
-                    "[]",    # remarks
+                    0,
+                    clean_date(r.get("start_date")),
+                    clean_date(r.get("end_date")),
+                    completion,
+                    "[]",
                 )
             )
             inserted += 1
@@ -450,10 +459,7 @@ def upload_jobs_csv(vid):
             errors.append(f"Row {i}: {e}")
 
     db.commit()
-    return jsonify({
-        "inserted": inserted,
-        "errors": errors
-    }), 201
+    return jsonify({"inserted": inserted, "errors": errors}), 201
 
 @app.route("/api/vessels/<vid>/jobs", methods=["GET"])
 def get_jobs(vid):
