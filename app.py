@@ -8,7 +8,7 @@ Run:
 Open: http://localhost:5000
 """
 
-import sqlite3, os, io, json, hashlib, secrets
+import sqlite3, os, io, json, hashlib, secrets, gzip
 from flask import Flask, g, jsonify, request, render_template, abort, send_file, session, redirect, url_for
 
 app = Flask(__name__)
@@ -16,7 +16,31 @@ app.config["DATABASE"] = os.path.join(app.instance_path, "fleet.db")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024   # 50 MB
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "drydock-secret-key-2026")
 app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7일
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # 캐시버스팅 있으니 0
 os.makedirs(app.instance_path, exist_ok=True)
+
+# ── Gzip 압축 ─────────────────────────────────────────────────
+@app.after_request
+def compress_response(response):
+    if (response.status_code < 200 or response.status_code >= 300
+            or response.direct_passthrough):
+        return response
+    accept = request.headers.get('Accept-Encoding', '')
+    if 'gzip' not in accept:
+        return response
+    content_type = response.content_type
+    if not any(t in content_type for t in ('json', 'javascript', 'css', 'html', 'text')):
+        return response
+    data = response.get_data()
+    if len(data) < 500:
+        return response
+    compressed = gzip.compress(data, compresslevel=6)
+    if len(compressed) >= len(data):
+        return response
+    response.set_data(compressed)
+    response.headers['Content-Encoding'] = 'gzip'
+    response.headers['Content-Length'] = len(compressed)
+    return response
 
 
 # ── DB helpers ────────────────────────────────────────────────
