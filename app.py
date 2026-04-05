@@ -49,6 +49,18 @@ def row(sql, *args):
 with app.app_context():
     init_db()
     db = get_db()
+    # STORE 섹션 수동 Budget/Consumed 테이블
+    db.execute("""CREATE TABLE IF NOT EXISTS vessel_sec_budget (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vessel_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        section TEXT NOT NULL,
+        budget REAL DEFAULT 0,
+        consumed REAL DEFAULT 0,
+        UNIQUE(vessel_id, category, section)
+    )""")
+    db.commit()
+    db = get_db()
     # 사용자 테이블 생성 (role, vessels 포함)
     db.execute("""CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -327,6 +339,29 @@ def delete_vessel(vid):
     db.commit()
     return jsonify({"deleted": vid})
 
+@app.route("/api/vessels/<vid>/sec_budget", methods=["GET"])
+@login_required
+def get_sec_budget(vid):
+    data = rows("SELECT category, section, budget, consumed FROM vessel_sec_budget WHERE vessel_id=?", vid)
+    return jsonify(data)
+
+@app.route("/api/vessels/<vid>/sec_budget", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def set_sec_budget(vid):
+    d = request.get_json(force=True)
+    cat = d.get("category","")
+    sec = d.get("section","")
+    budget   = float(d.get("budget",0) or 0)
+    consumed = float(d.get("consumed",0) or 0)
+    db = get_db()
+    db.execute("""INSERT INTO vessel_sec_budget(vessel_id,category,section,budget,consumed)
+                  VALUES(?,?,?,?,?)
+                  ON CONFLICT(vessel_id,category,section) DO UPDATE SET budget=?,consumed=?""",
+               (vid, cat, sec, budget, consumed, budget, consumed))
+    db.commit()
+    return jsonify({"ok": True})
+
 @app.route("/api/fleet/summary")
 @login_required
 def fleet_summary():
@@ -348,6 +383,7 @@ def fleet_summary():
             "classItems":  [to_class(r) for r in db.execute("SELECT * FROM class_items WHERE vessel_id=? ORDER BY id",     (vid,)).fetchall()],
             "discussions": [to_disc(r)  for r in db.execute("SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id",(vid,)).fetchall()],
             "attachments": attachments,
+            "secBudget":   [dict(r) for r in db.execute("SELECT category,section,budget,consumed FROM vessel_sec_budget WHERE vessel_id=?", (vid,)).fetchall()],
         })
     return jsonify(result)
 
