@@ -369,22 +369,36 @@ def fleet_summary():
     db = get_db()
     u = get_current_user()
     allowed = None if (u and u['role']=='admin') else json.loads(u['vessels'] or '[]') if u else []
+    # 전체 데이터 한 번에 로드 (vessel별 반복 쿼리 제거)
+    all_jobs        = {}
+    all_class       = {}
+    all_disc        = {}
+    all_attach      = {}
+    all_secbudget   = {}
+
+    for r in db.execute("SELECT * FROM jobs ORDER BY vessel_id, id").fetchall():
+        all_jobs.setdefault(r["vessel_id"], []).append(to_job(r))
+    for r in db.execute("SELECT * FROM class_items ORDER BY vessel_id, id").fetchall():
+        all_class.setdefault(r["vessel_id"], []).append(to_class(r))
+    for r in db.execute("SELECT * FROM discussions ORDER BY vessel_id, date, id").fetchall():
+        all_disc.setdefault(r["vessel_id"], []).append(to_disc(r))
+    for r in db.execute("SELECT vessel_id, ref_type, ref_id FROM attachments GROUP BY vessel_id, ref_type, ref_id").fetchall():
+        all_attach.setdefault(r["vessel_id"], []).append({"ref_type": r["ref_type"], "ref_id": r["ref_id"]})
+    for r in db.execute("SELECT vessel_id, category, section, budget, consumed FROM vessel_sec_budget").fetchall():
+        all_secbudget.setdefault(r["vessel_id"], []).append({"category": r["category"], "section": r["section"], "budget": r["budget"], "consumed": r["consumed"]})
+
     result = []
     for v in db.execute("SELECT * FROM vessels ORDER BY created_at").fetchall():
         vid = v["id"]
         if allowed is not None and vid not in allowed:
             continue
-        attach_rows = db.execute(
-            "SELECT ref_type, ref_id FROM attachments WHERE vessel_id=? GROUP BY ref_type, ref_id",
-            (vid,)).fetchall()
-        attachments = [{"ref_type": r["ref_type"], "ref_id": r["ref_id"]} for r in attach_rows]
         result.append({
             "info":        to_vessel(v),
-            "jobs":        [to_job(r)   for r in db.execute("SELECT * FROM jobs        WHERE vessel_id=? ORDER BY id",     (vid,)).fetchall()],
-            "classItems":  [to_class(r) for r in db.execute("SELECT * FROM class_items WHERE vessel_id=? ORDER BY id",     (vid,)).fetchall()],
-            "discussions": [to_disc(r)  for r in db.execute("SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id",(vid,)).fetchall()],
-            "attachments": attachments,
-            "secBudget":   [dict(r) for r in db.execute("SELECT category,section,budget,consumed FROM vessel_sec_budget WHERE vessel_id=?", (vid,)).fetchall()],
+            "jobs":        all_jobs.get(vid, []),
+            "classItems":  all_class.get(vid, []),
+            "discussions": all_disc.get(vid, []),
+            "attachments": all_attach.get(vid, []),
+            "secBudget":   all_secbudget.get(vid, []),
         })
     return jsonify(result)
 
