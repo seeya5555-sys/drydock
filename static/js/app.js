@@ -1464,7 +1464,6 @@ function expandCollapseAllGantt() {
   _catEverSeen.clear();
 
   if(!isExpanding) {
-    // 전체 접기
     _expandAll = false;
     const cats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
     cats.forEach(c => {
@@ -1478,11 +1477,12 @@ function expandCollapseAllGantt() {
     _expandAll = true;
     if(btn) btn.textContent = '▼ 전체 접기';
   }
-  // Job Progress 버튼도 동기화
   const jpBtn = document.getElementById('btn-expand-all');
   if(jpBtn) jpBtn.textContent = isExpanding ? '▼ 전체 접기' : '▶ 전체 펼치기';
   buildGantt(null, null, null);
 }
+
+function expandCollapseAll() {
   const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
   const btn = document.getElementById('btn-expand-all');
   const isExpanding = btn && btn.textContent.includes('펼치기');
