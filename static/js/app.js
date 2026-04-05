@@ -1313,19 +1313,19 @@ function renderJobs(){
           <td colspan="2" style="padding:8px"></td>
           <td style="padding:8px;text-align:right">
             ${sec === 'STORE'
-              ? `<input type="number" value="${storeData.budget||''}" placeholder="Budget"
+              ? `<input type="number" value="${storeData.budget > 0 ? storeData.budget : ''}" placeholder="$${sBudget.toLocaleString()}"
                    onclick="event.stopPropagation()"
                    onchange="setSecManualBudget('${storeKey}','budget',this.value)"
-                   style="width:90px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:#fff;font-family:'IBM Plex Mono',monospace;text-align:right">`
+                   style="width:100px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:#fff;font-family:'IBM Plex Mono',monospace;text-align:right" title="비우면 소분류 합계 자동사용">`
               : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">$${dispBudget.toLocaleString()}</div>`
             }
           </td>
           <td style="padding:8px;text-align:right">
             ${sec === 'STORE'
-              ? `<input type="number" value="${storeData.consumed||''}" placeholder="Consumed"
+              ? `<input type="number" value="${storeData.consumed > 0 ? storeData.consumed : ''}" placeholder="$${sConsumed.toLocaleString()}"
                    onclick="event.stopPropagation()"
                    onchange="setSecManualBudget('${storeKey}','consumed',this.value)"
-                   style="width:90px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:var(--green);font-family:'IBM Plex Mono',monospace;text-align:right">`
+                   style="width:100px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:3px 6px;font-size:11px;font-weight:600;color:var(--green);font-family:'IBM Plex Mono',monospace;text-align:right" title="비우면 소분류 합계 자동사용">`
               : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${dispConsumed.toLocaleString()}</div>`
             }
           </td>
@@ -1390,10 +1390,10 @@ window._secManualBudget = window._secManualBudget || {};
 async function setSecManualBudget(key, field, value) {
   if(!window._secManualBudget) window._secManualBudget = {};
   if(!window._secManualBudget[key]) window._secManualBudget[key] = {budget:0, consumed:0};
-  window._secManualBudget[key][field] = parseFloat(value) || 0;
+  // 빈값이면 0으로 → 자동계산으로 복귀
+  window._secManualBudget[key][field] = value === '' ? 0 : (parseFloat(value) || 0);
 
-  // API 저장
-  const parts = key.split('::'); // VID::category::section
+  const parts = key.split('::');
   const [vid, cat, sec] = parts;
   try {
     await apiFetch(`${API}/vessels/${vid}/sec_budget`, 'PUT', {
