@@ -185,7 +185,9 @@ function renderFleet(){
 
   document.getElementById('vesselsGrid').innerHTML=IDX.map(id=>{
     const v=FLEET[id],info=v.info,jobs=v.jobs||[];
-    const tb=jobs.reduce((s,j)=>s+(+j.budget||0),0),tc=jobs.reduce((s,j)=>s+(+j.consumption||0),0);
+    const dcRate = info.dcRate || 0;
+    const tb = jobs.reduce((s,j) => { const b=+j.budget||0; return s+(j.category==='Shipyard'?b*(1-dcRate/100):b); }, 0);
+    const tc = jobs.reduce((s,j) => { const c=+j.consumption||0; return s+(j.category==='Shipyard'?c*(1-dcRate/100):c); }, 0);
     const pct=tb?Math.min(100,(tc/tb)*100):0;
     const done2=jobs.filter(j=>{if(hasChildren(j.number,jobs))return false;const p=calcProgress(j.start_date,j.end_date);return(p!==null?p:j.completion||0)>=100;}).length;
     const leafCount=jobs.filter(j=>!hasChildren(j.number,jobs)).length;
@@ -518,7 +520,16 @@ async function loadAttachStates(refType, idKey, btnPrefix) {
 function renderDash(){
   if(!VID)return;
   const v=FLEET[VID],info=v.info,jobs=v.jobs||[];
-  const tb=jobs.reduce((s,j)=>s+(+j.budget||0),0),tc=jobs.reduce((s,j)=>s+(+j.consumption||0),0);
+  // Shipyard는 After D/C 기준으로 합산
+  const dcRate = info.dcRate || 0;
+  const tb = jobs.reduce((s,j) => {
+    const b = +j.budget||0;
+    return s + (j.category==='Shipyard' ? b*(1-dcRate/100) : b);
+  }, 0);
+  const tc = jobs.reduce((s,j) => {
+    const c = +j.consumption||0;
+    return s + (j.category==='Shipyard' ? c*(1-dcRate/100) : c);
+  }, 0);
   const leafJobs = jobs.filter(j => !hasChildren(j.number, jobs));
   const done=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);return (p!==null?p:j.completion||0)>=100;}).length;
   const prog=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);const pct=p!==null?p:j.completion||0;return pct>0&&pct<100;}).length;
@@ -1191,6 +1202,11 @@ function renderJobs(){
     const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
 
     // Category 헤더 행
+    // Shipyard D/C 요율
+    const dcRate = cat === 'Shipyard' ? (FLEET[VID]?.info?.dcRate || 0) : 0;
+    const dcBudget   = cat === 'Shipyard' ? Math.round(totalBudget   * (1 - dcRate/100)) : totalBudget;
+    const dcConsumed = cat === 'Shipyard' ? Math.round(totalConsumed * (1 - dcRate/100)) : totalConsumed;
+
     html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}')">
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;align-items:center;gap:8px">
@@ -1199,14 +1215,25 @@ function renderJobs(){
           <span style="font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;flex-shrink:0">${catJobs.length} jobs</span>
         </div>
       </td>
-      <td colspan="2" style="padding:10px 8px;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.5px"></td>
+      <td colspan="2" style="padding:10px 8px;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.5px">
+        ${cat === 'Shipyard' ? `
+          <div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:9px;color:rgba(255,255,255,.5);white-space:nowrap">D/C 요율</span>
+            <div class="cell-edit" onclick="event.stopPropagation();startDcRateEdit(this)"
+              style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#f59e0b">
+              ${dcRate}%
+            </div>
+          </div>` : ''}
+      </td>
       <td style="padding:10px 8px;text-align:right">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#fff">$${totalBudget.toLocaleString()}</div>
         <div style="font-size:10px;color:rgba(255,255,255,.5)">Total Budget</div>
+        ${cat === 'Shipyard' ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#f59e0b;margin-top:2px">$${dcBudget.toLocaleString()}</div><div style="font-size:9px;color:#f59e0b;opacity:.7">After D/C</div>` : ''}
       </td>
       <td style="padding:10px 8px;text-align:right">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green)">$${totalConsumed.toLocaleString()}</div>
         <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed</div>
+        ${cat === 'Shipyard' ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#f59e0b;margin-top:2px">$${dcConsumed.toLocaleString()}</div><div style="font-size:9px;color:#f59e0b;opacity:.7">After D/C</div>` : ''}
       </td>
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;gap:20px">
@@ -1418,6 +1445,27 @@ function startStoreEdit(span, key, field, currentVal) {
     if(e.key === 'Enter') inp.blur();
     if(e.key === 'Escape') inp.blur();
   });
+}
+
+function startDcRateEdit(span) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+  const current = FLEET[VID]?.info?.dcRate || 0;
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.min = 0; inp.max = 100; inp.step = 0.1;
+  inp.value = current;
+  inp.style.cssText = 'width:55px;background:transparent;border:none;border-bottom:1px solid #f59e0b;color:#f59e0b;font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:700;text-align:center;outline:none';
+  span.replaceWith(inp);
+  inp.focus(); inp.select();
+  const save = async () => {
+    const val = parseFloat(inp.value) || 0;
+    try {
+      await apiFetch(`${API}/vessels/${VID}/dc_rate`, 'PUT', {dcRate: val});
+      FLEET[VID].info.dcRate = val;
+    } catch(e) { toast('저장 실패: '+e.message, true); }
+    renderJobs(); renderDash();
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => { if(e.key==='Enter') inp.blur(); if(e.key==='Escape') inp.blur(); });
 }
 
 async function setSecManualBudget(key, field, value) {
