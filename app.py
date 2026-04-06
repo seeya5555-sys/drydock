@@ -83,6 +83,11 @@ with app.app_context():
         consumed REAL DEFAULT 0,
         UNIQUE(vessel_id, category, section)
     )""")
+    # Shipyard D/C 요율 컬럼 추가 (없으면)
+    try:
+        db.execute("ALTER TABLE vessels ADD COLUMN dc_rate REAL DEFAULT 0")
+    except:
+        pass
     db.commit()
     db = get_db()
     # 사용자 테이블 생성 (role, vessels 포함)
@@ -171,7 +176,8 @@ def to_vessel(r):
             "shipyard": r["shipyard"] or "",
             "classSociety": r["class_society"] or "",
             "dockIn": r["dock_in"] or "", "dockOut": r["dock_out"] or "",
-            "duration": r["duration"] or "", "grt": r["grt"] or ""}
+            "duration": r["duration"] or "", "grt": r["grt"] or "",
+            "dcRate": r["dc_rate"] if r["dc_rate"] is not None else 0}
 
 def to_job(r):
     return {"_id": r["id"], "number": r["number"] or "",
@@ -363,6 +369,17 @@ def delete_vessel(vid):
     db.execute("DELETE FROM vessels WHERE id=?", (vid,))
     db.commit()
     return jsonify({"deleted": vid})
+
+@app.route("/api/vessels/<vid>/dc_rate", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def set_dc_rate(vid):
+    d = request.get_json(force=True)
+    rate = float(d.get("dcRate", 0) or 0)
+    db = get_db()
+    db.execute("UPDATE vessels SET dc_rate=? WHERE id=?", (rate, vid))
+    db.commit()
+    return jsonify({"ok": True, "dcRate": rate})
 
 @app.route("/api/vessels/<vid>/sec_budget", methods=["GET"])
 @login_required
