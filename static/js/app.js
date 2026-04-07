@@ -529,6 +529,14 @@ function toggleClsDate(dt){
   else _clsDateExpanded.add(dt);
   renderDash();
 }
+function toggleBudgetConsumption(){
+  const body  = document.getElementById('v-budc-body');
+  const arrow = document.getElementById('v-budc-arrow');
+  if(!body) return;
+  const open = body.style.display === 'none';
+  body.style.display  = open ? '' : 'none';
+  arrow.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+}
 function toggleSecBudCat(cat){
   if(_secBudCatExpanded.has(cat)) _secBudCatExpanded.delete(cat);
   else _secBudCatExpanded.add(cat);
