@@ -286,7 +286,7 @@ main { padding:28px; max-width:1680px; margin:0 auto; }
 
 .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
 .dash-card { background:var(--bg-white); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; box-shadow:var(--shadow); }
-.dash-card-title { font-size:14px; font-weight:700; color:var(--txt-h); padding-bottom:12px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+.dash-card-title { font-size:14px; font-weight:700; color:var(--txt-h); padding-bottom:12px; border-bottom:1px solid var(--border); margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
 .d-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--bg); }
 .d-row:last-child { border-bottom:none; }
 
