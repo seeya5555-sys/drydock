@@ -609,6 +609,86 @@ function renderDash(){
   sv.textContent=st;
   sv.style.color=st==='IN DOCK'?'#fbbf24':st==='COMPLETED'?'#4ade80':'rgba(255,255,255,.5)';
 
+  // ── Progress Overview (Shipyard / Shore Repair 스케줄 + 공정률) ──
+  const OV_CATS = ['Shipyard', 'Shore Repair'];
+  const ovEl = document.getElementById('v-cat-overview');
+  const ovRows = document.getElementById('v-cat-overview-rows');
+  const ovCatData = {};
+  jobs.forEach(j => {
+    const cat = j.category || 'Shipyard';
+    if (!OV_CATS.includes(cat)) return;
+    if (!ovCatData[cat]) ovCatData[cat] = [];
+    ovCatData[cat].push(j);
+  });
+  if (Object.keys(ovCatData).length) {
+    ovEl.style.display = '';
+    ovRows.innerHTML = OV_CATS.filter(c => ovCatData[c]).map(cat => {
+      const catJobs = ovCatData[cat];
+      // 스케줄 바: dock in/out 기준 또는 job 날짜 범위
+      const allStarts = catJobs.map(j=>j.start_date).filter(d=>d&&d.trim()).sort();
+      const allEnds   = catJobs.map(j=>j.end_date).filter(d=>d&&d.trim()).sort();
+      const earliest  = allStarts[0] || info.dockIn || null;
+      const latest    = allEnds[allEnds.length-1] || info.dockOut || null;
+      let schedPct = calcProgress(earliest, latest) ?? 0;
+      schedPct = Math.min(100, schedPct);
+      const schedCol = schedPct>=100?'var(--green)':schedPct>0?'var(--amber)':'#cbd5e1';
+      // 공정률 바: 루트 job completion 평균
+      const rootJobs = catJobs.filter(j => !hasChildren(j.number, catJobs));
+      const actPct = rootJobs.length
+        ? Math.min(100, Math.round(rootJobs.map(j=>+j.completion||0).reduce((a,b)=>a+b,0)/rootJobs.length))
+        : 0;
+      const actCol = actPct>=100?'var(--green)':actPct>0?'#7c3aed':'#cbd5e1';
+      // consumed 바
+      const catBudRaw = catJobs.reduce((s,j)=>s+(+j.budget||0),0);
+      const catConRaw = catJobs.reduce((s,j)=>s+(+j.consumption||0),0);
+      const isYard = cat==='Shipyard';
+      const catBud = isYard ? catBudRaw*(1-dcRate/100) : catBudRaw;
+      const catCon = isYard ? catConRaw*(1-dcRate/100) : catConRaw;
+      const conRawPct = catBud>0?(catCon/catBud*100):0;
+      const conPct = Math.min(100, conRawPct);
+      const conOver = catBud>0 && catCon>catBud;
+      const conCol = conOver?'var(--red)':'var(--blue)';
+      return `<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:13px;font-weight:700;color:var(--txt-h)">${cat}</span>
+            <span style="font-size:11px;color:var(--txt-m)">${catJobs.length} jobs</span>
+            ${isYard&&dcRate>0?`<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">D/C ${dcRate}%</span>`:''}
+          </div>
+          <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:${conOver?'var(--red)':'var(--txt-s)'}">
+            <span style="font-weight:600;color:${conOver?'var(--red)':'var(--blue)'}">$${Math.round(catCon).toLocaleString()}</span>
+            <span style="color:var(--txt-m)"> / $${Math.round(catBud).toLocaleString()}</span>
+            ${isYard&&dcRate>0?`<span style="font-size:10px;color:var(--txt-m);margin-left:4px;text-decoration:line-through">$${catBudRaw.toLocaleString()}</span>`:''}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span style="font-size:11px;color:var(--txt-m)">📅 스케줄</span>
+              <span style="font-size:12px;font-weight:700;color:${schedCol}">${schedPct}%</span>
+            </div>
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${schedPct}%;background:${schedCol};border-radius:4px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:10px;color:var(--txt-m);margin-top:4px">${earliest||'—'} → ${latest||'—'}</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span style="font-size:11px;color:var(--txt-m)">✏ 공정률</span>
+              <span style="font-size:12px;font-weight:700;color:${actCol}">${actPct}%</span>
+            </div>
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${actPct}%;background:${actCol};border-radius:4px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:10px;color:var(--txt-m);margin-top:4px">${rootJobs.length} root items 기준 평균</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    ovEl.style.display = 'none';
+  }
+
   const rawPct = tb?(tc/tb)*100:0;
   const pct = Math.min(100, rawPct);
   const vBar = document.getElementById('v-bar');
