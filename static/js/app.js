@@ -156,8 +156,7 @@ async function loadAll(){
 }
 
 // DB → frontend normalizers
-function dbI(r){return{id:r.id,name:r.name||'',type:r.type||'',imo:r.imo||'',shipyard:r.shipyard||'',classSociety:r.class_society||r.classSociety||'',dockIn:r.dock_in||r.dockIn||'',dockOut:r.dock_out||r.dockOut||'',duration:r.duration||'',grt:r.grt||''};}
-function dbJ(r){
+function dbI(r){return{id:r.id,name:r.name||'',type:r.type||'',imo:r.imo||'',shipyard:r.shipyard||'',classSociety:r.class_society||r.classSociety||'',dockIn:r.dock_in||r.dockIn||'',dockOut:r.dock_out||r.dockOut||'',duration:r.duration||'',grt:r.grt||'',dcRate:+(r.dcRate||r.dc_rate||0)};}function dbJ(r){
   let remarks = [];
   if(Array.isArray(r.remarks)) remarks = r.remarks;
   else if(typeof r.remarks === 'string'){
