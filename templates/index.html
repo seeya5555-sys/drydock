@@ -102,9 +102,16 @@
       <div id="v-cat-overview-rows"></div>
     </div>
     <div class="budget-section">
-      <div class="sec-hdr" style="margin-bottom:0"><div class="sec-title">Budget Consumption</div></div>
-      <div class="big-bar-track"><div class="big-bar-fill" id="v-bar" style="width:0%"><span id="v-bar-lbl">0%</span></div></div>
-      <div id="v-sec-buds" class="sec-budgets-grid"></div>
+      <div class="sec-hdr" style="margin-bottom:0;cursor:pointer;user-select:none" onclick="toggleBudgetConsumption()">
+        <div class="sec-title" style="display:flex;align-items:center;gap:8px">
+          <span id="v-budc-arrow" style="font-size:11px;display:inline-block;transform:rotate(0deg);transition:transform .2s">▶</span>
+          Budget Consumption
+        </div>
+      </div>
+      <div id="v-budc-body" style="display:none">
+        <div class="big-bar-track" style="margin-top:12px"><div class="big-bar-fill" id="v-bar" style="width:0%"><span id="v-bar-lbl">0%</span></div></div>
+        <div id="v-sec-buds" class="sec-budgets-grid"></div>
+      </div>
     </div>
     <div class="dash-grid">
       <div class="dash-card"><div class="dash-card-title" id="v-bud-title">Budget by Section</div><div id="v-bud-rows"></div></div>
