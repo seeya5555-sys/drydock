@@ -1383,6 +1383,12 @@ function renderJobs(){
     const dcRate = cat === 'Shipyard' ? (FLEET[VID]?.info?.dcRate || 0) : 0;
     const dcBudget   = cat === 'Shipyard' ? Math.round(totalBudget   * (1 - dcRate/100)) : totalBudget;
     const dcConsumed = cat === 'Shipyard' ? Math.round(totalConsumed * (1 - dcRate/100)) : totalConsumed;
+    // consumed 초과 여부 (DC 적용 기준)
+    const catConsOver = dcBudget > 0 && dcConsumed > dcBudget;
+    const catConsRawPct = dcBudget > 0 ? (dcConsumed / dcBudget * 100) : 0;
+    const catConsBarPct = Math.min(100, catConsRawPct);
+    const catConsCol = catConsOver ? 'var(--red)' : 'var(--green)';
+    const catConsBarCol = catConsOver ? 'var(--red)' : 'var(--green)';
 
     html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}')">
       <td colspan="2" style="padding:10px 14px">
@@ -1408,18 +1414,18 @@ function renderJobs(){
         ${cat === 'Shipyard' ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#f59e0b;margin-top:2px">$${dcBudget.toLocaleString()}</div><div style="font-size:9px;color:#f59e0b;opacity:.7">After D/C</div>` : ''}
       </td>
       <td style="padding:10px 8px;text-align:right">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--green)">$${totalConsumed.toLocaleString()}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed</div>
-        ${cat === 'Shipyard' ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#f59e0b;margin-top:2px">$${dcConsumed.toLocaleString()}</div><div style="font-size:9px;color:#f59e0b;opacity:.7">After D/C</div>` : ''}
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${catConsCol}">$${totalConsumed.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5)">Consumed${catConsOver?' ⚠':''}</div>
+        ${cat === 'Shipyard' ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:${catConsOver?'var(--red)':'#f59e0b'};margin-top:2px">$${dcConsumed.toLocaleString()}</div><div style="font-size:9px;color:${catConsOver?'var(--red)':'#f59e0b'};opacity:.7">After D/C</div>` : ''}
       </td>
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;gap:20px">
           <div style="min-width:160px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
               <div style="width:120px;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;flex-shrink:0">
-                <div style="width:${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%;height:100%;background:var(--green);border-radius:4px"></div>
+                <div style="width:${catConsBarPct}%;height:100%;background:${catConsBarCol};border-radius:4px"></div>
               </div>
-              <span style="font-size:12px;font-weight:700;color:var(--green);min-width:36px">${totalBudget>0?Math.min(100,Math.round(totalConsumed/totalBudget*100)):0}%</span>
+              <span style="font-size:12px;font-weight:700;color:${catConsCol};min-width:36px">${catConsRawPct.toFixed(1)}%${catConsOver?' ⚠':''}</span>
             </div>
             <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.4px">TOTAL CONSUMED</div>
           </div>
@@ -1473,7 +1479,10 @@ function renderJobs(){
         // Section 집계
         const sBudget   = secJobs.reduce((s,j)=>s+(+j.budget||0),0);
         const sConsumed = secJobs.reduce((s,j)=>s+(+j.consumption||0),0);
-        const sConsPct = sBudget>0?Math.min(100,Math.round(sConsumed/sBudget*100)):0;
+        const sConsRawPct = sBudget>0?(sConsumed/sBudget*100):0;
+        const sConsPct = Math.min(100, Math.round(sConsRawPct));
+        const sConsOver = sBudget>0 && sConsumed>sBudget;
+        const sConsCol = sConsOver ? 'var(--red)' : 'var(--green)';
         // 계산 기준: 자식 없는 단독항목 + 자식 있는 부모항목 자체값
         const secRootJobs = secJobs.filter(j => {
           const p = getParentNumber(j.number);
@@ -1537,10 +1546,10 @@ function renderJobs(){
           <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
             ${sec==='STORE'
               ? `<div class="cell-edit" onclick="event.stopPropagation();startStoreEdit(this,'${storeKey}','consumed',${dispConsumed})"
-                   style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green);display:inline-block">
+                   style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:${sConsCol};display:inline-block">
                    $${dispConsumed.toLocaleString()}
                  </div>`
-              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--green)">$${dispConsumed.toLocaleString()}</div>`
+              : `<div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:${sConsCol}">$${dispConsumed.toLocaleString()}${sConsOver?' ⚠':''}</div>`
             }
           </td>
           <td colspan="2" style="padding:8px 14px">
@@ -1548,9 +1557,9 @@ function renderJobs(){
               <div style="min-width:130px">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
                   <div style="width:90px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;flex-shrink:0">
-                    <div style="width:${sConsPct}%;height:100%;background:var(--green);border-radius:3px"></div>
+                    <div style="width:${sConsPct}%;height:100%;background:${sConsCol};border-radius:3px"></div>
                   </div>
-                  <span style="font-size:11px;font-weight:600;color:var(--green)">${sConsPct}%</span>
+                  <span style="font-size:11px;font-weight:600;color:${sConsCol}">${sConsRawPct.toFixed(1)}%${sConsOver?' ⚠':''}</span>
                 </div>
                 <div style="font-size:8px;color:rgba(255,255,255,.4);letter-spacing:.4px">TOTAL CONSUMED</div>
               </div>
