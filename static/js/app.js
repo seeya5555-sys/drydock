@@ -667,12 +667,6 @@ function renderDash(){
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:13px;font-weight:700;color:var(--txt-h)">${cat}</span>
             <span style="font-size:11px;color:var(--txt-m)">${catJobs.length} jobs</span>
-            ${isYard&&dcRate>0?`<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">D/C ${dcRate}%</span>`:''}
-          </div>
-          <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:${conOver?'var(--red)':'var(--txt-s)'}">
-            <span style="font-weight:600;color:${conOver?'var(--red)':'var(--blue)'}">$${Math.round(catCon).toLocaleString()}</span>
-            <span style="color:var(--txt-m)"> / $${Math.round(catBud).toLocaleString()}</span>
-            ${isYard&&dcRate>0?`<span style="font-size:10px;color:var(--txt-m);margin-left:4px;text-decoration:line-through">$${catBudRaw.toLocaleString()}</span>`:''}
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
