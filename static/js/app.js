@@ -616,6 +616,10 @@ function renderDash(){
   }).join('');
 
   // ── Budget by Category → Section (계층 접기/펼치기) ──
+  // tb = 전체 예산 합계 (After D/C, 위에서 이미 계산됨)
+  document.getElementById('v-bud-title').innerHTML=
+    `<span>Budget by Section</span><span style="font-size:13px;font-weight:400;color:var(--txt-s)">Total: <span style="font-size:15px;font-weight:700;color:var(--txt-h);font-family:'IBM Plex Mono',monospace">$${Math.round(tb).toLocaleString()}</span></span>`;
+
   const catData={};
   jobs.forEach(j=>{
     const cat=j.category||'Shipyard', sec=j.section||'GENERAL';
@@ -634,10 +638,12 @@ function renderDash(){
     const dcB = isYard ? tot.b*(1-dcRate/100) : tot.b;
     const dcC = isYard ? tot.c*(1-dcRate/100) : tot.c;
     const tp = dcB?(dcC/dcB*100).toFixed(1):'0.0';
+    const catShare = tb>0?(dcB/tb*100).toFixed(1):'0.0';
     budHtml+=`<div class="d-row dash-cat-hdr" onclick="toggleBudCat('${safecat}')" style="cursor:pointer;background:var(--blue-light);border-radius:6px;margin-bottom:2px">
       <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--blue)">
         <span style="font-size:10px;display:inline-block;transform:rotate(${collapsed?'0':'90'}deg)">▶</span>
         ${cat} <span style="font-size:11px;font-weight:400;color:var(--txt-m)">(${tot.n} jobs)</span>
+        <span style="font-size:10px;background:var(--blue);color:#fff;border-radius:10px;padding:1px 7px;font-weight:600">${catShare}%</span>
       </div>
       <div style="text-align:right">
         ${isYard && dcRate>0 ? `
@@ -655,8 +661,12 @@ function renderDash(){
         const dcSecB = isYard ? d.b*(1-dcRate/100) : d.b;
         const dcSecC = isYard ? d.c*(1-dcRate/100) : d.c;
         const p = dcSecB?(dcSecC/dcSecB*100).toFixed(1):'0.0';
+        const secShare = dcB>0?(dcSecB/dcB*100).toFixed(1):'0.0';
         budHtml+=`<div class="d-row dash-sec-child" style="padding-left:28px;background:#fafbfc;border-left:3px solid var(--blue-light);margin-bottom:2px">
-          <div style="font-size:12px;color:var(--txt-s)">↳ ${sec} <span style="color:var(--txt-m)">(${d.n} jobs)</span></div>
+          <div style="font-size:12px;color:var(--txt-s);display:flex;align-items:center;gap:6px">
+            ↳ ${sec} <span style="color:var(--txt-m)">(${d.n} jobs)</span>
+            <span style="font-size:10px;background:#e2e8f0;color:var(--txt-s);border-radius:10px;padding:1px 6px;font-weight:600">${secShare}%</span>
+          </div>
           <div style="text-align:right">
             ${isYard && dcRate>0 ? `
             <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;text-decoration:line-through">$${d.b.toLocaleString()}</div>
