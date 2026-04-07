@@ -632,11 +632,17 @@ function renderDash(){
     ovEl.style.display = '';
     ovRows.innerHTML = OV_CATS.filter(c => ovCatData[c]).map(cat => {
       const catJobs = ovCatData[cat];
-      // 스케줄 바: dock in/out 기준 또는 job 날짜 범위
-      const allStarts = catJobs.map(j=>j.start_date).filter(d=>d&&d.trim()).sort();
-      const allEnds   = catJobs.map(j=>j.end_date).filter(d=>d&&d.trim()).sort();
-      const earliest  = allStarts[0] || info.dockIn || null;
-      const latest    = allEnds[allEnds.length-1] || info.dockOut || null;
+      // 스케줄 바: Shipyard는 vessel dock in/out 고정, 나머지는 job 날짜 범위
+      let earliest, latest;
+      if(cat === 'Shipyard') {
+        earliest = info.dockIn  || null;
+        latest   = info.dockOut || null;
+      } else {
+        const allStarts = catJobs.map(j=>j.start_date).filter(d=>d&&d.trim()).sort();
+        const allEnds   = catJobs.map(j=>j.end_date).filter(d=>d&&d.trim()).sort();
+        earliest = allStarts[0] || null;
+        latest   = allEnds[allEnds.length-1] || null;
+      }
       let schedPct = calcProgress(earliest, latest) ?? 0;
       schedPct = Math.min(100, schedPct);
       const schedCol = schedPct>=100?'var(--green)':schedPct>0?'var(--amber)':'#cbd5e1';
