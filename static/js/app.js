@@ -3,6 +3,8 @@ let FLEET = {}, IDX = [];
 let VID = null;          // current vessel id
 let eJobIdx=null, eClsIdx=null, eDscIdx=null, eVesselNew=true;
 let sKey='number', sDir=1;
+let _budCatExpanded = new Set();    // Dashboard: Budget 카테고리 펼침 상태 (기본 접힘)
+let _clsDateExpanded = new Set();   // Dashboard: Class Items 날짜그룹 펼침 상태 (기본 접힘)
 
 const SK = {
   idx: 'fleet_idx',
@@ -516,6 +518,16 @@ async function loadAttachStates(refType, idKey, btnPrefix) {
 }
 
 // ══ DASHBOARD ════════════════════════════════════════
+function toggleBudCat(cat){
+  if(_budCatExpanded.has(cat)) _budCatExpanded.delete(cat);
+  else _budCatExpanded.add(cat);
+  renderDash();
+}
+function toggleClsDate(dt){
+  if(_clsDateExpanded.has(dt)) _clsDateExpanded.delete(dt);
+  else _clsDateExpanded.add(dt);
+  renderDash();
+}
 function renderDash(){
   if(!VID)return;
   const v=FLEET[VID],info=v.info,jobs=v.jobs||[];
@@ -595,18 +607,86 @@ function renderDash(){
   document.getElementById('v-bar').style.width=pct+'%';
   document.getElementById('v-bar-lbl').textContent=pct.toFixed(1)+'% consumed';
 
+  // ── Budget by Section (v-sec-buds 미니바 — 섹션 기준 유지) ──
   const sd={};
   jobs.forEach(j=>{if(!sd[j.section])sd[j.section]={b:0,c:0,n:0};sd[j.section].b+=+j.budget||0;sd[j.section].c+=+j.consumption||0;sd[j.section].n++;});
   document.getElementById('v-sec-buds').innerHTML=Object.entries(sd).map(([nm,d])=>{
     const p=d.b?Math.min(100,(d.c/d.b)*100):0;
     return`<div class="sec-bud-card"><div class="sec-bud-name">${nm}</div><div class="sec-bud-bar"><div class="sec-bud-fill" style="width:${p}%"></div></div><div class="sec-bud-nums"><span style="color:var(--blue);font-weight:600">$${d.c.toLocaleString()}</span><span style="color:var(--txt-m)">/ $${d.b.toLocaleString()}</span></div></div>`;
   }).join('');
-  document.getElementById('v-bud-rows').innerHTML=Object.entries(sd).map(([nm,d])=>{
-    const p=d.b?(d.c/d.b*100).toFixed(1):'0.0';
-    return`<div class="d-row"><div style="font-size:13px;color:var(--txt-b);font-weight:500">${nm} <span style="font-size:12px;color:var(--txt-m)">(${d.n} jobs)</span></div><div style="text-align:right"><div style="font-size:14px;font-weight:700;color:var(--txt-h)">$${d.b.toLocaleString()}</div><div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${p}% consumed</div></div></div>`;
-  }).join('');
-  const oi=(v.classItems||[]).filter(c=>c.status==='Open').slice(0,6);
-  document.getElementById('v-open-cls').innerHTML=oi.length?oi.map(c=>`<div class="d-row" style="cursor:pointer" onclick="showTab('class',document.querySelectorAll('.vnav-btn')[3])"><div><div style="font-size:13px;font-weight:600;color:var(--txt-h)">${c.finding.substring(0,48)}${c.finding.length>48?'…':''}</div><div style="font-size:11px;color:var(--txt-m);margin-top:1px;font-family:'IBM Plex Mono',monospace">No.${c.no} · ${c.by||'—'} · ${c.open_date||'—'}</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${priorityBadge(c.priority)}<span class="c-badge c-open">OPEN</span></div></div>`).join(''):'<div class="empty-state" style="padding:20px">No open class items ✓</div>';
+
+  // ── Budget by Category → Section (계층 접기/펼치기) ──
+  const catData={};
+  jobs.forEach(j=>{
+    const cat=j.category||'Shipyard', sec=j.section||'GENERAL';
+    if(!catData[cat]) catData[cat]={};
+    if(!catData[cat][sec]) catData[cat][sec]={b:0,c:0,n:0};
+    catData[cat][sec].b+=+j.budget||0;
+    catData[cat][sec].c+=+j.consumption||0;
+    catData[cat][sec].n++;
+  });
+  let budHtml='';
+  for(const [cat, secs] of Object.entries(catData)){
+    const tot=Object.values(secs).reduce((a,s)=>({b:a.b+s.b,c:a.c+s.c,n:a.n+s.n}),{b:0,c:0,n:0});
+    const tp=tot.b?(tot.c/tot.b*100).toFixed(1):'0.0';
+    const collapsed=!_budCatExpanded.has(cat);
+    const safecat=cat.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    budHtml+=`<div class="d-row dash-cat-hdr" onclick="toggleBudCat('${safecat}')" style="cursor:pointer;background:var(--blue-light);border-radius:6px;margin-bottom:2px">
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--blue)">
+        <span style="font-size:10px;transition:transform .2s;display:inline-block;transform:rotate(${collapsed?'0':'90'}deg)">▶</span>
+        ${cat} <span style="font-size:11px;font-weight:400;color:var(--txt-m)">(${tot.n} jobs)</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:700;color:var(--txt-h)">$${tot.b.toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${tp}% consumed</div>
+      </div>
+    </div>`;
+    if(!collapsed){
+      for(const [sec, d] of Object.entries(secs)){
+        const p=d.b?(d.c/d.b*100).toFixed(1):'0.0';
+        budHtml+=`<div class="d-row dash-sec-child" style="padding-left:28px;background:#fafbfc;border-left:3px solid var(--blue-light);margin-bottom:2px">
+          <div style="font-size:12px;color:var(--txt-s)">↳ ${sec} <span style="color:var(--txt-m)">(${d.n} jobs)</span></div>
+          <div style="text-align:right">
+            <div style="font-size:13px;font-weight:600;color:var(--txt-h)">$${d.b.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${p}% consumed</div>
+          </div>
+        </div>`;
+      }
+    }
+  }
+  document.getElementById('v-bud-rows').innerHTML=budHtml||'<div class="empty-state" style="padding:20px">No jobs yet</div>';
+
+  // ── Open Class Items (날짜별 접기/펼치기) ──
+  const oi=(v.classItems||[]).filter(c=>c.status==='Open');
+  if(!oi.length){
+    document.getElementById('v-open-cls').innerHTML='<div class="empty-state" style="padding:20px">No open class items ✓</div>';
+  } else {
+    const byDate={};
+    oi.forEach(c=>{const d=c.open_date||'—';if(!byDate[d])byDate[d]=[];byDate[d].push(c);});
+    const sortedDates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+    let clsHtml='';
+    for(const dt of sortedDates){
+      const items=byDate[dt];
+      const collapsed=!_clsDateExpanded.has(dt);
+      const safedt=dt.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      clsHtml+=`<div class="d-row dash-cls-date-hdr" onclick="toggleClsDate('${safedt}')" style="cursor:pointer;background:#f1f5f9;border-radius:6px;margin-bottom:2px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--txt-s)">
+          <span style="font-size:10px;display:inline-block;transform:rotate(${collapsed?'0':'90'}deg)">▶</span>
+          ${dt} <span style="font-size:11px;font-weight:400;color:var(--txt-m)">(${items.length})</span>
+        </div>
+      </div>`;
+      if(!collapsed){
+        clsHtml+=items.map(c=>`<div class="d-row" style="cursor:pointer;padding-left:16px;border-left:3px solid #e2e8f0;margin-bottom:2px" onclick="showTab('class',document.querySelectorAll('.vnav-btn')[3])">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt-h)">${c.finding.substring(0,48)}${c.finding.length>48?'…':''}</div>
+            <div style="font-size:11px;color:var(--txt-m);margin-top:1px;font-family:'IBM Plex Mono',monospace">No.${c.no} · ${c.by||'—'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${priorityBadge(c.priority)}<span class="c-badge c-open">OPEN</span></div>
+        </div>`).join('');
+      }
+    }
+    document.getElementById('v-open-cls').innerHTML=clsHtml;
+  }
 }
 
 // ══ DATE SYNC HELPERS ════════════════════════════════
