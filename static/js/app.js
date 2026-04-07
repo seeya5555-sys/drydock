@@ -616,7 +616,6 @@ function renderDash(){
   }).join('');
 
   // ── Budget by Category → Section (계층 접기/펼치기) ──
-  const dcRate = info.dcRate || 0;
   const catData={};
   jobs.forEach(j=>{
     const cat=j.category||'Shipyard', sec=j.section||'GENERAL';
