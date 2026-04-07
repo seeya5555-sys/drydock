@@ -655,7 +655,7 @@ function renderDash(){
         return`<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px">
           <div style="font-size:11px;font-weight:600;color:var(--txt-s);margin-bottom:6px">↳ ${sec}</div>
           <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${sp}%;background:${spOver?'var(--red)':'var(--blue)'};border-radius:2px"></div></div>
-          <div style="font-size:9px;font-family:'IBM Plex Mono',monospace;text-align:right;color:${spOver?'var(--red)':'var(--txt-m)'}${spOver?';font-weight:700':''}margin-bottom:4px">${rawSp.toFixed(1)}%${spOver?' ⚠':''}</div>
+          <div style="font-size:9px;font-family:'IBM Plex Mono',monospace;text-align:right;color:${spOver?'var(--red)':'var(--txt-m)'};font-weight:${spOver?'700':'400'};margin-bottom:4px">${rawSp.toFixed(1)}%${spOver?' ⚠':''}</div>
           <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10px">
             <span style="color:${spOver?'var(--red)':'var(--blue)'};font-weight:600">$${Math.round(dcSecC).toLocaleString()}</span>
             <span style="color:var(--txt-m)">/ $${Math.round(dcSecB).toLocaleString()}</span>
@@ -675,7 +675,7 @@ function renderDash(){
         </div>
       </div>
       <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${barOver?'var(--red)':'var(--blue)'};border-radius:2px"></div></div>
-      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;margin-top:3px;text-align:right;color:${barOver?'var(--red)':'var(--txt-m)'}${barOver?';font-weight:700':''}>${rawPct.toFixed(1)}% consumed${barOver?' ⚠':''}</div>
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;margin-top:3px;text-align:right;color:${barOver?'var(--red)':'var(--txt-m)'}${barOver?';font-weight:700':''}">${rawPct.toFixed(1)}% consumed${barOver?' ⚠':''}</div>
       ${secHtml}
     </div>`;
   }).join('');
