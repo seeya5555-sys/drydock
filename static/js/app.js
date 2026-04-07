@@ -5,6 +5,7 @@ let eJobIdx=null, eClsIdx=null, eDscIdx=null, eVesselNew=true;
 let sKey='number', sDir=1;
 let _budCatExpanded = new Set();    // Dashboard: Budget 카테고리 펼침 상태 (기본 접힘)
 let _clsDateExpanded = new Set();   // Dashboard: Class Items 날짜그룹 펼침 상태 (기본 접힘)
+let _secBudCatExpanded = new Set(); // Dashboard: Budget Consumption 카테고리 펼침 상태 (기본 접힘)
 
 const SK = {
   idx: 'fleet_idx',
@@ -528,6 +529,11 @@ function toggleClsDate(dt){
   else _clsDateExpanded.add(dt);
   renderDash();
 }
+function toggleSecBudCat(cat){
+  if(_secBudCatExpanded.has(cat)) _secBudCatExpanded.delete(cat);
+  else _secBudCatExpanded.add(cat);
+  renderDash();
+}
 function renderDash(){
   if(!VID)return;
   const v=FLEET[VID],info=v.info,jobs=v.jobs||[];
@@ -603,16 +609,75 @@ function renderDash(){
   sv.textContent=st;
   sv.style.color=st==='IN DOCK'?'#fbbf24':st==='COMPLETED'?'#4ade80':'rgba(255,255,255,.5)';
 
-  const pct=tb?Math.min(100,(tc/tb)*100):0;
-  document.getElementById('v-bar').style.width=pct+'%';
-  document.getElementById('v-bar-lbl').textContent=pct.toFixed(1)+'% consumed';
+  const rawPct = tb?(tc/tb)*100:0;
+  const pct = Math.min(100, rawPct);
+  const vBar = document.getElementById('v-bar');
+  vBar.style.width = pct+'%';
+  vBar.style.background = rawPct>100 ? 'var(--red)' : '';
+  document.getElementById('v-bar-lbl').textContent = rawPct.toFixed(1)+'% consumed';
+  document.getElementById('v-bar-lbl').style.color = rawPct>100 ? '#fff' : '';
 
-  // ── Budget by Section (v-sec-buds 미니바 — 섹션 기준 유지) ──
-  const sd={};
-  jobs.forEach(j=>{if(!sd[j.section])sd[j.section]={b:0,c:0,n:0};sd[j.section].b+=+j.budget||0;sd[j.section].c+=+j.consumption||0;sd[j.section].n++;});
-  document.getElementById('v-sec-buds').innerHTML=Object.entries(sd).map(([nm,d])=>{
-    const p=d.b?Math.min(100,(d.c/d.b)*100):0;
-    return`<div class="sec-bud-card"><div class="sec-bud-name">${nm}</div><div class="sec-bud-bar"><div class="sec-bud-fill" style="width:${p}%"></div></div><div class="sec-bud-nums"><span style="color:var(--blue);font-weight:600">$${d.c.toLocaleString()}</span><span style="color:var(--txt-m)">/ $${d.b.toLocaleString()}</span></div></div>`;
+  // ── Budget Consumption (v-sec-buds — Category 기준, Section 하위 접기/펼치기) ──
+  const scCatData={};
+  jobs.forEach(j=>{
+    const cat=j.category||'Shipyard', sec=j.section||'GENERAL';
+    if(!scCatData[cat]) scCatData[cat]={};
+    if(!scCatData[cat][sec]) scCatData[cat][sec]={b:0,c:0,n:0};
+    scCatData[cat][sec].b+=+j.budget||0;
+    scCatData[cat][sec].c+=+j.consumption||0;
+    scCatData[cat][sec].n++;
+  });
+  // Crew 맨 밑 정렬
+  const scCatEntries=Object.entries(scCatData).sort(([a],[b])=>{
+    if(a==='Crew') return 1; if(b==='Crew') return -1; return 0;
+  });
+  document.getElementById('v-sec-buds').innerHTML=scCatEntries.map(([cat, secs])=>{
+    const tot=Object.values(secs).reduce((a,s)=>({b:a.b+s.b,c:a.c+s.c}),{b:0,c:0});
+    const isYard=cat==='Shipyard';
+    const dcB=isYard?tot.b*(1-dcRate/100):tot.b;
+    const dcC=isYard?tot.c*(1-dcRate/100):tot.c;
+    const rawPct=dcB?(dcC/dcB)*100:0;
+    const pct=Math.min(100,rawPct);
+    const barOver=rawPct>100&&dcB>0;
+    const expanded=_secBudCatExpanded.has(cat);
+    const safecat=cat.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    // Section 하위카드 (CANCEL 맨 밑)
+    const secEntries=Object.entries(secs).sort(([a],[b])=>{
+      if(a==='CANCEL') return 1; if(b==='CANCEL') return -1; return 0;
+    });
+    const secHtml=expanded?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">`+
+      secEntries.map(([sec,d])=>{
+        const dcSecB=isYard?d.b*(1-dcRate/100):d.b;
+        const dcSecC=isYard?d.c*(1-dcRate/100):d.c;
+        const rawSp=dcSecB?(dcSecC/dcSecB)*100:0;
+        const sp=Math.min(100,rawSp);
+        const spOver=rawSp>100&&dcSecB>0;
+        return`<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt-s);margin-bottom:6px">↳ ${sec}</div>
+          <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${sp}%;background:${spOver?'var(--red)':'var(--blue)'};border-radius:2px"></div></div>
+          <div style="font-size:9px;font-family:'IBM Plex Mono',monospace;text-align:right;color:${spOver?'var(--red)':'var(--txt-m)'}${spOver?';font-weight:700':''}margin-bottom:4px">${rawSp.toFixed(1)}%${spOver?' ⚠':''}</div>
+          <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10px">
+            <span style="color:${spOver?'var(--red)':'var(--blue)'};font-weight:600">$${Math.round(dcSecC).toLocaleString()}</span>
+            <span style="color:var(--txt-m)">/ $${Math.round(dcSecB).toLocaleString()}</span>
+          </div>
+        </div>`;
+      }).join('')+`</div>`:'';
+    return`<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer" onclick="toggleSecBudCat('${safecat}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;display:inline-block;transform:rotate(${expanded?'90':'0'}deg)"">▶</span>
+          <span style="font-size:12px;font-weight:700;color:var(--txt-h)">${cat}</span>
+          ${isYard&&dcRate>0?`<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">D/C ${dcRate}%</span>`:''}
+        </div>
+        <div style="text-align:right">
+          ${isYard&&dcRate>0?`<div style="font-size:10px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;text-decoration:line-through">$${tot.b.toLocaleString()}</div>`:''}
+          <div style="font-size:12px;font-weight:700;color:${isYard&&dcRate>0?'#d97706':'var(--txt-h)'};font-family:'IBM Plex Mono',monospace"><span style="color:${dcC>dcB&&dcB>0?'var(--red)':isYard&&dcRate>0?'#d97706':'var(--blue)'}">$${Math.round(dcC).toLocaleString()}</span> / $${Math.round(dcB).toLocaleString()}</div>
+        </div>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${barOver?'var(--red)':'var(--blue)'};border-radius:2px"></div></div>
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;margin-top:3px;text-align:right;color:${barOver?'var(--red)':'var(--txt-m)'}${barOver?';font-weight:700':''}>${rawPct.toFixed(1)}% consumed${barOver?' ⚠':''}</div>
+      ${secHtml}
+    </div>`;
   }).join('');
 
   // ── Budget by Category → Section (계층 접기/펼치기) ──
@@ -657,7 +722,8 @@ function renderDash(){
           <span style="font-size:14px;font-weight:700;color:#d97706">$${Math.round(dcB).toLocaleString()}</span>
         </div>` :
         `<div style="font-size:14px;font-weight:700;color:var(--txt-h)">$${tot.b.toLocaleString()}</div>`}
-        <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${tp}% consumed</div>
+        <div style="font-size:11px;color:${+tp>100?'var(--red)':'var(--txt-m)'};font-family:'IBM Plex Mono',monospace;font-weight:${+tp>100?'700':'400'}">${tp}% consumed${+tp>100?' ⚠':''}
+        </div>
       </div>
     </div>`;
     if(!collapsed){
@@ -680,7 +746,7 @@ function renderDash(){
             <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace;text-decoration:line-through">$${d.b.toLocaleString()}</div>
             <div style="font-size:13px;font-weight:600;color:#d97706">$${Math.round(dcSecB).toLocaleString()}</div>` :
             `<div style="font-size:13px;font-weight:600;color:var(--txt-h)">$${d.b.toLocaleString()}</div>`}
-            <div style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${p}% consumed</div>
+            <div style="font-size:11px;color:${+p>100?'var(--red)':'var(--txt-m)'};font-family:'IBM Plex Mono',monospace;font-weight:${+p>100?'700':'400'}">${p}% consumed${+p>100?' ⚠':''}</div>
           </div>
         </div>`;
       }
@@ -1749,7 +1815,8 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         ${showAuto?'<div style="font-size:9px;color:var(--blue);text-align:right">auto</div>':''}
       </td>
       <td data-label="Consumed" style="text-align:right">
-        <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--green)">$${effConsumed.toLocaleString()}</span>
+        <span class="cell-edit" onclick="startEdit(this,${ri},'consumption','number')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:${effConsumed>effBudget&&effBudget>0?'var(--red)':'var(--green)'}">$${effConsumed.toLocaleString()}</span>
+        ${effConsumed>effBudget&&effBudget>0?'<div style="font-size:9px;color:var(--red);text-align:right;font-weight:600">초과</div>':''}
       </td>
       <td data-label="Progress">
         ${j.section === 'CANCEL'
