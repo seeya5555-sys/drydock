@@ -629,8 +629,12 @@ function renderDash(){
     catData[cat][sec].c+=+j.consumption||0;
     catData[cat][sec].n++;
   });
+  // Crew 맨 밑 정렬
+  const catEntries = Object.entries(catData).sort(([a],[b])=>{
+    if(a==='Crew') return 1; if(b==='Crew') return -1; return 0;
+  });
   let budHtml='';
-  for(const [cat, secs] of Object.entries(catData)){
+  for(const [cat, secs] of catEntries){
     const tot=Object.values(secs).reduce((a,s)=>({b:a.b+s.b,c:a.c+s.c,n:a.n+s.n}),{b:0,c:0,n:0});
     const collapsed=!_budCatExpanded.has(cat);
     const safecat=cat.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -657,7 +661,11 @@ function renderDash(){
       </div>
     </div>`;
     if(!collapsed){
-      for(const [sec, d] of Object.entries(secs)){
+      // CANCEL 맨 밑 정렬
+      const secEntries = Object.entries(secs).sort(([a],[b])=>{
+        if(a==='CANCEL') return 1; if(b==='CANCEL') return -1; return 0;
+      });
+      for(const [sec, d] of secEntries){
         const dcSecB = isYard ? d.b*(1-dcRate/100) : d.b;
         const dcSecC = isYard ? d.c*(1-dcRate/100) : d.c;
         const p = dcSecB?(dcSecC/dcSecB*100).toFixed(1):'0.0';
