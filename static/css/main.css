@@ -277,7 +277,7 @@ main { padding:28px; max-width:1680px; margin:0 auto; }
   transition:width 1s ease; min-width:0;
 }
 .big-bar-fill span { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#fff; font-weight:600; white-space:nowrap; }
-.sec-budgets-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+.sec-budgets-grid { display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; }
 .sec-bud-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
 .sec-bud-name { font-size:12px; font-weight:600; color:var(--txt-h); margin-bottom:8px; }
 .sec-bud-bar  { height:4px; background:var(--border); border-radius:2px; overflow:hidden; margin-bottom:6px; }
