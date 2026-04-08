@@ -647,9 +647,20 @@ function renderDash(){
       schedPct = Math.min(100, schedPct);
       const schedCol = schedPct>=100?'var(--green)':schedPct>0?'var(--amber)':'#cbd5e1';
       // 공정률 바: 루트 job completion 평균
-      const rootJobs = catJobs.filter(j => !hasChildren(j.number, catJobs));
+      // 공정률 바: Shipyard는 GENERAL/CANCEL 제외, parent는 autoSum 활용 (Job Progress 탭과 동일 로직)
+      const rootJobs = catJobs.filter(j => {
+        const sec = j.section || 'GENERAL';
+        if(cat === 'Shipyard' && (sec === 'GENERAL' || sec === 'CANCEL')) return false;
+        const p = j.number ? j.number.split('.').slice(0,-1).join('.') : '';
+        return !p || !catJobs.some(x => x.number === p);
+      });
       const actPct = rootJobs.length
-        ? Math.min(100, Math.round(rootJobs.map(j=>+j.completion||0).reduce((a,b)=>a+b,0)/rootJobs.length))
+        ? Math.min(100, Math.round(rootJobs.map(j => {
+            if(hasChildren(j.number, catJobs)) {
+              return (+j.completion||0) > 0 ? (+j.completion) : (j._autoSum?.completion ?? 0);
+            }
+            return +j.completion||0;
+          }).reduce((a,b)=>a+b,0) / rootJobs.length))
         : 0;
       const actCol = actPct>=100?'var(--green)':actPct>0?'#7c3aed':'#cbd5e1';
       // consumed 바
@@ -1300,11 +1311,14 @@ function computeParentSums(jobs) {
     const totalConsumed = desc.reduce((s,d) => s + (+d.consumption||0), 0);
     // leaf 항목만 기준으로 계산
     const leaves = desc.filter(d => !hasChildren(d.number, jobs));
-    // 공정률: leaf의 completion 평균
-    const compPcts = leaves.map(d => (+d.completion||0));
-    const avgPct = compPcts.length ? Math.round(compPcts.reduce((a,b)=>a+b,0)/compPcts.length) : 0;
-    // 스케줄: leaf의 날짜 기반 progress 평균 (날짜 없는 항목은 0%)
-    const schedPcts = leaves.map(d => {
+    // 공정률: completion이 입력된(>0) leaf만 분자/분모에 포함 (규칙2: 미입력 항목은 제외)
+    const enteredLeaves = leaves.filter(d => (+d.completion||0) > 0);
+    const avgPct = enteredLeaves.length
+      ? Math.round(enteredLeaves.reduce((s,d)=>s+(+d.completion),0) / enteredLeaves.length)
+      : 0;
+    // 스케줄: 날짜가 있는 leaf만 분자/분모에 포함 (날짜 미입력 항목 제외)
+    const datedLeaves = leaves.filter(d => d.start_date && d.end_date);
+    const schedPcts = datedLeaves.map(d => {
       const lp = calcProgress(d.start_date, d.end_date);
       return lp !== null ? lp : 0;
     });
