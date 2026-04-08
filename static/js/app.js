@@ -545,6 +545,9 @@ function toggleSecBudCat(cat){
 function renderDash(){
   if(!VID)return;
   const v=FLEET[VID],info=v.info,jobs=v.jobs||[];
+  // _autoSum이 항상 최신값이 되도록 재계산 (Job Progress 탭 미방문 시에도 동일 값 보장)
+  computeParentDates(jobs);
+  computeParentSums(jobs);
   // Shipyard는 After D/C 기준으로 합산
   const dcRate = info.dcRate || 0;
   const tb = jobs.reduce((s,j) => {
@@ -651,7 +654,7 @@ function renderDash(){
       const rootJobs = catJobs.filter(j => {
         const sec = j.section || 'GENERAL';
         if(cat === 'Shipyard' && (sec === 'GENERAL' || sec === 'CANCEL')) return false;
-        const p = j.number ? j.number.split('.').slice(0,-1).join('.') : '';
+        const p = getParentNumber(j.number);
         return !p || !catJobs.some(x => x.number === p);
       });
       const actPct = rootJobs.length
