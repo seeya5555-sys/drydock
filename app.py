@@ -714,14 +714,40 @@ def delete_discussion(did):
 @app.route("/api/vessels/<vid>/discussions/bulk", methods=["PUT"])
 def bulk_discussions(vid):
     db = get_db()
-    db.execute("DELETE FROM discussions WHERE vessel_id=?", (vid,))
-    for item in request.get_json(force=True):
-        db.execute(
-            "INSERT INTO discussions(vessel_id,no,date,time_of_day,item,description,actions,status,priority)"
-            " VALUES(?,?,?,?,?,?,?,?,?)",
-            (vid, item.get("no",""), item.get("date") or None, item.get("time_of_day",""),
-             item.get("item",""), item.get("description",""),
-             je(item.get("actions",[])), item.get("status","Open"), item.get("priority","Normal")))
+    items = request.get_json(force=True)
+
+    # 전송된 _id 목록
+    incoming_ids = [int(item['_id']) for item in items if item.get('_id')]
+
+    # DB에 있지만 전송 목록에 없는 항목 삭제 (삭제된 row)
+    if incoming_ids:
+        placeholders = ','.join('?' * len(incoming_ids))
+        db.execute(f"DELETE FROM discussions WHERE vessel_id=? AND id NOT IN ({placeholders})",
+                   [vid] + incoming_ids)
+    else:
+        db.execute("DELETE FROM discussions WHERE vessel_id=?", (vid,))
+
+    result_ids = []
+    for item in items:
+        did = item.get('_id')
+        vals = (item.get("no",""), item.get("date") or None, item.get("time_of_day",""),
+                item.get("item",""), item.get("description",""),
+                je(item.get("actions",[])), item.get("status","Open"), item.get("priority","Normal"))
+        if did:
+            # 기존 row → UPDATE (ID 보존 → 첨부파일 ref_id 유지)
+            db.execute(
+                "UPDATE discussions SET no=?,date=?,time_of_day=?,item=?,description=?,"
+                "actions=?,status=?,priority=?,updated_at=datetime('now') WHERE id=? AND vessel_id=?",
+                vals + (int(did), vid))
+            result_ids.append(int(did))
+        else:
+            # 신규 row → INSERT
+            cur = db.execute(
+                "INSERT INTO discussions(vessel_id,no,date,time_of_day,item,description,actions,status,priority)"
+                " VALUES(?,?,?,?,?,?,?,?,?)",
+                (vid,) + vals)
+            result_ids.append(cur.lastrowid)
+
     db.commit()
     return jsonify([to_disc(r) for r in
                     get_db().execute("SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id", (vid,)).fetchall()])
