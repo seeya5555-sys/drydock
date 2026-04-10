@@ -770,9 +770,6 @@ def upload_attachment(vid, ref_type, ref_id):
         return jsonify({"error": "No files"}), 400
     db = get_db()
     uploaded = []
-    # 모든 타입 항상 1개만 유지 — 기존 파일 삭제
-    db.execute("DELETE FROM attachments WHERE vessel_id=? AND ref_type=? AND ref_id=?",
-               (vid, ref_type, ref_id))
     for f in request.files.getlist("files"):
         if not f.filename: continue
         data = f.read()
