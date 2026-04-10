@@ -62,6 +62,7 @@
     <button class="vnav-btn" onclick="showTab('gantt',this)">Gantt Chart</button>
     <button class="vnav-btn" onclick="showTab('class',this)">Class Items</button>
     <button class="vnav-btn" onclick="showTab('daily',this)">Daily Log</button>
+    <button class="vnav-btn" onclick="showTab('calendar',this)">📅 Calendar</button>
     <span class="vnav-sep"></span>
     <button class="vnav-btn" onclick="showTab('steel',this)">Steel Repair</button>
     <button class="vnav-btn" onclick="showTab('outfit',this)">Outfitting</button>
@@ -239,7 +240,45 @@
   </main></div>
 </div>
 
-  <!-- ── Steel Repair ──────────────────────────────────────── -->
+  <!-- Calendar -->
+  <div id="vt-calendar" class="page"><main>
+    <div class="sec-hdr" style="margin-bottom:16px">
+      <div class="sec-title" style="display:flex;align-items:center;gap:16px">
+        <button class="btn-sec" id="cal-prev" onclick="calMove(-1)" style="padding:4px 12px;font-size:16px">‹</button>
+        <span id="cal-title" style="font-size:18px;font-weight:700;color:var(--txt-h);min-width:160px;text-align:center"></span>
+        <button class="btn-sec" id="cal-next" onclick="calMove(1)" style="padding:4px 12px;font-size:16px">›</button>
+        <button class="btn-sec" onclick="calGoToday()" style="font-size:12px;padding:5px 12px">Today</button>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <span class="cal-legend" style="background:#3b82f6">Job</span>
+        <span class="cal-legend" style="background:#10b981">Daily</span>
+        <span class="cal-legend" style="background:#f59e0b">Class</span>
+      </div>
+    </div>
+    <div class="cal-grid-wrap">
+      <div class="cal-dow-row">
+        <div style="color:#ff6b6b;font-weight:800">Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
+        <div>Thu</div><div>Fri</div><div style="color:#60a5fa;font-weight:800">Sat</div>
+      </div>
+      <div id="cal-body" class="cal-body"></div>
+    </div>
+  </main></div>
+
+  <!-- Calendar Day Popup -->
+  <div class="modal-overlay" id="m-cal-day" onclick="if(event.target===this)closeM('m-cal-day')">
+    <div class="modal" style="width:520px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title" id="cal-popup-title">📅 —</div>
+        <button class="modal-x" onclick="closeM('m-cal-day')">✕</button>
+      </div>
+      <div class="modal-body" id="cal-popup-body" style="overflow-y:auto;flex:1"></div>
+      <div class="modal-footer">
+        <button class="btn-sec" onclick="closeM('m-cal-day')">닫기</button>
+      </div>
+    </div>
+  </div>
+
+
   <div id="vt-steel" class="page"><main>
     <div class="sec-hdr">
       <div class="sec-title">Steel Repair</div>
