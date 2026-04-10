@@ -496,6 +496,7 @@ function showTab(tab,btn){
   if(tab==='fan')renderTracking('fan');
   if(tab==='staging')renderTracking('staging');
   if(tab==='gasfree')renderTracking('gasfree');
+  if(tab==='calendar')renderCalendar();
 }
 
 async function loadAttachStates(refType, idKey, btnPrefix) {
@@ -1375,8 +1376,8 @@ function renderJobs(){
   computeParentDates(jobs);
   computeParentSums(jobs);
 
-  // Category/Section 그룹 - 전체 펼치기 상태면 건너뜀
-  if(!_expandAll) {
+  // Category/Section 그룹 - 전체 펼치기 상태거나 nav 이동 시 건너뜀
+  if(!_expandAll && !_calNavExpand) {
     const allCats = [...new Set(fil.map(j=>j.category||'Uncategorized'))];
     allCats.forEach(c => {
       if(!catCollapsed.has(c) && !_catEverSeen.has(c)) {
@@ -1712,6 +1713,8 @@ function renderJobs(){
 const catCollapsed = window.catCollapsed || new Set();
 const _catEverSeen = new Set();
 let _expandAll = false; // 전체 펼치기 상태 플래그
+let _calNavExpand = false;     // 캘린더 이동 시 Job 자동접기 skip
+let _calNavExpandDisc = false; // 캘린더 이동 시 Daily Log 자동접기 skip
 
 // STORE 섹션 수동 Budget/Consumed 저장
 window._secManualBudget = window._secManualBudget || {};
@@ -1909,7 +1912,7 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
       : depth===1 ? 'font-weight:600;color:var(--blue)' : 'color:var(--txt-s)';
     const rowBg = depth===0 ? 'var(--bg-panel)' : 'var(--bg-white)';
 
-    return`<tr data-ri="${ri}" style="background:${rowBg}">
+    return`<tr data-ri="${ri}" data-jid="${j._id}" style="background:${rowBg}">
       <td data-label="No." style="padding-left:${8+indent}px">
         <div style="display:flex;align-items:center">
           ${toggleBtn}
@@ -2724,7 +2727,7 @@ function renderClass(){
     const ri=items.indexOf(c);
     const stCls=c.status==='Open'?'c-open':'c-closed';
     const priHtml=priorityBadge(c.priority);
-    return`<tr>
+    return`<tr data-cid="${c._id}">
       <td data-label="No."><span class="cell-edit" onclick="startEditC(this,${ri},'no','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${c.no||'—'}</span></td>
       <td data-label="Status"><span class="cell-edit" onclick="startEditSelectC(this,${ri},'status',['Open','Closed'])">
         <span class="c-badge ${stCls}">${c.status}</span>
@@ -2875,8 +2878,8 @@ function renderDisc(){
     return true;
   });
 
-  // 최초 렌더 시 모든 날짜 자동 접기
-  if(discCollapsed.size === 0 && fil.length > 0) {
+  // 최초 렌더 시 모든 날짜 자동 접기 (nav 이동 시 skip)
+  if(!_calNavExpandDisc && discCollapsed.size === 0 && fil.length > 0) {
     const dates = [...new Set(fil.map(d => d.date || '(날짜 없음)'))];
     dates.forEach(d => discCollapsed.add(d));
   }
@@ -2936,8 +2939,8 @@ function _discRow(d, items) {
   const stCls=d.status==='Close'?'c-closed':'c-open';
   const stLbl=d.status==='Close'?'Closed':'Open';
   const priHtml=priorityBadge(d.priority);
-  return`<tr style="background:var(--bg-white)">
-    <td data-label="No."><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
+  return`<tr data-did="${d._id}" style="background:var(--bg-white)">
+    <td data-label="No."><span style="font-family:'IBM Plex Mono'",monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
     <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
     <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
     <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
@@ -3413,6 +3416,269 @@ async function uploadTrackingXlsx(input){
     setSS('error'); toast('업로드 실패: '+e.message, true);
   }
   input.value='';
+}
+
+
+// ══ CALENDAR ═════════════════════════════════════════════════
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth();
+let _calPendingHighlight = null; // {tabName, type, id}
+
+function calMove(dir) {
+  _calMonth += dir;
+  if(_calMonth > 11){ _calMonth=0; _calYear++; }
+  if(_calMonth < 0) { _calMonth=11; _calYear--; }
+  renderCalendar();
+}
+function calGoToday() {
+  const now = new Date();
+  _calYear=now.getFullYear(); _calMonth=now.getMonth();
+  renderCalendar();
+}
+
+// ── 이벤트 맵 생성 ─────────────────────────────────────────
+function buildCalEvents() {
+  if(!VID) return {evMap:{}, schedList:[]};
+  const v = FLEET[VID];
+  const evMap = {};
+
+  function addEv(date, ev) {
+    if(!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) return;
+    const d = date.substring(0,10);
+    if(!evMap[d]) evMap[d] = [];
+    evMap[d].push(ev);
+  }
+
+  // Job Progress — remarks
+  (v.jobs||[]).forEach(j => {
+    (j.remarks||[]).forEach(r => {
+      if(!r.date) return;
+      addEv(r.date, { type:'job', source:'Job Progress',
+        desc: j.number?`[${j.number}] ${j.description||''}`:(j.description||'—'),
+        note: r.progress||'', important: r.important||false,
+        refType:'job', refId: j._id, tabIdx:1 });
+    });
+  });
+
+  // Daily Log — actions
+  (v.discussions||[]).forEach(d => {
+    (d.actions||[]).forEach(a => {
+      if(!a.date) return;
+      addEv(a.date, { type:'daily', source:'Daily Log',
+        desc: d.item||d.description||'—',
+        note: a.progress||'', important: a.important||false,
+        refType:'disc', refId: d._id, tabIdx:4 });
+    });
+  });
+
+  // Class Items — actions
+  (v.classItems||[]).forEach(c => {
+    (c.actions||[]).forEach(a => {
+      if(!a.date) return;
+      addEv(a.date, { type:'class', source:'Class Items',
+        desc: c.finding||'—',
+        note: a.progress||'', important: a.important||false,
+        refType:'class', refId: c._id, tabIdx:3 });
+    });
+  });
+
+  // Job 스케줄 (start_date ~ end_date)
+  const schedList = [];
+  (v.jobs||[]).forEach(j => {
+    if(!j.start_date || !j.end_date) return;
+    if(j.section==='CANCEL') return;
+    schedList.push({ jid: j._id, number: j.number||'', desc: j.description||'',
+      start: j.start_date, end: j.end_date,
+      section: j.section||'', category: j.category||'' });
+  });
+
+  return {evMap, schedList};
+}
+
+// ── 캘린더 렌더 ────────────────────────────────────────────
+function renderCalendar() {
+  if(!VID) return;
+  const MONTHS=['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+  document.getElementById('cal-title').textContent=`${MONTHS[_calMonth]} ${_calYear}`;
+
+  const {evMap, schedList} = buildCalEvents();
+  const today = new Date();
+  const todayStr = fmtD(today);
+
+  const firstDay = new Date(_calYear, _calMonth, 1);
+  const startDate = new Date(firstDay);
+  startDate.setDate(firstDay.getDate() - firstDay.getDay());
+
+  // 이번 달 날짜 범위
+  const monthStart = fmtD(new Date(_calYear, _calMonth, 1));
+  const monthEnd   = fmtD(new Date(_calYear, _calMonth+1, 0));
+
+  // 스케줄 바 색상 (section 기반)
+  const SCHED_COLORS = {
+    PAINT:'#8b5cf6', STEEL:'#64748b', DECK:'#0891b2', ENGINE:'#dc2626',
+    ELECTRIC:'#f59e0b', REPAIR:'#16a34a', ADD:'#9333ea', SPARE:'#78716c',
+    STORE:'#6b7280', GENERAL:'#94a3b8'
+  };
+  function schedColor(sec) { return SCHED_COLORS[sec] || '#6366f1'; }
+
+  let html = '';
+  const cur = new Date(startDate);
+
+  for(let i=0; i<42; i++){
+    const dow = cur.getDay(); // 0=Sun, 6=Sat
+    const dateStr = fmtD(cur);
+    const isToday = dateStr===todayStr;
+    const isOther = cur.getMonth()!==_calMonth;
+    const evs = evMap[dateStr]||[];
+
+    // 해당 날짜가 start 또는 end인 job만
+    const dayScheds = schedList.filter(s => dateStr===s.start || dateStr===s.end);
+
+    const jobEvs   = evs.filter(e=>e.type==='job');
+    const dailyEvs = evs.filter(e=>e.type==='daily');
+    const classEvs = evs.filter(e=>e.type==='class');
+
+    let badges='';
+    if(jobEvs.length)   badges+=`<span class="cal-badge job">Job ${jobEvs.length}</span>`;
+    if(dailyEvs.length) badges+=`<span class="cal-badge daily">Daily ${dailyEvs.length}</span>`;
+    if(classEvs.length) badges+=`<span class="cal-badge class">Class ${classEvs.length}</span>`;
+
+    // 스케줄 바 (최대 3개 표시)
+    let schedBars='';
+    dayScheds.slice(0,3).forEach(s=>{
+      const isStart = dateStr===s.start;
+      const isEnd   = dateStr===s.end;
+      const col = isStart&&isEnd ? '#f59e0b' : isStart ? '#10b981' : '#ef4444';
+      const tag = isStart&&isEnd ? '▶■' : isStart ? '▶' : '■';
+      const label = s.number ? `${tag} ${s.number}` : tag;
+      schedBars+=`<div style="display:inline-flex;align-items:center;gap:3px;background:${col};color:#fff;border-radius:4px;padding:2px 6px;margin-bottom:2px;font-size:10px;font-weight:700;cursor:pointer;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"
+        onclick="event.stopPropagation();openCalDay('${dateStr}','sched')"
+        title="${s.number} ${s.desc} (${s.start}→${s.end})">
+        ${label}
+      </div>`;
+    });
+    if(dayScheds.length>3) schedBars+=`<div style="font-size:9px;color:var(--txt-m)">+${dayScheds.length-3}개</div>`;
+
+    const hasClick = evs.length>0 || dayScheds.length>0;
+    // 요일별 날짜 색상
+    const numColor = dow===0?'color:var(--red)': dow===6?'color:var(--blue)':'';
+
+    html+=`<div class="cal-cell${isToday?' today':''}${isOther?' other-month':''}"
+      ${hasClick?`onclick="openCalDay('${dateStr}','ev')"`:''}>
+      <div class="cal-day-num" style="${numColor}">${cur.getDate()}</div>
+      ${schedBars?`<div style="margin-bottom:3px">${schedBars}</div>`:''}
+      ${badges?`<div class="cal-badges">${badges}</div>`:''}
+    </div>`;
+    cur.setDate(cur.getDate()+1);
+  }
+  document.getElementById('cal-body').innerHTML=html;
+}
+
+function fmtD(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+// ── 날짜 팝업 ──────────────────────────────────────────────
+function openCalDay(dateStr, focus) {
+  const {evMap, schedList} = buildCalEvents();
+  const evs = evMap[dateStr]||[];
+  const dayScheds = schedList.filter(s=>dateStr===s.start || dateStr===s.end);
+
+  document.getElementById('cal-popup-title').textContent=`📅 ${dateStr}`;
+
+  const TAB_NAMES={1:'jobs',3:'class',4:'daily'};
+  const TAB_BTN_IDX={1:1,3:3,4:4};
+
+  let html='';
+
+  // Job 스케줄
+  if(dayScheds.length){
+    const SCHED_COLORS={PAINT:'#8b5cf6',STEEL:'#64748b',DECK:'#0891b2',ENGINE:'#dc2626',
+      ELECTRIC:'#f59e0b',REPAIR:'#16a34a',ADD:'#9333ea',SPARE:'#78716c',STORE:'#6b7280',GENERAL:'#94a3b8'};
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--txt-m);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 Job Schedule</div>`;
+    html+=dayScheds.map(s=>{
+      const col=SCHED_COLORS[s.section]||'#6366f1';
+      const isStart=dateStr===s.start, isEnd=dateStr===s.end;
+      const tag=isStart&&isEnd?'Start/End':isStart?'▶ Start':isEnd?'■ End':'진행 중';
+      return`<div class="cal-popup-item" style="border-color:${col}">
+        <div class="cal-popup-source" style="color:${col}">${s.section} · ${s.category}</div>
+        <div class="cal-popup-desc">${s.number?`[${s.number}] `:''}${s.desc}</div>
+        <div style="font-size:11px;color:var(--txt-m);margin:3px 0">${s.start} → ${s.end} · <span style="font-weight:600;color:${col}">${tag}</span></div>
+        <button class="btn-sec" style="margin-top:6px;font-size:11px;padding:4px 10px"
+          onclick="closeM('m-cal-day');navToJob(${s.jid})">→ Job Progress 이동</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Remarks / Actions
+  if(evs.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--txt-m);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px">📝 Updates</div>`;
+    html+=evs.map(e=>`<div class="cal-popup-item ${e.type}">
+      <div class="cal-popup-source">${e.source}</div>
+      <div class="cal-popup-desc">${e.desc}</div>
+      ${e.note?`<div class="cal-popup-note">${e.note}${e.important?' ⭐':''}</div>`:''}
+      <button class="btn-sec" style="margin-top:8px;font-size:11px;padding:4px 10px"
+        onclick="closeM('m-cal-day');navToItem('${TAB_NAMES[e.tabIdx]}',${TAB_BTN_IDX[e.tabIdx]},'${e.refType}',${e.refId})">
+        → ${e.source} 이동
+      </button>
+    </div>`).join('');
+  }
+
+  document.getElementById('cal-popup-body').innerHTML=html||'<div style="text-align:center;padding:20px;color:var(--txt-m)">내용 없음</div>';
+  openM('m-cal-day');
+}
+
+// ── 탭 이동 + 해당 항목 하이라이트 ────────────────────────
+function navToJob(jid) {
+  // 자동 접기 skip 플래그 ON
+  _calNavExpand = true;
+  catCollapsed.clear();
+  _catEverSeen.clear();
+  showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
+  renderJobs();
+  // 플래그 해제
+  _calNavExpand = false;
+  requestAnimationFrame(()=> requestAnimationFrame(()=>{
+    const row = document.querySelector(`tr[data-jid="${jid}"]`);
+    if(row){
+      row.scrollIntoView({behavior:'smooth', block:'center'});
+      flashRow(row,'#dbeafe');
+    }
+  }));
+}
+
+function navToItem(tabName, tabIdx, refType, refId) {
+  if(refType==='disc'){
+    _calNavExpandDisc = true;
+    discCollapsed.clear();
+    showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
+    renderDisc();
+    _calNavExpandDisc = false;
+  } else {
+    showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
+    if(refType==='class') renderClass();
+  }
+  requestAnimationFrame(()=> requestAnimationFrame(()=>{
+    let sel='';
+    if(refType==='class') sel=`tr[data-cid="${refId}"]`;
+    else if(refType==='disc') sel=`tr[data-did="${refId}"]`;
+    const row = document.querySelector(sel);
+    if(row){
+      row.scrollIntoView({behavior:'smooth', block:'center'});
+      flashRow(row, refType==='disc'?'#d1fae5':'#fef9c3');
+    }
+  }));
+}
+
+function flashRow(row, color) {
+  const orig = row.style.background || '';
+  row.style.transition = 'background .15s';
+  row.style.background = color;
+  let count = 0;
+  const blink = setInterval(()=>{
+    count++;
+    row.style.background = count%2===0 ? color : orig;
+    if(count >= 5){ clearInterval(blink); row.style.background = orig; }
+  }, 300);
 }
 
 loadAll();
