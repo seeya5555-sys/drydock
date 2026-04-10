@@ -3773,11 +3773,11 @@ async function renderDocuments() {
             ${t.icon} ${t.key}
             <span style="font-size:11px;font-weight:400;opacity:.7">(${files.length})</span>
           </div>
-          <label class="docs-upload-btn" title="파일 업로드" onclick="event.stopPropagation()">
+          ${isViewer() ? '' : `<label class="docs-upload-btn" title="파일 업로드" onclick="event.stopPropagation()">
             ＋ 업로드
             <input type="file" multiple style="display:none"
               onchange="uploadDocument(this,'${safeKey}')">
-          </label>
+          </label>`}
         </div>
         <div class="docs-file-list" id="docs-list-${_docTypeId(t.key)}"
           style="display:${collapsed?'none':'block'}">${fileHtml}</div>
@@ -3838,7 +3838,7 @@ function _docFileItem(f) {
     <div class="docs-file-actions">
       <button class="btn-sec" onclick="window._docFilename='${f.filename}';previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
       <button class="btn-sec" onclick="window.location='/api/documents/${f.id}'">⬇</button>
-      <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>
+      ${isViewer()?'':` <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>`}
     </div>
   </div>`;
 }
