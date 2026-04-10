@@ -2512,68 +2512,55 @@ function buildGantt(sf,cf,btn){
 // ══ JOB ATTACHMENTS ══════════════════════════════════
 async function openJobAttach(jobId) {
   if(!VID) return;
-  // 파일 목록 로드
   const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
-  const file = list && list.length ? list[list.length-1] : null;
-
-  const modal = document.getElementById('m-job-attach');
   document.getElementById('ja-title').textContent = '📎 첨부파일';
   document.getElementById('ja-jobid').value = jobId;
-
-  // 버튼 상태 업데이트
-  _renderJobAttachUI(file);
+  _renderJobAttachUI(list||[]);
   openM('m-job-attach');
 }
 
-function _renderJobAttachUI(file) {
+function _renderJobAttachUI(files) {
   const area = document.getElementById('ja-file-area');
-  if(!file) {
-    area.innerHTML = `
-      <div style="text-align:center;padding:24px;color:var(--txt-m);font-size:13px">
-        <div style="font-size:32px;margin-bottom:8px">📂</div>
-        첨부된 파일이 없습니다
-      </div>`;
+  if(!files.length){
+    area.innerHTML=`<div style="text-align:center;padding:24px;color:var(--txt-m);font-size:13px"><div style="font-size:32px;margin-bottom:8px">📂</div>첨부된 파일이 없습니다</div>`;
     return;
   }
-  const isImg = file.mimetype && file.mimetype.startsWith('image/');
-  const isPdf = file.mimetype === 'application/pdf';
-  const sizeMB = file.filesize ? (file.filesize/1024/1024).toFixed(1)+' MB' : '';
-  area.innerHTML = `
-    <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span style="font-size:28px">${isImg?'🖼️':isPdf?'📄':'📁'}</span>
+  area.innerHTML = files.map(file=>{
+    const isImg = file.mimetype&&file.mimetype.startsWith('image/');
+    const isPdf = file.mimetype==='application/pdf';
+    const sizeMB = file.filesize?(file.filesize/1024/1024).toFixed(1)+' MB':'';
+    return`<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:24px">${isImg?'🖼️':isPdf?'📄':'📁'}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.filename}</div>
           <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${sizeMB}</div>
         </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn-sec" style="flex:1" onclick="previewJobAttach(${file.id},'${file.mimetype}')">👁 미리보기</button>
-        <button class="btn-sec" style="flex:1" onclick="window.location='/api/attachments/${file.id}'">⬇ 다운로드</button>
-        <button class="btn-sec" style="flex:1;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕ 삭제</button>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}')">👁</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>
+        </div>
       </div>
     </div>`;
+  }).join('');
 }
 
 async function uploadJobAttach(input) {
   if(!VID || !input.files.length) return;
   const jobId = +document.getElementById('ja-jobid').value;
   const formData = new FormData();
-  formData.append('files', input.files[0]);
+  for(const f of input.files) formData.append('files', f);
   setSS('saving');
   try {
-    const res = await fetch(`${API}/vessels/${VID}/attachments/job/${jobId}`, {method:'POST', body:formData});
-    const data = await res.json();
-    setSS('synced');
-    // 목록 다시 로드해서 UI 갱신
+    await fetch(`${API}/vessels/${VID}/attachments/job/${jobId}`, {method:'POST', body:formData});
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
-    const file = list && list.length ? list[list.length-1] : null;
-    _renderJobAttachUI(file);
+    _renderJobAttachUI(list||[]);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`job:${jobId}`);
-    _updateJobAttachBtn(jobId, !!file);
-    toast('파일 업로드 완료');
+    _updateJobAttachBtn(jobId, list?list.length:0);
+    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
-  input.value = '';
+  input.value='';
 }
 
 async function deleteJobAttach(aid, jobId) {
@@ -2581,11 +2568,12 @@ async function deleteJobAttach(aid, jobId) {
   setSS('saving');
   try {
     await apiFetch(`${API}/attachments/${aid}`, 'DELETE');
-    setSS('synced');
-    _renderJobAttachUI(null);
-    if(FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`job:${jobId}`);
-    _updateJobAttachBtn(jobId, false);
-    toast('삭제됐습니다');
+    const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
+    _renderJobAttachUI(list||[]);
+    const cnt = list?list.length:0;
+    if(!cnt && FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`job:${jobId}`);
+    _updateJobAttachBtn(jobId, cnt);
+    setSS('synced'); toast('삭제됐습니다');
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
 }
 
@@ -2600,12 +2588,12 @@ function previewJobAttach(aid, mimetype) {
   }
 }
 
-function _updateJobAttachBtn(jobId, hasFile) {
+function _updateJobAttachBtn(jobId, cnt) {
   const btn = document.getElementById(`jattbtn-${jobId}`);
   if(!btn) return;
-  btn.style.background = hasFile ? 'var(--blue)' : '';
-  btn.style.color = hasFile ? 'var(--white)' : '';
-  btn.textContent = hasFile ? '📎 +' : '📎';
+  btn.style.background = cnt>0 ? 'var(--blue)' : '';
+  btn.style.color = cnt>0 ? 'var(--white)' : '';
+  btn.textContent = cnt>0 ? `📎 ${cnt}` : '📎';
 }
 
 // 첨부 버튼 상태 초기화 (renderJobs 후 호출)
