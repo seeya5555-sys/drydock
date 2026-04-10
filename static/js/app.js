@@ -497,6 +497,7 @@ function showTab(tab,btn){
   if(tab==='staging')renderTracking('staging');
   if(tab==='gasfree')renderTracking('gasfree');
   if(tab==='calendar')renderCalendar();
+  if(tab==='documents')renderDocuments();
 }
 
 async function loadAttachStates(refType, idKey, btnPrefix) {
@@ -3715,6 +3716,161 @@ function flashRow(row, color) {
     row.style.background = count%2===0 ? color : orig;
     if(count >= 5){ clearInterval(blink); row.style.background = orig; }
   }, 300);
+}
+
+
+// ══ DOCUMENTS ════════════════════════════════════════════════
+const DOC_TYPES = [
+  { key:'Shipyard Specification', icon:'📋', color:'#3b82f6' },
+  { key:'Shipyard Quotation',     icon:'💰', color:'#10b981' },
+  { key:'Shipyard Workdone List', icon:'✅', color:'#8b5cf6' },
+  { key:'Yard Report',            icon:'🏗️', color:'#f59e0b' },
+  { key:'Service Report',         icon:'🔧', color:'#ef4444' },
+  { key:'Invoices',               icon:'🧾', color:'#0891b2' },
+];
+
+const _docCollapsed = new Set(); // 기본 접힘
+
+async function renderDocuments() {
+  if(!VID) return;
+  const grid = document.getElementById('docs-grid');
+  grid.innerHTML = '<div style="color:var(--txt-m);padding:20px">Loading…</div>';
+  try {
+    const allDocs = await apiFetch(`${API}/vessels/${VID}/documents`);
+    const byType = {};
+    DOC_TYPES.forEach(t => byType[t.key] = []);
+    (allDocs||[]).forEach(d => { if(byType[d.doc_type]) byType[d.doc_type].push(d); });
+
+    // 최초 진입 시 모두 접기
+    if(_docCollapsed.size === 0) DOC_TYPES.forEach(t => _docCollapsed.add(t.key));
+
+    grid.innerHTML = DOC_TYPES.map(t => {
+      const files = byType[t.key] || [];
+      const collapsed = _docCollapsed.has(t.key);
+      const safeKey = t.key.replace(/'/g,"\\'");
+      const fileHtml = files.length
+        ? files.map(f => _docFileItem(f)).join('')
+        : `<div class="docs-empty">📂 업로드된 파일이 없습니다</div>`;
+      return `<div class="docs-section">
+        <div class="docs-section-hdr" style="background:${t.color};cursor:pointer" onclick="toggleDocSection('${safeKey}')">
+          <div class="docs-section-title" style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;display:inline-block;transform:rotate(${collapsed?'0':'90'}deg);transition:transform .2s">▶</span>
+            ${t.icon} ${t.key}
+            <span style="font-size:11px;font-weight:400;opacity:.7">(${files.length})</span>
+          </div>
+          <label class="docs-upload-btn" title="파일 업로드" onclick="event.stopPropagation()">
+            ＋ 업로드
+            <input type="file" multiple style="display:none"
+              onchange="uploadDocument(this,'${safeKey}')">
+          </label>
+        </div>
+        <div class="docs-file-list" id="docs-list-${_docTypeId(t.key)}"
+          style="display:${collapsed?'none':'block'}">${fileHtml}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = `<div style="color:var(--red);padding:20px">로드 실패: ${e.message}</div>`;
+  }
+  _updateDocsToggleAllBtn();
+}
+
+function toggleDocSection(key) {
+  if(_docCollapsed.has(key)) _docCollapsed.delete(key);
+  else _docCollapsed.add(key);
+  const typeId = _docTypeId(key);
+  const listEl = document.getElementById('docs-list-'+typeId);
+  const hdr = listEl?.previousElementSibling;
+  const collapsed = _docCollapsed.has(key);
+  if(listEl) listEl.style.display = collapsed ? 'none' : 'block';
+  if(hdr) { const arrow = hdr.querySelector('span'); if(arrow) arrow.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(90deg)'; }
+  _updateDocsToggleAllBtn();
+}
+
+function toggleAllDocSections() {
+  const allCollapsed = DOC_TYPES.every(t => _docCollapsed.has(t.key));
+  DOC_TYPES.forEach(t => {
+    if(allCollapsed) _docCollapsed.delete(t.key); else _docCollapsed.add(t.key);
+    const listEl = document.getElementById('docs-list-'+_docTypeId(t.key));
+    const hdr = listEl?.previousElementSibling;
+    const collapsed = !allCollapsed;
+    if(listEl) listEl.style.display = collapsed ? 'none' : 'block';
+    if(hdr) { const arrow = hdr.querySelector('span'); if(arrow) arrow.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(90deg)'; }
+  });
+  _updateDocsToggleAllBtn();
+}
+
+function _updateDocsToggleAllBtn() {
+  const btn = document.getElementById('docs-toggle-all');
+  if(!btn) return;
+  const allCollapsed = DOC_TYPES.every(t => _docCollapsed.has(t.key));
+  btn.textContent = allCollapsed ? '▶ 전체 펼치기' : '▼ 전체 접기';
+}
+
+function _docTypeId(key) { return key.replace(/\s+/g,'_').toLowerCase(); }
+
+function _docFileItem(f) {
+  const isImg = f.mimetype&&f.mimetype.startsWith('image/');
+  const isPdf = f.mimetype==='application/pdf';
+  const icon  = isImg?'🖼️': isPdf?'📄':'📁';
+  const size  = f.filesize ? (f.filesize/1024/1024).toFixed(1)+' MB' : '';
+  const date  = f.uploaded_at ? f.uploaded_at.substring(0,10) : '';
+  return `<div class="docs-file-item">
+    <div class="docs-file-icon">${icon}</div>
+    <div class="docs-file-info">
+      <div class="docs-file-name" title="${f.filename}">${f.filename}</div>
+      <div class="docs-file-meta">${size}${size&&date?' · ':''}${date}</div>
+    </div>
+    <div class="docs-file-actions">
+      <button class="btn-sec" onclick="previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
+      <button class="btn-sec" onclick="window.location='/api/documents/${f.id}'">⬇</button>
+      <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>
+    </div>
+  </div>`;
+}
+
+async function uploadDocument(input, docType) {
+  if(!VID || !input.files.length) return;
+  const formData = new FormData();
+  formData.append('doc_type', docType);
+  for(const f of input.files) formData.append('file', f);
+  setSS('saving');
+  try {
+    await fetch(`${API}/vessels/${VID}/documents`, {method:'POST', body:formData});
+    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+    // 해당 섹션만 갱신
+    const listId = 'docs-list-'+_docTypeId(docType);
+    const el = document.getElementById(listId);
+    if(el){
+      const allDocs = await apiFetch(`${API}/vessels/${VID}/documents?doc_type=${encodeURIComponent(docType)}`);
+      el.innerHTML = allDocs&&allDocs.length ? allDocs.map(f=>_docFileItem(f)).join('')
+        : '<div class="docs-empty">📂 업로드된 파일이 없습니다</div>';
+    }
+  } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
+  input.value='';
+}
+
+async function deleteDoc(did, typeId) {
+  if(!confirm('파일을 삭제하시겠습니까?')) return;
+  setSS('saving');
+  try {
+    // doc_type 복원
+    const docType = DOC_TYPES.find(t=>_docTypeId(t.key)===typeId)?.key||'';
+    await apiFetch(`${API}/documents/${did}`, 'DELETE');
+    setSS('synced'); toast('삭제됐습니다');
+    const el = document.getElementById('docs-list-'+typeId);
+    if(el && docType){
+      const allDocs = await apiFetch(`${API}/vessels/${VID}/documents?doc_type=${encodeURIComponent(docType)}`);
+      el.innerHTML = allDocs&&allDocs.length ? allDocs.map(f=>_docFileItem(f)).join('')
+        : '<div class="docs-empty">📂 업로드된 파일이 없습니다</div>';
+    }
+  } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
+}
+
+function previewDoc(did, mimetype) {
+  const isImg = mimetype&&mimetype.startsWith('image/');
+  const isPdf = mimetype==='application/pdf';
+  if(isImg||isPdf) window.open(`/api/documents/${did}/preview`, '_blank');
+  else window.location = `/api/documents/${did}`;
 }
 
 loadAll();
