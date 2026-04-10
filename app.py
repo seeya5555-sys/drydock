@@ -90,6 +90,19 @@ with app.app_context():
         pass
     db.commit()
     db = get_db()
+    # Documents 테이블 생성
+    db.execute("""CREATE TABLE IF NOT EXISTS vessel_documents (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        vessel_id   TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+        doc_type    TEXT NOT NULL,
+        filename    TEXT NOT NULL,
+        filesize    INTEGER,
+        mimetype    TEXT,
+        data        BLOB NOT NULL,
+        uploaded_at TEXT DEFAULT (datetime('now'))
+    )""")
+    db.commit()
+    db = get_db()
     # 사용자 테이블 생성 (role, vessels 포함)
     db.execute("""CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1182,6 +1195,69 @@ def upload_tracking_xlsx(vid):
 
     db.commit()
     return jsonify({"success": True, "imported": result}), 201
+
+
+# ══ VESSEL DOCUMENTS ══════════════════════════════════════════
+
+DOC_TYPES = ['Shipyard Specification', 'Shipyard Quotation', 'Shipyard Workdone List',
+             'Yard Report', 'Service Report', 'Invoices']
+
+@app.route("/api/vessels/<vid>/documents", methods=["GET"])
+@login_required
+def get_documents(vid):
+    doc_type = request.args.get('doc_type')
+    if doc_type:
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=? ORDER BY id", vid, doc_type)
+    else:
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? ORDER BY doc_type,id", vid)
+    return jsonify(data)
+
+@app.route("/api/vessels/<vid>/documents", methods=["POST"])
+@login_required
+@viewer_forbidden
+def upload_document(vid):
+    doc_type = request.form.get('doc_type','')
+    if doc_type not in DOC_TYPES:
+        return jsonify({"error": "Invalid doc_type"}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    db = get_db()
+    uploaded = []
+    for f in request.files.getlist("file"):
+        if not f.filename: continue
+        data = f.read()
+        cur = db.execute(
+            "INSERT INTO vessel_documents(vessel_id,doc_type,filename,filesize,mimetype,data) VALUES(?,?,?,?,?,?)",
+            (vid, doc_type, f.filename, len(data), f.content_type, data))
+        uploaded.append({"id": cur.lastrowid, "doc_type": doc_type, "filename": f.filename,
+                         "filesize": len(data), "mimetype": f.content_type})
+    db.commit()
+    return jsonify(uploaded), 201
+
+@app.route("/api/documents/<int:did>", methods=["GET"])
+@login_required
+def download_document(did):
+    r = get_db().execute("SELECT filename,mimetype,data FROM vessel_documents WHERE id=?", (did,)).fetchone()
+    if not r: abort(404)
+    return send_file(io.BytesIO(r["data"]), mimetype=r["mimetype"] or "application/octet-stream",
+                     as_attachment=True, download_name=r["filename"])
+
+@app.route("/api/documents/<int:did>/preview", methods=["GET"])
+@login_required
+def preview_document(did):
+    r = get_db().execute("SELECT filename,mimetype,data FROM vessel_documents WHERE id=?", (did,)).fetchone()
+    if not r: abort(404)
+    return send_file(io.BytesIO(r["data"]), mimetype=r["mimetype"] or "application/octet-stream",
+                     as_attachment=False, download_name=r["filename"])
+
+@app.route("/api/documents/<int:did>", methods=["DELETE"])
+@login_required
+@viewer_forbidden
+def delete_document(did):
+    db = get_db()
+    db.execute("DELETE FROM vessel_documents WHERE id=?", (did,))
+    db.commit()
+    return jsonify({"deleted": did})
 
 
 # ── Run ───────────────────────────────────────────────────────
