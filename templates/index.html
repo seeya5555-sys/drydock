@@ -63,6 +63,7 @@
     <button class="vnav-btn" onclick="showTab('class',this)">Class Items</button>
     <button class="vnav-btn" onclick="showTab('daily',this)">Daily Log</button>
     <button class="vnav-btn" onclick="showTab('calendar',this)">📅 Calendar</button>
+    <button class="vnav-btn" onclick="showTab('documents',this)">📁 Documents</button>
     <span class="vnav-sep"></span>
     <button class="vnav-btn" onclick="showTab('steel',this)">Steel Repair</button>
     <button class="vnav-btn" onclick="showTab('outfit',this)">Outfitting</button>
@@ -266,7 +267,8 @@
     </div>
   </main></div>
 
-  <!-- Calendar Day Popup -->
+  <!-- Documents -->
+    <!-- Calendar Day Popup -->
   <div class="modal-overlay" id="m-cal-day" onclick="if(event.target===this)closeM('m-cal-day')">
     <div class="modal" style="width:520px;max-height:80vh;display:flex;flex-direction:column">
       <div class="modal-hdr">
@@ -280,6 +282,14 @@
     </div>
   </div>
 
+  <!-- Documents -->
+  <div id="vt-documents" class="page"><main>
+    <div class="sec-hdr" style="margin-bottom:20px">
+      <div class="sec-title">📁 Documents</div>
+      <button class="btn-sec" id="docs-toggle-all" onclick="toggleAllDocSections()" style="font-size:12px;padding:5px 12px">▶ 전체 펼치기</button>
+    </div>
+    <div id="docs-grid" class="docs-grid"></div>
+  </main></div>
 
   <div id="vt-steel" class="page"><main>
     <div class="sec-hdr">
