@@ -101,7 +101,7 @@ function applyRoleUI() {
       const style = document.createElement('style');
       style.id = 'viewer-style';
       style.textContent = `
-        .btn-add, .add-btn, .edit-btn, .attach-btn, .btn-edit,
+        .btn-add, .add-btn, .edit-btn, .btn-edit,
         #j-add-row-btn, .upload-btn, .btn-sec[onclick*="CSV"]:not([onclick*="downloadCSVTemplate"]),
         .j-toolbar .btn-sec:not([onclick*="downloadCSVTemplate"]), .c-toolbar .btn-sec, .d-toolbar .btn-sec,
         button[onclick*="openJobModal(null)"], button[onclick*="openAddVesselModal"],
@@ -2516,6 +2516,9 @@ async function openJobAttach(jobId) {
   const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
   document.getElementById('ja-title').textContent = '📎 첨부파일';
   document.getElementById('ja-jobid').value = jobId;
+  // viewer면 업로드 버튼 숨김
+  const uploadLabel = document.querySelector('#m-job-attach label');
+  if(uploadLabel) uploadLabel.style.display = isViewer() ? 'none' : '';
   _renderJobAttachUI(list||[]);
   openM('m-job-attach');
 }
@@ -2540,7 +2543,7 @@ function _renderJobAttachUI(files) {
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>
+          ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>`}
         </div>
       </div>
     </div>`;
@@ -2620,6 +2623,9 @@ async function openGenAttach(refType, refId) {
   const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`);
   document.getElementById('ga-reftype').value = refType;
   document.getElementById('ga-refid').value = refId;
+  // viewer면 업로드 버튼 숨김
+  const uploadLabel = document.querySelector('#m-gen-attach label');
+  if(uploadLabel) uploadLabel.style.display = isViewer() ? 'none' : '';
   _renderGenAttachUI(list || []);
   openM('m-gen-attach');
 }
@@ -2648,7 +2654,7 @@ function _renderGenAttachUI(files) {
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteGenAttach(${file.id})">✕</button>
+          ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteGenAttach(${file.id})">✕</button>`}
         </div>
       </div>
     </div>`;
