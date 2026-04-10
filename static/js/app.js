@@ -3629,12 +3629,13 @@ function openCalDay(dateStr, focus) {
 
 // ── 탭 이동 + 해당 항목 하이라이트 ────────────────────────
 function navToJob(jid) {
-  // 해당 job 번호로 검색 필터 적용 → 해당 항목만 표시
   const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==jid);
   if(!job) return;
   showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
+  // 모든 필터 초기화 후 번호로만 검색
+  _clearJobFilters();
   const qEl = document.getElementById('j-q');
-  if(qEl){ qEl.value = job.number||job.description||''; buildJFilters(); renderJobs(); }
+  if(qEl){ qEl.value = job.number||''; buildJFilters(); renderJobs(); }
   _scrollToRow(`tr[data-jid="${jid}"]`, '#dbeafe');
 }
 
@@ -3643,8 +3644,9 @@ function navToItem(tabName, tabIdx, refType, refId) {
     const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==refId);
     if(!job) return;
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
+    _clearJobFilters();
     const qEl = document.getElementById('j-q');
-    if(qEl){ qEl.value = job.number||job.description||''; buildJFilters(); renderJobs(); }
+    if(qEl){ qEl.value = job.number||''; buildJFilters(); renderJobs(); }
     _scrollToRow(`tr[data-jid="${refId}"]`, '#dbeafe');
 
   } else if(refType==='disc'){
@@ -3664,10 +3666,16 @@ function navToItem(tabName, tabIdx, refType, refId) {
     const cls = (FLEET[VID]?.classItems||[]).find(c=>c._id==refId);
     if(!cls) return;
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
+    // 모든 class 필터 초기화 후 finding으로 검색
+    ['c-sf','c-bf','c-pf'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     const qEl = document.getElementById('c-q');
-    if(qEl){ qEl.value = cls.finding||cls.no||''; renderClass(); }
+    if(qEl){ qEl.value = cls.no||cls.finding||''; renderClass(); }
     _scrollToRow(`tr[data-cid="${refId}"]`, '#fef9c3');
   }
+}
+
+function _clearJobFilters() {
+  ['j-sf','j-cf','j-vf','j-pf'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
 }
 
 function _scrollToRow(sel, color) {
