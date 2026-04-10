@@ -519,9 +519,9 @@
       <!-- 업로드 버튼 -->
       <label style="display:block;cursor:pointer;margin-bottom:14px">
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:8px;padding:12px;font-size:13px;font-weight:600">
-          <span>📂</span> 파일 선택 / 교체 업로드
+          <span>📂</span> 파일 선택 / 업로드
         </div>
-        <input type="file" style="display:none" onchange="uploadJobAttach(this)">
+        <input type="file" multiple style="display:none" onchange="uploadJobAttach(this)">
       </label>
       <!-- 파일 정보 영역 -->
       <div id="ja-file-area">
