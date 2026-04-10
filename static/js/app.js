@@ -2538,7 +2538,7 @@ function _renderJobAttachUI(files) {
           <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${sizeMB}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}')">👁</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>
         </div>
@@ -2578,15 +2578,18 @@ async function deleteJobAttach(aid, jobId) {
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
 }
 
-function previewJobAttach(aid, mimetype) {
+function previewJobAttach(aid, mimetype, filename) {
   const isImg = mimetype && mimetype.startsWith('image/');
   const isPdf = mimetype === 'application/pdf';
-  const url = `/api/attachments/${aid}/preview`;
-  if(isImg || isPdf) {
-    window.open(url, '_blank');
-  } else {
-    window.location = `/api/attachments/${aid}`;
-  }
+  if(isImg || isPdf) window.open(`/api/attachments/${aid}/preview`, '_blank');
+  else window.location = `/api/attachments/${aid}`;
+}
+
+function previewDoc(did, mimetype) {
+  const isImg = mimetype && mimetype.startsWith('image/');
+  const isPdf = mimetype === 'application/pdf';
+  if(isImg || isPdf) window.open(`/api/documents/${did}/preview`, '_blank');
+  else window.location = `/api/documents/${did}`;
 }
 
 function _updateJobAttachBtn(jobId, cnt) {
@@ -2630,16 +2633,20 @@ function _renderGenAttachUI(files) {
   area.innerHTML = files.map(file => {
     const isImg = file.mimetype && file.mimetype.startsWith('image/');
     const isPdf = file.mimetype === 'application/pdf';
+    const ext = (file.filename||'').split('.').pop().toLowerCase();
+    const isXls = ['xlsx','xls','xlsm'].includes(ext);
+    const isDoc = ['docx','doc'].includes(ext);
+    const icon = isImg?'🖼️':isPdf?'📄':isXls?'📊':isDoc?'📝':'📁';
     const sizeMB = file.filesize ? (file.filesize/1024/1024).toFixed(1)+' MB' : '';
     return `<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:24px">${isImg?'🖼️':isPdf?'📄':'📁'}</span>
+        <span style="font-size:24px">${icon}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.filename}</div>
           <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${sizeMB}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}')">👁</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
           <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteGenAttach(${file.id})">✕</button>
         </div>
@@ -3740,6 +3747,8 @@ async function renderDocuments() {
     const byType = {};
     DOC_TYPES.forEach(t => byType[t.key] = []);
     (allDocs||[]).forEach(d => { if(byType[d.doc_type]) byType[d.doc_type].push(d); });
+    // 각 섹션 파일 이름순 정렬
+    Object.keys(byType).forEach(k => byType[k].sort((a,b) => a.filename.localeCompare(b.filename)));
 
     // 최초 진입 시 모두 접기
     if(_docCollapsed.size === 0) DOC_TYPES.forEach(t => _docCollapsed.add(t.key));
@@ -3821,7 +3830,7 @@ function _docFileItem(f) {
       <div class="docs-file-meta">${size}${size&&date?' · ':''}${date}</div>
     </div>
     <div class="docs-file-actions">
-      <button class="btn-sec" onclick="previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
+      <button class="btn-sec" onclick="window._docFilename='${f.filename}';previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
       <button class="btn-sec" onclick="window.location='/api/documents/${f.id}'">⬇</button>
       <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>
     </div>
@@ -3864,13 +3873,6 @@ async function deleteDoc(did, typeId) {
         : '<div class="docs-empty">📂 업로드된 파일이 없습니다</div>';
     }
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
-}
-
-function previewDoc(did, mimetype) {
-  const isImg = mimetype&&mimetype.startsWith('image/');
-  const isPdf = mimetype==='application/pdf';
-  if(isImg||isPdf) window.open(`/api/documents/${did}/preview`, '_blank');
-  else window.location = `/api/documents/${did}`;
 }
 
 loadAll();
