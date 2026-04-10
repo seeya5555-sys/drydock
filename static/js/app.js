@@ -3636,13 +3636,7 @@ function navToJob(jid) {
   showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
   renderJobs();
   _calNavExpand = false;
-  requestAnimationFrame(()=> requestAnimationFrame(()=>{
-    const row = document.querySelector(`tr[data-jid="${jid}"]`);
-    if(row){
-      row.scrollIntoView({behavior:'smooth', block:'center'});
-      flashRow(row,'#dbeafe');
-    }
-  }));
+  _scrollToRow(`tr[data-jid="${jid}"]`, '#dbeafe');
 }
 
 function navToItem(tabName, tabIdx, refType, refId) {
@@ -3654,27 +3648,31 @@ function navToItem(tabName, tabIdx, refType, refId) {
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
     renderJobs();
     _calNavExpand = false;
+    _scrollToRow(`tr[data-jid="${refId}"]`, '#dbeafe');
   } else if(refType==='disc'){
     _calNavExpandDisc = true;
     discCollapsed.clear();
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
     renderDisc();
     _calNavExpandDisc = false;
-  } else {
+    _scrollToRow(`tr[data-did="${refId}"]`, '#d1fae5');
+  } else if(refType==='class'){
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
-    if(refType==='class') renderClass();
+    renderClass();
+    _scrollToRow(`tr[data-cid="${refId}"]`, '#fef9c3');
   }
-  requestAnimationFrame(()=> requestAnimationFrame(()=>{
-    let sel='';
-    if(refType==='job')   sel=`tr[data-jid="${refId}"]`;
-    if(refType==='class') sel=`tr[data-cid="${refId}"]`;
-    if(refType==='disc')  sel=`tr[data-did="${refId}"]`;
+}
+
+function _scrollToRow(sel, color) {
+  // 50ms → 못찾으면 150ms 재시도
+  setTimeout(()=>{
     const row = document.querySelector(sel);
-    if(row){
-      row.scrollIntoView({behavior:'smooth', block:'center'});
-      flashRow(row, refType==='job'?'#dbeafe': refType==='disc'?'#d1fae5':'#fef9c3');
-    }
-  }));
+    if(row){ row.scrollIntoView({behavior:'smooth', block:'center'}); flashRow(row, color); return; }
+    setTimeout(()=>{
+      const row2 = document.querySelector(sel);
+      if(row2){ row2.scrollIntoView({behavior:'smooth', block:'center'}); flashRow(row2, color); }
+    }, 150);
+  }, 50);
 }
 
 function flashRow(row, color) {
