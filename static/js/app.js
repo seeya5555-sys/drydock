@@ -3629,42 +3629,48 @@ function openCalDay(dateStr, focus) {
 
 // ── 탭 이동 + 해당 항목 하이라이트 ────────────────────────
 function navToJob(jid) {
-  _calNavExpand = true;
-  catCollapsed.clear();
-  _catEverSeen.clear();
-  jobCollapsed.clear();
+  // 해당 job 번호로 검색 필터 적용 → 해당 항목만 표시
+  const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==jid);
+  if(!job) return;
   showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
-  renderJobs();
-  _calNavExpand = false;
+  const qEl = document.getElementById('j-q');
+  if(qEl){ qEl.value = job.number||job.description||''; buildJFilters(); renderJobs(); }
   _scrollToRow(`tr[data-jid="${jid}"]`, '#dbeafe');
 }
 
 function navToItem(tabName, tabIdx, refType, refId) {
   if(refType==='job'){
-    _calNavExpand = true;
-    catCollapsed.clear();
-    _catEverSeen.clear();
-    jobCollapsed.clear();
+    const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==refId);
+    if(!job) return;
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
-    renderJobs();
-    _calNavExpand = false;
+    const qEl = document.getElementById('j-q');
+    if(qEl){ qEl.value = job.number||job.description||''; buildJFilters(); renderJobs(); }
     _scrollToRow(`tr[data-jid="${refId}"]`, '#dbeafe');
+
   } else if(refType==='disc'){
+    const disc = (FLEET[VID]?.discussions||[]).find(d=>d._id==refId);
+    if(!disc) return;
+    // 해당 날짜 그룹만 펼치기, 나머지는 접기
     _calNavExpandDisc = true;
+    const allDates = [...new Set((FLEET[VID].discussions||[]).map(d=>d.date||'(날짜 없음)'))];
     discCollapsed.clear();
+    allDates.forEach(dt => { if(dt !== (disc.date||'(날짜 없음)')) discCollapsed.add(dt); });
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
     renderDisc();
     _calNavExpandDisc = false;
     _scrollToRow(`tr[data-did="${refId}"]`, '#d1fae5');
+
   } else if(refType==='class'){
+    const cls = (FLEET[VID]?.classItems||[]).find(c=>c._id==refId);
+    if(!cls) return;
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
-    renderClass();
+    const qEl = document.getElementById('c-q');
+    if(qEl){ qEl.value = cls.finding||cls.no||''; renderClass(); }
     _scrollToRow(`tr[data-cid="${refId}"]`, '#fef9c3');
   }
 }
 
 function _scrollToRow(sel, color) {
-  // 50ms → 못찾으면 150ms 재시도
   setTimeout(()=>{
     const row = document.querySelector(sel);
     if(row){ row.scrollIntoView({behavior:'smooth', block:'center'}); flashRow(row, color); return; }
