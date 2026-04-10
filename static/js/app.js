@@ -3646,7 +3646,15 @@ function navToJob(jid) {
 }
 
 function navToItem(tabName, tabIdx, refType, refId) {
-  if(refType==='disc'){
+  if(refType==='job'){
+    _calNavExpand = true;
+    catCollapsed.clear();
+    _catEverSeen.clear();
+    jobCollapsed.clear();
+    showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
+    renderJobs();
+    _calNavExpand = false;
+  } else if(refType==='disc'){
     _calNavExpandDisc = true;
     discCollapsed.clear();
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
@@ -3658,12 +3666,13 @@ function navToItem(tabName, tabIdx, refType, refId) {
   }
   requestAnimationFrame(()=> requestAnimationFrame(()=>{
     let sel='';
+    if(refType==='job')   sel=`tr[data-jid="${refId}"]`;
     if(refType==='class') sel=`tr[data-cid="${refId}"]`;
-    else if(refType==='disc') sel=`tr[data-did="${refId}"]`;
+    if(refType==='disc')  sel=`tr[data-did="${refId}"]`;
     const row = document.querySelector(sel);
     if(row){
       row.scrollIntoView({behavior:'smooth', block:'center'});
-      flashRow(row, refType==='disc'?'#d1fae5':'#fef9c3');
+      flashRow(row, refType==='job'?'#dbeafe': refType==='disc'?'#d1fae5':'#fef9c3');
     }
   }));
 }
