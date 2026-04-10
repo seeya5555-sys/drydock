@@ -470,9 +470,9 @@ function showTab(tab,btn){
   if(tab==='dashboard')renderDash();
   if(tab==='jobs'){
     buildJFilters();
-    // 탭 열 때 루트(depth=0) 항목 자동 접기
+    // 탭 열 때 루트(depth=0) 항목 자동 접기 (nav 이동 시 skip)
     const jobs = FLEET[VID] ? (FLEET[VID].jobs||[]) : [];
-    if(jobs.length > 0 && jobCollapsed.size === 0) {
+    if(!_calNavExpand && jobs.length > 0 && jobCollapsed.size === 0) {
       const numMap = {};
       jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
       jobs.forEach(j => {
@@ -3629,13 +3629,12 @@ function openCalDay(dateStr, focus) {
 
 // ── 탭 이동 + 해당 항목 하이라이트 ────────────────────────
 function navToJob(jid) {
-  // 자동 접기 skip 플래그 ON
   _calNavExpand = true;
   catCollapsed.clear();
   _catEverSeen.clear();
+  jobCollapsed.clear();
   showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
   renderJobs();
-  // 플래그 해제
   _calNavExpand = false;
   requestAnimationFrame(()=> requestAnimationFrame(()=>{
     const row = document.querySelector(`tr[data-jid="${jid}"]`);
