@@ -854,7 +854,8 @@ textarea.form-ctrl { min-height:80px; resize:vertical; line-height:1.5; }
   font-size:11px;font-weight:600;color:#fff;
   padding:3px 10px;border-radius:12px;
 }
-.cal-grid-wrap { border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+.cal-grid-wrap { border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;-webkit-overflow-scrolling:touch; }
+.cal-grid-inner { min-width:700px; }
 .cal-dow-row {
   display:grid;grid-template-columns:repeat(7,1fr);
   background:var(--navy);
