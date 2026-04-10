@@ -3631,11 +3631,11 @@ function openCalDay(dateStr, focus) {
 function navToJob(jid) {
   const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==jid);
   if(!job) return;
+  _calNavExpand = true;
+  _expandTargetJob(job);
   showTab('jobs', document.querySelectorAll('.vnav-btn')[1]);
-  // 모든 필터 초기화 후 번호로만 검색
-  _clearJobFilters();
-  const qEl = document.getElementById('j-q');
-  if(qEl){ qEl.value = job.number||''; buildJFilters(); renderJobs(); }
+  renderJobs();
+  _calNavExpand = false;
   _scrollToRow(`tr[data-jid="${jid}"]`, '#dbeafe');
 }
 
@@ -3643,10 +3643,11 @@ function navToItem(tabName, tabIdx, refType, refId) {
   if(refType==='job'){
     const job = (FLEET[VID]?.jobs||[]).find(j=>j._id==refId);
     if(!job) return;
+    _calNavExpand = true;
+    _expandTargetJob(job);
     showTab(tabName, document.querySelectorAll('.vnav-btn')[tabIdx]);
-    _clearJobFilters();
-    const qEl = document.getElementById('j-q');
-    if(qEl){ qEl.value = job.number||''; buildJFilters(); renderJobs(); }
+    renderJobs();
+    _calNavExpand = false;
     _scrollToRow(`tr[data-jid="${refId}"]`, '#dbeafe');
 
   } else if(refType==='disc'){
@@ -3674,8 +3675,35 @@ function navToItem(tabName, tabIdx, refType, refId) {
   }
 }
 
-function _clearJobFilters() {
-  ['j-sf','j-cf','j-vf','j-pf'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+function _expandTargetJob(job) {
+  const jobs = FLEET[VID]?.jobs||[];
+  const tgtCat = job.category||'Uncategorized';
+  const tgtSec = job.section||'GENERAL';
+
+  catCollapsed.clear();
+  _catEverSeen.clear();
+  jobCollapsed.clear();
+
+  // 대상 카테고리+섹션 제외하고 모두 접기
+  const allCats = [...new Set(jobs.map(j=>j.category||'Uncategorized'))];
+  allCats.forEach(c => {
+    const secs = [...new Set(jobs.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+    if(c !== tgtCat) {
+      catCollapsed.add(c);
+      secs.forEach(s => catCollapsed.add(c+'::'+s));
+    } else {
+      secs.forEach(s => { if(s !== tgtSec) catCollapsed.add(c+'::'+s); });
+    }
+  });
+
+  // 대상 job의 직계 조상만 펼치기, 나머지 parent는 접기
+  jobs.forEach(j => {
+    if(!hasChildren(j.number, jobs)) return;
+    let isAncestor = false;
+    let p = getParentNumber(job.number);
+    while(p) { if(p===j.number){ isAncestor=true; break; } p=getParentNumber(p); }
+    if(!isAncestor) jobCollapsed.add(j.number);
+  });
 }
 
 function _scrollToRow(sel, color) {
