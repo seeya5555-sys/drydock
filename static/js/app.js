@@ -3762,6 +3762,7 @@ const DOC_TYPES = [
   { key:'Yard Report',            icon:'🏗️', color:'#f59e0b' },
   { key:'Service Report',         icon:'🔧', color:'#ef4444' },
   { key:'Invoices',               icon:'🧾', color:'#0891b2' },
+  { key:'Reference',              icon:'📚', color:'#64748b' },
 ];
 
 const _docCollapsed = new Set(); // 기본 접힘
