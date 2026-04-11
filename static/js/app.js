@@ -170,7 +170,7 @@ async function loadAll(){
 }
 
 // DB → frontend normalizers
-function dbI(r){return{id:r.id,name:r.name||'',type:r.type||'',imo:r.imo||'',shipyard:r.shipyard||'',classSociety:r.class_society||r.classSociety||'',dockIn:r.dock_in||r.dockIn||'',dockOut:r.dock_out||r.dockOut||'',duration:r.duration||'',grt:r.grt||'',dcRate:+(r.dcRate||r.dc_rate||0)};}function dbJ(r){
+function dbI(r){return{id:r.id,name:r.name||'',type:r.type||'',imo:r.imo||'',shipyard:r.shipyard||'',classSociety:r.class_society||r.classSociety||'',berthingDate:r.berthing_date||r.berthingDate||'',dockIn:r.dock_in||r.dockIn||'',dockOut:r.dock_out||r.dockOut||'',departureDate:r.departure_date||r.departureDate||'',duration:r.duration||'',grt:r.grt||'',dcRate:+(r.dcRate||r.dc_rate||0)};}function dbJ(r){
   let remarks = [];
   if(Array.isArray(r.remarks)) remarks = r.remarks;
   else if(typeof r.remarks === 'string'){
@@ -183,14 +183,28 @@ function dbD(r){return{_id:r.id||r._id,no:r.no||'',date:r.date||'',time_of_day:r
 
 // ══ FLEET ════════════════════════════════════════════
 function vesselStatus(info){
-  if(!info.dockIn)return'PLANNED';
-  const now=new Date(),di=new Date(info.dockIn),dout=info.dockOut?new Date(info.dockOut):null;
-  if(now<di)return'PLANNED';if(dout&&now>dout)return'COMPLETED';return'IN DOCK';
+  const now = new Date(); now.setHours(0,0,0,0);
+  const bd   = info.berthingDate   ? new Date(info.berthingDate)   : null;
+  const di   = info.dockIn         ? new Date(info.dockIn)         : null;
+  const dout = info.dockOut        ? new Date(info.dockOut)        : null;
+  const dep  = info.departureDate  ? new Date(info.departureDate)  : null;
+  // 기준 날짜가 하나도 없으면 PLANNED
+  if(!bd && !di) return 'PLANNED';
+  // Departure 이후 → COMPLETED
+  if(dep && now > dep) return 'COMPLETED';
+  // Dock In ~ Dock Out → IN DRY DOCK
+  if(di && dout && now >= di && now <= dout) return 'IN DRY DOCK';
+  // Dock In 이후 (dockOut 없거나 아직 안됨) → IN DRY DOCK
+  if(di && !dout && now >= di) return 'IN DRY DOCK';
+  // Berthing ~ (Dock In 전, 또는 Dock Out ~ Departure) → IN WET DOCK
+  if(bd && now >= bd) return 'IN WET DOCK';
+  // Berthing 전 → PLANNED
+  return 'PLANNED';
 }
 
 function renderFleet(){
   let active=0,done=0,cls=0;
-  IDX.forEach(id=>{const v=FLEET[id];cls+=(v.classItems||[]).filter(c=>c.status==='Open').length;const s=vesselStatus(v.info);if(s==='IN DOCK')active++;if(s==='COMPLETED')done++;});
+  IDX.forEach(id=>{const v=FLEET[id];cls+=(v.classItems||[]).filter(c=>c.status==='Open').length;const s=vesselStatus(v.info);if(s==='IN DRY DOCK'||s==='IN WET DOCK')active++;if(s==='COMPLETED')done++;});
   document.getElementById('fk-v').textContent=IDX.length;
   document.getElementById('fk-a').textContent=active;
   document.getElementById('fk-d').textContent=done;
@@ -206,15 +220,16 @@ function renderFleet(){
     const leafCount=jobs.filter(j=>!hasChildren(j.number,jobs)).length;
     const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
     const st=vesselStatus(info);
-    const stripeCls=st==='IN DOCK'?'amber':st==='COMPLETED'?'green':'grey';
-    const badgeCls=st==='IN DOCK'?'sb-dock':st==='COMPLETED'?'sb-done':'sb-plan';
+    const stripeCls=st==='IN DRY DOCK'?'amber':st==='IN WET DOCK'?'amber':st==='COMPLETED'?'green':'grey';
+    const badgeCls=st==='IN DRY DOCK'?'sb-dock':st==='IN WET DOCK'?'sb-wet':st==='COMPLETED'?'sb-done':'sb-plan';
 
-    // D-Day 배지
+    // D-Day 배지 — Departure 기준, 없으면 Dock Out 기준
     let ddayBadge = '';
-    if(info.dockOut) {
+    const ddRef = info.departureDate || info.dockOut;
+    if(ddRef) {
       const todayD = new Date(); todayD.setHours(0,0,0,0);
-      const dockOutD = new Date(info.dockOut);
-      const diff = Math.round((dockOutD - todayD) / 86400000);
+      const refD = new Date(ddRef);
+      const diff = Math.round((refD - todayD) / 86400000);
       let ddColor, ddText;
       if(st === 'COMPLETED') {
         ddColor = '#64748b'; ddText = 'DONE';
@@ -228,19 +243,21 @@ function renderFleet(){
       ddayBadge = `<div style="position:absolute;top:10px;right:12px;background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:13px;font-weight:700;padding:3px 10px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">${ddText}</div>`;
     }
 
-    // Duration 자동계산 + 소요일
+    // Duration: Dock In ~ Dock Out (상가~하가)
     const autoDur = (info.dockIn && info.dockOut)
       ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000) + 1
       : (info.duration || null);
     let elapsedTag = '';
-    if(info.dockIn && autoDur) {
+    if(info.dockIn) {
       const todayC = new Date(); todayC.setHours(0,0,0,0);
-      const sdC = new Date(info.dockIn);
-      const elapsed = Math.round((todayC - sdC) / 86400000) + 1; // In 날 = 1일째
-      if(elapsed >= 1 && elapsed <= autoDur) {
-        elapsedTag = ` <span style="font-size:11px;color:var(--amber);font-weight:600">(${elapsed}일째)</span>`;
-      } else if(elapsed > autoDur) {
-        elapsedTag = ` <span style="font-size:11px;color:var(--green);font-weight:600">(완료)</span>`;
+      const diC = new Date(info.dockIn);
+      const doC = info.dockOut ? new Date(info.dockOut) : null;
+      if(todayC < diC) {
+        elapsedTag = `<span style="font-size:11px;color:#94a3b8;font-weight:600">상가 전</span>`;
+      } else if(doC && todayC <= doC) {
+        elapsedTag = `<span style="font-size:11px;color:var(--amber);font-weight:600">상가 중</span>`;
+      } else {
+        elapsedTag = `<span style="font-size:11px;color:var(--green);font-weight:600">하가 완료</span>`;
       }
     }
 
@@ -252,9 +269,11 @@ function renderFleet(){
         ${info.type?`<div class="vc-type">${info.type}</div>`:''}
         <div class="vc-meta">
           ${info.shipyard?`<div class="vc-meta-item"><b>${info.shipyard}</b></div>`:''}
-          ${info.dockIn?`<div class="vc-meta-item">In: <b>${info.dockIn}</b></div>`:''}
-          ${info.dockOut?`<div class="vc-meta-item">Out: <b>${info.dockOut}</b></div>`:''}
-          ${autoDur?`<div class="vc-meta-item"><b>${autoDur}</b> days${elapsedTag}</div>`:''}
+          ${info.berthingDate?`<div class="vc-meta-item">Berthing: <b>${info.berthingDate}</b></div>`:''}
+          ${info.dockIn?`<div class="vc-meta-item">Dock In: <b>${info.dockIn}</b></div>`:''}
+          ${info.dockOut?`<div class="vc-meta-item">Dock Out: <b>${info.dockOut}</b></div>`:''}
+          ${info.departureDate?`<div class="vc-meta-item">Departure: <b>${info.departureDate}</b></div>`:''}
+          ${elapsedTag?`<div class="vc-meta-item">${elapsedTag}</div>`:''}
         </div>
         <div class="status-badge ${badgeCls}">${st}</div>
       </div>
@@ -700,35 +719,42 @@ function renderDash(){
   document.getElementById('vs-con-s').textContent=tb?(tc/tb*100).toFixed(1)+'% of budget':'0%';
   document.getElementById('vs-cls').textContent=oc;
 
-  // Duration 자동계산 (DB 저장값 없으면 날짜로 계산)
+  // Duration: Dock In ~ Dock Out (상가~하가)
   const autoDur = (info.dockIn && info.dockOut)
     ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000) + 1
     : (info.duration || null);
 
-  // D-day / 소요일 계산
+  // D-day 기준: Departure → Dock Out 순 fallback
   const today = new Date(); today.setHours(0,0,0,0);
+  const ddRef = info.departureDate || info.dockOut;
   let ddayStr = '', elapsedStr = '';
   if(info.dockIn && info.dockOut) {
     const sd = new Date(info.dockIn), ed = new Date(info.dockOut);
-    const elapsed = Math.round((today - sd) / 86400000) + 1; // In 날 = 1일째
+    const elapsed = Math.round((today - sd) / 86400000) + 1;
     const dday    = Math.round((ed - today) / 86400000);
     if(today < sd) {
       ddayStr    = `D-${Math.round((sd-today)/86400000)}`;
-      elapsedStr = '입거 전';
+      elapsedStr = '상가 전';
     } else if(today > ed) {
       ddayStr    = 'D+'+Math.abs(dday);
-      elapsedStr = `${elapsed-1}일 경과 (완료)`;
+      elapsedStr = `${elapsed-1}일 경과 (하가 완료)`;
     } else {
       ddayStr    = dday === 0 ? 'D-DAY' : `D-${dday}`;
       elapsedStr = `${elapsed}일째 / ${autoDur}일`;
     }
+  } else if(ddRef) {
+    const refD = new Date(ddRef);
+    const dday = Math.round((refD - today) / 86400000);
+    ddayStr = dday >= 0 ? `D-${dday}` : `D+${Math.abs(dday)}`;
   }
 
   const metas=[
     info.shipyard&&`SHIPYARD: <span>${info.shipyard}</span>`,
+    info.berthingDate&&`BERTHING: <span>${info.berthingDate}</span>`,
     info.dockIn&&`DOCK IN: <span>${info.dockIn}</span>`,
     info.dockOut&&`DOCK OUT: <span>${info.dockOut}</span>`,
-    autoDur&&`DURATION: <span>${autoDur} DAYS</span>`,
+    info.departureDate&&`DEPARTURE: <span>${info.departureDate}</span>`,
+    autoDur&&`DD DURATION: <span>${autoDur} DAYS</span>`,
     info.classSociety&&`CLASS: <span>${info.classSociety}</span>`,
     info.imo&&`IMO: <span>${info.imo}</span>`
   ].filter(Boolean);
@@ -746,7 +772,7 @@ function renderDash(){
   const st=vesselStatus(info);
   const sv=document.getElementById('vb-status');
   sv.textContent=st;
-  sv.style.color=st==='IN DOCK'?'#fbbf24':st==='COMPLETED'?'#4ade80':'rgba(255,255,255,.5)';
+  sv.style.color=st==='IN DRY DOCK'?'#fbbf24':st==='IN WET DOCK'?'#60a5fa':st==='COMPLETED'?'#4ade80':'rgba(255,255,255,.5)';
 
   // ── Progress Overview (Shipyard / Shore Repair 스케줄 + 공정률) ──
   const OV_CATS = ['Shipyard', 'Shore Repair'];
@@ -763,11 +789,11 @@ function renderDash(){
     ovEl.style.display = '';
     ovRows.innerHTML = OV_CATS.filter(c => ovCatData[c]).map(cat => {
       const catJobs = ovCatData[cat];
-      // 스케줄 바: Shipyard는 vessel dock in/out 고정, 나머지는 job 날짜 범위
+      // 스케줄 바: Shipyard는 vessel 전체 조선소 체류 기간, 나머지는 job 날짜 범위
       let earliest, latest;
       if(cat === 'Shipyard') {
-        earliest = info.dockIn  || null;
-        latest   = info.dockOut || null;
+        earliest = info.berthingDate || info.dockIn  || null;
+        latest   = info.departureDate|| info.dockOut || null;
       } else {
         const allStarts = catJobs.map(j=>j.start_date).filter(d=>d&&d.trim()).sort();
         const allEnds   = catJobs.map(j=>j.end_date).filter(d=>d&&d.trim()).sort();
@@ -1019,8 +1045,8 @@ function renderDash(){
 
 // ══ DATE SYNC HELPERS ════════════════════════════════
 function calcVesselDuration() {
-  const inVal  = document.getElementById('mv-in-txt')?.value.trim()  || document.getElementById('mv-in')?.value;
-  const outVal = document.getElementById('mv-out-txt')?.value.trim() || document.getElementById('mv-out')?.value;
+  const inVal  = document.getElementById('mv-berthing-txt')?.value.trim()  || document.getElementById('mv-berthing')?.value;
+  const outVal = document.getElementById('mv-departure-txt')?.value.trim() || document.getElementById('mv-departure')?.value;
   const durEl  = document.getElementById('mv-dur');
   if(!durEl) return;
   if(inVal && outVal) {
@@ -2531,8 +2557,8 @@ function buildGantt(sf,cf,btn){
     if(expandBtn) expandBtn.textContent = '▶ 전체 펼치기';
   }
   const info=FLEET[VID].info;
-  const ds=info.dockIn?new Date(info.dockIn):new Date();
-  const de=info.dockOut?new Date(info.dockOut):new Date(ds.getTime()+25*86400000);
+  const ds = (info.berthingDate||info.dockIn) ? new Date(info.berthingDate||info.dockIn) : new Date();
+  const de = (info.departureDate||info.dockOut) ? new Date(info.departureDate||info.dockOut) : new Date(ds.getTime()+25*86400000);
   const nd=Math.max(28,Math.ceil((de-ds)/86400000)+4);
   const dates=Array.from({length:nd},(_,i)=>new Date(ds.getTime()+i*86400000));
   const today=new Date();const DW=38;
@@ -3255,33 +3281,57 @@ function deleteDisc(){
 // ══ VESSEL ADD/EDIT ═══════════════════════════════════
 function openAddVesselModal(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
-
   eVesselNew=true;
   document.getElementById('mv-title').textContent='ADD NEW VESSEL';
   document.getElementById('mv-del').style.display='none';
   ['name','type','imo','yard','class','dur','grt'].forEach(k=>document.getElementById('mv-'+k).value='');
-  ['mv-in','mv-out','mv-in-txt','mv-out-txt'].forEach(id=>document.getElementById(id).value='');
+  ['mv-berthing','mv-in','mv-out','mv-departure',
+   'mv-berthing-txt','mv-in-txt','mv-out-txt','mv-departure-txt'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
   openM('m-vessel');
 }
 function openVesselEditModal(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
-
-  if(!VID)return;eVesselNew=false;
+  if(!VID)return; eVesselNew=false;
   const info=FLEET[VID].info;
   document.getElementById('mv-title').textContent='EDIT VESSEL INFO';
   document.getElementById('mv-del').style.display='block';
-  document.getElementById('mv-name').value=info.name||'';document.getElementById('mv-type').value=info.type||'';
-  document.getElementById('mv-imo').value=info.imo||'';document.getElementById('mv-yard').value=info.shipyard||'';
+  document.getElementById('mv-name').value=info.name||'';
+  document.getElementById('mv-type').value=info.type||'';
+  document.getElementById('mv-imo').value=info.imo||'';
+  document.getElementById('mv-yard').value=info.shipyard||'';
   document.getElementById('mv-class').value=info.classSociety||'';
-  document.getElementById('mv-in').value=info.dockIn||'';document.getElementById('mv-in-txt').value=info.dockIn||'';
-  document.getElementById('mv-out').value=info.dockOut||'';document.getElementById('mv-out-txt').value=info.dockOut||'';
+  // 4개 날짜
+  const setDate=(txtId, pickId, val)=>{
+    const t=document.getElementById(txtId), p=document.getElementById(pickId);
+    if(t) t.value=val||''; if(p) p.value=val||'';
+  };
+  setDate('mv-berthing-txt','mv-berthing', info.berthingDate);
+  setDate('mv-in-txt',      'mv-in',       info.dockIn);
+  setDate('mv-out-txt',     'mv-out',      info.dockOut);
+  setDate('mv-departure-txt','mv-departure',info.departureDate);
   calcVesselDuration();
-  document.getElementById('mv-grt').value=info.grt||'';openM('m-vessel');
+  document.getElementById('mv-grt').value=info.grt||'';
+  openM('m-vessel');
 }
 async function saveVessel(){
   const name=document.getElementById('mv-name').value.trim();
   if(!name){toast('Vessel name is required',true);return;}
-  const payload={name,type:document.getElementById('mv-type').value.trim(),imo:document.getElementById('mv-imo').value.trim(),shipyard:document.getElementById('mv-yard').value.trim(),classSociety:document.getElementById('mv-class').value.trim(),dockIn:document.getElementById('mv-in').value||document.getElementById('mv-in-txt').value.trim(),dockOut:document.getElementById('mv-out').value||document.getElementById('mv-out-txt').value.trim(),duration:document.getElementById('mv-dur').value,grt:document.getElementById('mv-grt').value.trim()};
+  const gv=id=>(document.getElementById(id)||{}).value||'';
+  const payload={
+    name,
+    type:       gv('mv-type').trim(),
+    imo:        gv('mv-imo').trim(),
+    shipyard:   gv('mv-yard').trim(),
+    classSociety: gv('mv-class').trim(),
+    berthingDate:  gv('mv-berthing') || gv('mv-berthing-txt').trim(),
+    dockIn:        gv('mv-in')       || gv('mv-in-txt').trim(),
+    dockOut:       gv('mv-out')      || gv('mv-out-txt').trim(),
+    departureDate: gv('mv-departure')|| gv('mv-departure-txt').trim(),
+    duration: gv('mv-dur'),
+    grt:      gv('mv-grt').trim()
+  };
   setSS('saving');
   try{
     if(!eVesselNew&&VID){
