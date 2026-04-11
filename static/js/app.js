@@ -2968,8 +2968,8 @@ function _discRow(d, items) {
     <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
     <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
     <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
-    <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;max-width:200px;white-space:pre-line">${d.description||'—'}</span></td>
-    <td data-label="Action"><div style="font-size:12px;max-width:180px;cursor:pointer" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
+    <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;min-width:220px;max-width:320px;white-space:pre-line;line-height:1.6;padding:4px 0">${d.description||'—'}</span></td>
+    <td data-label="Action"><div style="font-size:12px;min-width:260px;max-width:360px;cursor:pointer;padding:4px 0;line-height:1.6" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
     <td data-label="Priority">${priHtml}</td>
     <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
       <span class="c-badge ${stCls}">${stLbl}</span>
