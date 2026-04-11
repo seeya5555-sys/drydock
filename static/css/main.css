@@ -955,3 +955,77 @@ textarea.form-ctrl { min-height:80px; resize:vertical; line-height:1.5; }
 .docs-file-actions { display:flex; gap:4px; flex-shrink:0; }
 .docs-file-actions button { padding:3px 7px; font-size:11px; }
 .docs-empty { text-align:center; padding:20px 12px; color:var(--txt-m); font-size:12px; }
+
+/* ══ UI/UX 개선 추가 스타일 ══════════════════════════════ */
+
+/* ① Tracking 서브탭 (nav 아래 가로 행) */
+.tracking-subnav {
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  background: #f1f5f9;
+  border-bottom: 1.5px solid var(--border);
+  padding: 0 24px;
+  position: sticky;
+  top: 112px;
+  z-index: 190;
+}
+.tracking-subnav.open { display: flex; }
+.tracking-sub-btn {
+  padding: 10px 15px;
+  background: transparent; border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--txt-s); font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+  margin-bottom: -1.5px;
+}
+.tracking-sub-btn:hover { color: var(--navy); border-bottom-color: var(--border-dark); }
+.tracking-sub-btn.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+.vnav-tracking-trigger.active { color: var(--blue) !important; border-bottom-color: var(--blue) !important; font-weight: 600 !important; }
+
+/* ② Avatar 드롭다운 */
+.avatar-wrap { position: relative; }
+.avatar-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 13px; font-weight: 700;
+  user-select: none; flex-shrink: 0;
+  transition: opacity .15s;
+}
+.avatar-btn:hover { opacity: .85; }
+.avatar-menu {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0;
+  background: #ffffff; border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.2);
+  z-index: 300; min-width: 186px; overflow: hidden;
+}
+.avatar-menu.open { display: block; }
+.avatar-menu-user {
+  padding: 10px 16px; font-size: 12px; color: #5a7192;
+  border-bottom: 1px solid var(--border); background: #f4f6f9;
+}
+.avatar-menu-item {
+  display: block; width: 100%; padding: 10px 16px;
+  background: none; border: none; text-align: left;
+  font-size: 13px; font-family: inherit; color: #0f2a4a;
+  cursor: pointer; text-decoration: none; transition: background .12s;
+}
+.avatar-menu-item:hover { background: #f4f6f9; }
+.avatar-menu-sep { height: 1px; background: var(--border); }
+
+/* ③ Quick Filter 버튼 */
+.qf-bar {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 6px 0 4px;
+}
+.qf-btn {
+  font-size: 12px; padding: 4px 12px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--bg-white);
+  color: var(--txt-s); cursor: pointer; font-family: inherit;
+  transition: all .15s; white-space: nowrap;
+}
+.qf-btn:hover { border-color: var(--blue); color: var(--blue); background: #eff6ff; }
+.qf-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+#qf-d-today:hover { border-color: var(--green); color: var(--green); background: #f0fdf4; }
