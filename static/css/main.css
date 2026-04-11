@@ -177,9 +177,9 @@ main { padding:28px; max-width:1680px; margin:0 auto; }
 .vc-date-item b { color:var(--txt-h); }
 
 .status-badge {
-  position:absolute; top:44px; right:18px;
+  position: relative; display: inline-block;
   font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:.8px;
-  padding:4px 10px; border-radius:20px;
+  padding:4px 10px; border-radius:20px; white-space:nowrap;
 }
 .sb-dock   { background:var(--amber-bg); color:var(--amber); border:1px solid #fcd34d; }
 .sb-wet    { background:#eff6ff; color:#1d6fdb; border:1px solid #93c5fd; }
