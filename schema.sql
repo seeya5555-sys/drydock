@@ -12,8 +12,10 @@ CREATE TABLE IF NOT EXISTS vessels (
     imo           TEXT,
     shipyard      TEXT,
     class_society TEXT,
+    berthing_date TEXT,
     dock_in       TEXT,
     dock_out      TEXT,
+    departure_date TEXT,
     duration      INTEGER,
     grt           TEXT,
     created_at    TEXT DEFAULT (datetime('now'))
