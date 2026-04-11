@@ -629,7 +629,16 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-lbl">Dock In Date</label>
+          <label class="form-lbl">Berthing Date <span style="font-size:10px;color:var(--txt-m)">조선소 도착일</span></label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mv-berthing-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-berthing-txt','mv-berthing');calcVesselDuration()">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mv-berthing" onchange="document.getElementById('mv-berthing-txt').value=this.value;calcVesselDuration()">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Dock In Date <span style="font-size:10px;color:var(--txt-m)">상가일자</span></label>
           <div class="date-combo">
             <input class="form-ctrl" id="mv-in-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-in-txt','mv-in');calcVesselDuration()">
             <div class="cal-btn" title="캘린더로 선택">📅
@@ -637,12 +646,23 @@
             </div>
           </div>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
-          <label class="form-lbl">Dock Out Date</label>
+          <label class="form-lbl">Dock Out Date <span style="font-size:10px;color:var(--txt-m)">하가일자</span></label>
           <div class="date-combo">
             <input class="form-ctrl" id="mv-out-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-out-txt','mv-out');calcVesselDuration()">
             <div class="cal-btn" title="캘린더로 선택">📅
               <input type="date" id="mv-out" onchange="document.getElementById('mv-out-txt').value=this.value;calcVesselDuration()">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Departure Date <span style="font-size:10px;color:var(--txt-m)">조선소 출항일</span></label>
+          <div class="date-combo">
+            <input class="form-ctrl" id="mv-departure-txt" placeholder="YYYY-MM-DD" oninput="syncDatePicker('mv-departure-txt','mv-departure');calcVesselDuration()">
+            <div class="cal-btn" title="캘린더로 선택">📅
+              <input type="date" id="mv-departure" onchange="document.getElementById('mv-departure-txt').value=this.value;calcVesselDuration()">
             </div>
           </div>
         </div>
