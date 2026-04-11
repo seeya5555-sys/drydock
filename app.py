@@ -88,6 +88,12 @@ with app.app_context():
         db.execute("ALTER TABLE vessels ADD COLUMN dc_rate REAL DEFAULT 0")
     except:
         pass
+    # 신규 날짜 컬럼 추가 (없으면)
+    for col in ['berthing_date', 'departure_date']:
+        try:
+            db.execute(f"ALTER TABLE vessels ADD COLUMN {col} TEXT")
+        except:
+            pass
     db.commit()
     db = get_db()
     # Documents 테이블 생성
@@ -188,7 +194,9 @@ def to_vessel(r):
             "type": r["type"] or "", "imo": r["imo"] or "",
             "shipyard": r["shipyard"] or "",
             "classSociety": r["class_society"] or "",
+            "berthingDate": r["berthing_date"] or "",
             "dockIn": r["dock_in"] or "", "dockOut": r["dock_out"] or "",
+            "departureDate": r["departure_date"] or "",
             "duration": r["duration"] or "", "grt": r["grt"] or "",
             "dcRate": r["dc_rate"] if r["dc_rate"] is not None else 0}
 
@@ -352,11 +360,13 @@ def create_vessel():
     vid = d.get("id") or f"v_{os.urandom(4).hex()}"
     db = get_db()
     db.execute(
-        "INSERT INTO vessels(id,name,type,imo,shipyard,class_society,dock_in,dock_out,duration,grt)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO vessels(id,name,type,imo,shipyard,class_society,berthing_date,dock_in,dock_out,departure_date,duration,grt)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (vid, d.get("name",""), d.get("type",""), d.get("imo",""),
          d.get("shipyard",""), d.get("classSociety",""),
+         d.get("berthingDate") or None,
          d.get("dockIn") or None, d.get("dockOut") or None,
+         d.get("departureDate") or None,
          d.get("duration") or None, d.get("grt","")))
     db.commit()
     return jsonify(to_vessel(row("SELECT * FROM vessels WHERE id=?", vid))), 201
@@ -367,10 +377,12 @@ def update_vessel(vid):
     db = get_db()
     db.execute(
         "UPDATE vessels SET name=?,type=?,imo=?,shipyard=?,class_society=?,"
-        "dock_in=?,dock_out=?,duration=?,grt=? WHERE id=?",
+        "berthing_date=?,dock_in=?,dock_out=?,departure_date=?,duration=?,grt=? WHERE id=?",
         (d.get("name",""), d.get("type",""), d.get("imo",""),
          d.get("shipyard",""), d.get("classSociety",""),
+         d.get("berthingDate") or None,
          d.get("dockIn") or None, d.get("dockOut") or None,
+         d.get("departureDate") or None,
          d.get("duration") or None, d.get("grt",""), vid))
     db.commit()
     v = row("SELECT * FROM vessels WHERE id=?", vid)
