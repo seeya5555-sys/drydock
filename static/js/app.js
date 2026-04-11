@@ -264,9 +264,9 @@ function renderFleet(){
     return`<div class="vessel-card" onclick="openVessel('${id}')">
       <div class="vc-stripe ${stripeCls}"></div>
       <div class="vc-top">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          ${ddayBadge||`<span></span>`}
           <span class="status-badge ${badgeCls}">${st}</span>
-          ${ddayBadge}
         </div>
         <div class="vc-name">${info.name}</div>
         ${info.type?`<div class="vc-type">${info.type}</div>`:''}
