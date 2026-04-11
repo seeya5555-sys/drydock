@@ -240,7 +240,7 @@ function renderFleet(){
       } else {
         ddColor = '#1d6fdb'; ddText = `D-${diff}`;
       }
-      ddayBadge = `<div style="position:absolute;top:10px;right:12px;background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:13px;font-weight:700;padding:3px 10px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">${ddText}</div>`;
+      ddayBadge = `<div style="background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:12px;font-weight:700;padding:2px 9px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;white-space:nowrap">${ddText}</div>`;
     }
 
     // Duration: Dock In ~ Dock Out (상가~하가)
@@ -262,20 +262,30 @@ function renderFleet(){
     }
 
     return`<div class="vessel-card" onclick="openVessel('${id}')" style="position:relative">
-      ${ddayBadge}
       <div class="vc-stripe ${stripeCls}"></div>
       <div class="vc-top">
-        <div class="vc-name" style="padding-right:${ddayBadge?'80px':'0'}">${info.name}</div>
-        ${info.type?`<div class="vc-type">${info.type}</div>`:''}
-        <div class="vc-meta">
-          ${info.shipyard?`<div class="vc-meta-item"><b>${info.shipyard}</b></div>`:''}
-          ${info.berthingDate?`<div class="vc-meta-item">Berthing: <b>${info.berthingDate}</b></div>`:''}
-          ${info.dockIn?`<div class="vc-meta-item">Dock In: <b>${info.dockIn}</b></div>`:''}
-          ${info.dockOut?`<div class="vc-meta-item">Dock Out: <b>${info.dockOut}</b></div>`:''}
-          ${info.departureDate?`<div class="vc-meta-item">Departure: <b>${info.departureDate}</b></div>`:''}
-          ${elapsedTag?`<div class="vc-meta-item">${elapsedTag}</div>`:''}
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div>
+            <div class="vc-name">${info.name}</div>
+            ${info.type?`<div class="vc-type">${info.type}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <div class="status-badge ${badgeCls}">${st}</div>
+            ${ddayBadge}
+          </div>
         </div>
-        <div class="status-badge ${badgeCls}">${st}</div>
+        <div class="vc-meta" style="margin-top:8px">
+          ${info.shipyard?`<div class="vc-meta-item" style="margin-bottom:4px"><b>${info.shipyard}</b></div>`:''}
+          <div class="vc-meta-row">
+            ${info.berthingDate?`<span class="vc-date-item">Berthing: <b>${info.berthingDate}</b></span>`:''}
+            ${info.dockIn?`<span class="vc-date-item">Dock In: <b>${info.dockIn}</b></span>`:''}
+          </div>
+          <div class="vc-meta-row">
+            ${info.dockOut?`<span class="vc-date-item">Dock Out: <b>${info.dockOut}</b></span>`:''}
+            ${info.departureDate?`<span class="vc-date-item">Departure: <b>${info.departureDate}</b></span>`:''}
+          </div>
+          ${elapsedTag?`<div style="margin-top:4px">${elapsedTag}</div>`:''}
+        </div>
       </div>
       <div class="vc-body">
         <div class="vc-prog-row">
