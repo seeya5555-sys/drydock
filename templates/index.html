@@ -23,10 +23,19 @@
   </div>
   <div class="header-r">
     <div class="save-pill synced" id="savePill">● SYNCED</div>
-    <div class="live-pill"><div class="live-dot"></div>LIVE</div>
     <div class="today-label" id="todayLbl"></div>
-    <button class="btn-sec" onclick="openUserMgmt()" style="font-size:11px;padding:5px 10px" title="사용자 관리">👤 계정</button>
-    <a href="/logout" class="btn-sec" style="font-size:11px;padding:5px 10px;text-decoration:none;color:inherit">🚪 로그아웃</a>
+    <div class="avatar-wrap" id="avatarWrap">
+      <div class="avatar-btn" id="avatarBtn" onclick="toggleAvatarMenu()" title="계정 메뉴">
+        <span id="avatarInitial">A</span>
+      </div>
+      <div class="avatar-menu" id="avatarMenu">
+        <div class="avatar-menu-user" id="avatarMenuUser">—</div>
+        <button class="avatar-menu-item" id="avatarUserMgmtItem" onclick="closeAvatarMenu();openUserMgmt()">👤 사용자 관리</button>
+        <button class="avatar-menu-item" onclick="closeAvatarMenu();openUserMgmt()">🔑 비밀번호 변경</button>
+        <div class="avatar-menu-sep"></div>
+        <a href="/logout" class="avatar-menu-item" style="text-decoration:none">🚪 로그아웃</a>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -65,17 +74,22 @@
     <button class="vnav-btn" onclick="showTab('calendar',this)">📅 Calendar</button>
     <button class="vnav-btn" onclick="showTab('documents',this)">📁 Documents</button>
     <span class="vnav-sep"></span>
-    <button class="vnav-btn" onclick="showTab('steel',this)">Steel Repair</button>
-    <button class="vnav-btn" onclick="showTab('outfit',this)">Outfitting</button>
-    <button class="vnav-btn" onclick="showTab('wbt',this)">WBT &amp; COT</button>
-    <button class="vnav-btn" onclick="showTab('fan',this)">Portable Fan</button>
-    <button class="vnav-btn" onclick="showTab('staging',this)">Staging</button>
-    <button class="vnav-btn" onclick="showTab('gasfree',this)">Gas Free</button>
+    <button class="vnav-btn vnav-tracking-trigger" id="trackingTriggerBtn" onclick="toggleTrackingMenu(this)">Tracking ▾</button>
     <div class="vnav-actions">
       <button class="btn-sec" onclick="printCurrentTab()" style="font-size:12px;padding:6px 12px">🖨 Print</button>
       <button class="btn-edit" onclick="openVesselEditModal()">✎ Edit Info</button>
       <button class="btn-back" onclick="goFleet()">← Fleet</button>
     </div>
+  </div><!-- /vessel-nav -->
+
+  <!-- Tracking 서브탭 행 -->
+  <div class="tracking-subnav" id="trackingMenu">
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('steel',this)">Steel Repair</button>
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('outfit',this)">Outfitting</button>
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('wbt',this)">WBT &amp; COT</button>
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('fan',this)">Portable Fan</button>
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('staging',this)">Staging</button>
+    <button class="tracking-sub-btn" onclick="pickTrackingTab('gasfree',this)">Gas Free</button>
   </div>
 
   <!-- Dashboard -->
@@ -134,6 +148,12 @@
         <button class="btn-add" onclick="openJobModal(null)">+ Add Job</button>
       </div>
     </div>
+    <div class="qf-bar">
+      <button class="qf-btn" id="qf-j-wip" onclick="toggleQF('j','wip')">⚙ In Progress</button>
+      <button class="qf-btn" id="qf-j-ns" onclick="toggleQF('j','ns')">○ Not Started</button>
+      <button class="qf-btn" id="qf-j-done" onclick="toggleQF('j','done')">✓ Completed</button>
+      <button class="qf-btn" id="qf-j-novendor" onclick="toggleQF('j','novendor')">❓ No Vendor</button>
+    </div>
     <div class="filter-bar">
       <input type="text" class="fi" id="j-q" placeholder="Search job description or number…" oninput="renderJobs()">
       <select class="fi" id="j-sf" onchange="renderJobs()"><option value="">All Sections</option></select>
@@ -182,6 +202,11 @@
   <!-- Class -->
   <div id="vt-class" class="page"><main>
     <div class="sec-hdr"><div class="sec-title">Class Items</div><button class="btn-add" onclick="openClassModal(null)">+ Add Item</button></div>
+    <div class="qf-bar">
+      <button class="qf-btn" id="qf-c-critical" onclick="toggleQF('c','critical')">🔴 Critical</button>
+      <button class="qf-btn" id="qf-c-urgent" onclick="toggleQF('c','urgent')">🔶 Urgent</button>
+      <button class="qf-btn" id="qf-c-open" onclick="toggleQF('c','open')">📋 Open Only</button>
+    </div>
     <div class="filter-bar">
       <input type="text" class="fi" id="c-q" placeholder="Search findings…" oninput="renderClass()">
       <select class="fi" id="c-sf" onchange="renderClass()"><option value="">All Status</option><option>Open</option><option>Closed</option></select>
@@ -214,6 +239,7 @@
   <div id="vt-daily" class="page"><main>
     <div class="sec-hdr"><div class="sec-title">Daily Log</div><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div>
     <div class="filter-bar">
+      <button class="qf-btn" id="qf-d-today" onclick="jumpToToday()" style="margin-right:4px">📅 Today</button>
       <input type="text" class="fi" id="d-q" placeholder="Search items…" oninput="renderDisc()">
       <select class="fi" id="d-df" onchange="renderDisc()"><option value="">All Dates</option></select>
       <select class="fi" id="d-sf" onchange="renderDisc()"><option value="">All Status</option><option value="Open">Open</option><option value="Close">Closed</option></select>
@@ -239,7 +265,6 @@
       </button>
     </div>
   </main></div>
-</div>
 
   <!-- Calendar -->
   <div id="vt-calendar" class="page"><main>
@@ -440,6 +465,7 @@
       </table>
     </div>
   </main></div>
+</div><!-- /page-vessel -->
 
 <!-- 사용자 관리 Modal -->
 <div class="modal-overlay" id="m-user-mgmt">
