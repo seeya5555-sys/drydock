@@ -123,6 +123,20 @@
       font-size: 11px;
       color: rgba(255,255,255,.4);
     }
+    .footer-contact {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(255,255,255,.28);
+      line-height: 1.7;
+    }
+    .footer-contact a {
+      color: rgba(255,255,255,.45);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,.2);
+      transition: color .15s;
+    }
+    .footer-contact a:hover { color: rgba(255,255,255,.75); }
   </style>
 </head>
 <body>
@@ -130,7 +144,7 @@
     <div class="login-logo">
       <div class="icon">⚓</div>
       <h1>FLEET DRY DOCK MANAGER</h1>
-      <p>TRMT3 Ship Management System</p>
+
     </div>
     <div class="login-card">
       <h2>로그인</h2>
@@ -145,7 +159,11 @@
       </div>
       <button class="login-btn" id="login-btn" onclick="doLogin()">로그인</button>
     </div>
-    <div class="footer-txt">© 2026 손유석 감독 · Sinokor Shipmanagement</div>
+    <div class="footer-txt">© 2026 손유석 감독 · Made by Youseok Son (Mr.)</div>
+    <div class="footer-contact">
+      <div>Contact: You Seok, Son (Mr.) · Technical Superintendent</div>
+      <div><a href="mailto:ysson@sinokor.co.kr">ysson@sinokor.co.kr</a></div>
+    </div>
   </div>
   <script>
     document.getElementById('password').addEventListener('keydown', e => {
