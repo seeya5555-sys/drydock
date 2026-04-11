@@ -286,7 +286,10 @@
   <div id="vt-documents" class="page"><main>
     <div class="sec-hdr" style="margin-bottom:20px">
       <div class="sec-title">📁 Documents</div>
-      <button class="btn-sec" id="docs-toggle-all" onclick="toggleAllDocSections()" style="font-size:12px;padding:5px 12px">▶ 전체 펼치기</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="docs-search" class="fi" placeholder="파일명 검색…" oninput="filterDocs()" style="width:200px">
+        <button class="btn-sec" id="docs-toggle-all" onclick="toggleAllDocSections()" style="font-size:12px;padding:5px 12px">▶ 전체 펼치기</button>
+      </div>
     </div>
     <div id="docs-grid" class="docs-grid"></div>
   </main></div>
