@@ -240,7 +240,7 @@ function renderFleet(){
       } else {
         ddColor = '#1d6fdb'; ddText = `D-${diff}`;
       }
-      ddayBadge = `<div style="position:absolute;top:12px;right:14px;background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:12px;font-weight:700;padding:2px 9px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;white-space:nowrap">${ddText}</div>`;
+      ddayBadge = `<span style="background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:12px;font-weight:700;padding:2px 9px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;white-space:nowrap">${ddText}</span>`;
     }
 
     // Duration: Dock In ~ Dock Out (상가~하가)
@@ -261,13 +261,15 @@ function renderFleet(){
       }
     }
 
-    return`<div class="vessel-card" onclick="openVessel('${id}')" style="position:relative">
+    return`<div class="vessel-card" onclick="openVessel('${id}')">
       <div class="vc-stripe ${stripeCls}"></div>
-      ${ddayBadge}
       <div class="vc-top">
-        <div class="vc-name" style="padding-right:${ddayBadge?'72px':'0'}">${info.name}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span class="status-badge ${badgeCls}">${st}</span>
+          ${ddayBadge}
+        </div>
+        <div class="vc-name">${info.name}</div>
         ${info.type?`<div class="vc-type">${info.type}</div>`:''}
-        <div style="margin-top:6px"><span class="status-badge ${badgeCls}">${st}</span></div>
         <div class="vc-meta" style="margin-top:8px">
           ${info.shipyard?`<div class="vc-meta-item" style="margin-bottom:4px"><b>${info.shipyard}</b></div>`:''}
           <div class="vc-meta-row">
