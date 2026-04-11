@@ -3844,6 +3844,50 @@ function _updateDocsToggleAllBtn() {
   btn.textContent = allCollapsed ? '▶ 전체 펼치기' : '▼ 전체 접기';
 }
 
+function filterDocs() {
+  const q = (document.getElementById('docs-search')?.value||'').toLowerCase().trim();
+  DOC_TYPES.forEach(t => {
+    const typeId = _docTypeId(t.key);
+    const listEl = document.getElementById('docs-list-'+typeId);
+    if(!listEl) return;
+    const items = listEl.querySelectorAll('.docs-file-item');
+    let visibleCount = 0;
+    items.forEach(item => {
+      const name = item.querySelector('.docs-file-name')?.textContent.toLowerCase()||'';
+      const match = !q || name.includes(q);
+      item.style.display = match ? '' : 'none';
+      if(match) visibleCount++;
+    });
+    // 검색 중이면 매칭된 섹션 자동 펼치기
+    const hdr = listEl.previousElementSibling;
+    if(q) {
+      listEl.style.display = 'block';
+      if(hdr){ const arrow=hdr.querySelector('span'); if(arrow) arrow.style.transform='rotate(90deg)'; }
+      _docCollapsed.delete(t.key);
+    }
+    // 검색어 없으면 원래 접힘 상태로
+    if(!q) {
+      const collapsed = _docCollapsed.has(t.key);
+      listEl.style.display = collapsed ? 'none' : 'block';
+      if(hdr){ const arrow=hdr.querySelector('span'); if(arrow) arrow.style.transform=collapsed?'rotate(0deg)':'rotate(90deg)'; }
+    }
+    // empty 메시지 처리
+    let emptyEl = listEl.querySelector('.docs-empty');
+    if(q && visibleCount === 0) {
+      if(!emptyEl){
+        emptyEl = document.createElement('div');
+        emptyEl.className = 'docs-empty';
+        listEl.appendChild(emptyEl);
+      }
+      emptyEl.textContent = `"${q}" 검색 결과 없음`;
+      emptyEl.style.display = '';
+    } else if(emptyEl) {
+      emptyEl.style.display = q ? 'none' : '';
+    }
+  });
+  _updateDocsToggleAllBtn();
+}
+
 function _docTypeId(key) { return key.replace(/\s+/g,'_').toLowerCase(); }
 
 function _docFileItem(f) {
