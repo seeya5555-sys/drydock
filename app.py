@@ -1200,7 +1200,7 @@ def upload_tracking_xlsx(vid):
 # ══ VESSEL DOCUMENTS ══════════════════════════════════════════
 
 DOC_TYPES = ['Shipyard Specification', 'Shipyard Quotation', 'Shipyard Workdone List',
-             'Yard Report', 'Service Report', 'Invoices']
+             'Yard Report', 'Service Report', 'Invoices', 'Reference']
 
 @app.route("/api/vessels/<vid>/documents", methods=["GET"])
 @login_required
@@ -1249,6 +1249,7 @@ def preview_document(did):
     if not r: abort(404)
     return send_file(io.BytesIO(r["data"]), mimetype=r["mimetype"] or "application/octet-stream",
                      as_attachment=False, download_name=r["filename"])
+
 
 @app.route("/api/documents/<int:did>", methods=["DELETE"])
 @login_required
