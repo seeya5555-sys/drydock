@@ -247,7 +247,7 @@ main { padding:28px; max-width:1680px; margin:0 auto; }
 .vb-meta-item { font-family:'IBM Plex Mono',monospace; font-size:11px; color:rgba(255,255,255,.6); letter-spacing:.5px; }
 .vb-meta-item span { color:#fff; font-weight:600; }
 .vb-status-lbl { font-family:'IBM Plex Mono',monospace; font-size:10px; color:rgba(255,255,255,.5); letter-spacing:2px; text-align:right; margin-bottom:4px; }
-.vb-status-val { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; text-align:right; }
+.vb-status-val { font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:2px; text-align:right; white-space:nowrap; }
 
 /* ── STAT CARDS ──────────────────────────────── */
 .stats-row { display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:24px; }
