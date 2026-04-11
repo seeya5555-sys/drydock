@@ -6,6 +6,8 @@ let sKey='number', sDir=1;
 let _budCatExpanded = new Set();    // Dashboard: Budget 카테고리 펼침 상태 (기본 접힘)
 let _clsDateExpanded = new Set();   // Dashboard: Class Items 날짜그룹 펼침 상태 (기본 접힘)
 let _secBudCatExpanded = new Set(); // Dashboard: Budget Consumption 카테고리 펼침 상태 (기본 접힘)
+let _qfJob = null;  // Jobs 퀵필터: 'critical'|'urgent'|'wip'|'novendor'|null
+let _qfCls = null;  // Class 퀵필터: 'critical'|'urgent'|'open'|null
 
 const SK = {
   idx: 'fleet_idx',
@@ -91,22 +93,31 @@ function isViewer() { return CURRENT_USER.role === 'viewer'; }
 function applyRoleUI() {
   const isAdminUser = CURRENT_USER.role === 'admin';
 
-  // admin 아니면 👤 계정 버튼 숨김
-  const userMgmtBtn = document.querySelector('[onclick="openUserMgmt()"]');
-  if(userMgmtBtn) userMgmtBtn.style.display = isAdminUser ? '' : 'none';
+  // 아바타 이니셜 + 사용자명 설정
+  const initial = (CURRENT_USER.username||'?')[0].toUpperCase();
+  const avatarEl = document.getElementById('avatarInitial');
+  if(avatarEl) avatarEl.textContent = initial;
+  const avatarUser = document.getElementById('avatarMenuUser');
+  if(avatarUser) avatarUser.textContent = CURRENT_USER.username + ' (' + (CURRENT_USER.role||'editor') + ')';
 
-  // viewer면 CSS로 쓰기 UI 전체 숨김
-  if(isViewer()) {
+  // 사용자 관리 메뉴 아이템 — admin 아니면 숨김
+  const userMgmtItem = document.getElementById('avatarUserMgmtItem');
+  if(userMgmtItem) userMgmtItem.style.display = isAdminUser ? '' : 'none';
+
+  // viewer면 CSS로 쓰기 UI 전체 숨김 (role이 명시적으로 'viewer'일 때만)
+  if(CURRENT_USER && CURRENT_USER.role === 'viewer') {
     if(!document.getElementById('viewer-style')) {
       const style = document.createElement('style');
       style.id = 'viewer-style';
       style.textContent = `
         .btn-add, .add-btn, .edit-btn, .btn-edit,
-        #j-add-row-btn, .upload-btn, .btn-sec[onclick*="CSV"]:not([onclick*="downloadCSVTemplate"]),
-        .j-toolbar .btn-sec:not([onclick*="downloadCSVTemplate"]), .c-toolbar .btn-sec, .d-toolbar .btn-sec,
+        #j-add-row-btn, .upload-btn,
+        .j-toolbar .btn-sec, .c-toolbar .btn-sec, .d-toolbar .btn-sec,
         button[onclick*="openJobModal(null)"], button[onclick*="openAddVesselModal"],
         button[onclick*="addDiscRow"], button[onclick*="addInlineRow"],
         button[onclick*="uploadJobsCSV"],
+        button[onclick*="csv-upload-input"],
+        button[onclick*="downloadCSVTemplate"],
         button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
         button[onclick*="openTrackingXlsx"]
         { display: none !important; }
@@ -198,6 +209,25 @@ function renderFleet(){
     const stripeCls=st==='IN DOCK'?'amber':st==='COMPLETED'?'green':'grey';
     const badgeCls=st==='IN DOCK'?'sb-dock':st==='COMPLETED'?'sb-done':'sb-plan';
 
+    // D-Day 배지
+    let ddayBadge = '';
+    if(info.dockOut) {
+      const todayD = new Date(); todayD.setHours(0,0,0,0);
+      const dockOutD = new Date(info.dockOut);
+      const diff = Math.round((dockOutD - todayD) / 86400000);
+      let ddColor, ddText;
+      if(st === 'COMPLETED') {
+        ddColor = '#64748b'; ddText = 'DONE';
+      } else if(diff < 0) {
+        ddColor = '#dc2626'; ddText = `D+${Math.abs(diff)}`;
+      } else if(diff <= 7) {
+        ddColor = '#d97706'; ddText = `D-${diff}`;
+      } else {
+        ddColor = '#1d6fdb'; ddText = `D-${diff}`;
+      }
+      ddayBadge = `<div style="position:absolute;top:10px;right:12px;background:${ddColor}18;color:${ddColor};border:1.5px solid ${ddColor}44;font-size:13px;font-weight:700;padding:3px 10px;border-radius:8px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">${ddText}</div>`;
+    }
+
     // Duration 자동계산 + 소요일
     const autoDur = (info.dockIn && info.dockOut)
       ? Math.round((new Date(info.dockOut) - new Date(info.dockIn)) / 86400000) + 1
@@ -214,10 +244,11 @@ function renderFleet(){
       }
     }
 
-    return`<div class="vessel-card" onclick="openVessel('${id}')">
+    return`<div class="vessel-card" onclick="openVessel('${id}')" style="position:relative">
+      ${ddayBadge}
       <div class="vc-stripe ${stripeCls}"></div>
       <div class="vc-top">
-        <div class="vc-name">${info.name}</div>
+        <div class="vc-name" style="padding-right:${ddayBadge?'80px':'0'}">${info.name}</div>
         ${info.type?`<div class="vc-type">${info.type}</div>`:''}
         <div class="vc-meta">
           ${info.shipyard?`<div class="vc-meta-item"><b>${info.shipyard}</b></div>`:''}
@@ -249,11 +280,97 @@ function renderFleet(){
 
 function openVessel(id){
   VID=id;
+  resetQF();
   show('page-vessel');
   showTab('dashboard',document.querySelector('.vnav-btn'));
   setBreadcrumb([{label:'FLEET OVERVIEW',fn:'goFleet()'},{label:FLEET[id].info.name}]);
 }
 function goFleet(){VID=null;renderFleet();}
+
+// ── Avatar 메뉴 ───────────────────────────────────────
+function toggleAvatarMenu() {
+  const menu = document.getElementById('avatarMenu');
+  const isOpen = menu.classList.contains('open');
+  if(isOpen){ menu.classList.remove('open'); return; }
+  menu.classList.add('open');
+  setTimeout(()=>{
+    document.addEventListener('click', function _close(e){
+      if(!e.target.closest('#avatarWrap')){
+        menu.classList.remove('open');
+        document.removeEventListener('click',_close);
+      }
+    });
+  },0);
+}
+function closeAvatarMenu(){ document.getElementById('avatarMenu').classList.remove('open'); }
+
+// ── Tracking 서브탭 (nav 아래 가로 행) ───────────────
+function toggleTrackingMenu(triggerBtn) {
+  const menu = document.getElementById('trackingMenu');
+  const isOpen = menu.classList.contains('open');
+  if(isOpen && document.querySelector('.tracking-sub-btn.active')) return;
+  menu.classList.toggle('open', !isOpen);
+  triggerBtn.classList.toggle('active', !isOpen);
+}
+
+function pickTrackingTab(tab, btn) {
+  document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const trigger = document.getElementById('trackingTriggerBtn');
+  if(trigger) trigger.classList.add('active');
+  showTab(tab, null);
+}
+
+// ── Quick Filter ──────────────────────────────────────
+function toggleQF(type, filter) {
+  if(type==='j'){
+    _qfJob = (_qfJob===filter) ? null : filter;
+    ['wip','ns','done','novendor'].forEach(f=>{
+      const btn=document.getElementById('qf-j-'+f);
+      if(btn) btn.classList.toggle('active', _qfJob===f);
+    });
+    renderJobs();
+  } else if(type==='c'){
+    _qfCls = (_qfCls===filter) ? null : filter;
+    ['critical','urgent','open'].forEach(f=>{
+      const btn=document.getElementById('qf-c-'+f);
+      if(btn) btn.classList.toggle('active', _qfCls===f);
+    });
+    renderClass();
+  }
+}
+
+function resetQF(){
+  _qfJob=null; _qfCls=null;
+  ['wip','ns','done','novendor'].forEach(f=>{
+    const btn=document.getElementById('qf-j-'+f); if(btn) btn.classList.remove('active');
+  });
+  ['critical','urgent','open'].forEach(f=>{
+    const btn=document.getElementById('qf-c-'+f); if(btn) btn.classList.remove('active');
+  });
+}
+
+// ── Jump to Today ─────────────────────────────────────
+function jumpToToday() {
+  const today = fmtD(new Date());
+  const df = document.getElementById('d-df');
+  if(df) df.value = today;
+  const q=document.getElementById('d-q'); if(q) q.value='';
+  const sf=document.getElementById('d-sf'); if(sf) sf.value='';
+  const pf=document.getElementById('d-pf'); if(pf) pf.value='';
+  if(discCollapsed.has(today)) discCollapsed.delete(today);
+  renderDisc();
+  setTimeout(()=>{
+    const headers = document.querySelectorAll('#d-body .disc-date-header td');
+    for(const td of headers){
+      if(td.textContent.includes(today)){
+        td.parentElement.scrollIntoView({behavior:'smooth',block:'start'});
+        return;
+      }
+    }
+  },80);
+  toast('오늘 ('+today+') 항목으로 이동');
+}
 
 // ══ USER MANAGEMENT ═══════════════════════════════════
 async function openUserMgmt() {
@@ -463,7 +580,16 @@ function printCurrentTab() {
 }
 
 function showTab(tab,btn){
+  // 일반 탭 이동 시 tracking 서브탭 닫기
+  if(!['steel','outfit','wbt','fan','staging','gasfree'].includes(tab)) {
+    const menu = document.getElementById('trackingMenu');
+    if(menu) menu.classList.remove('open');
+    document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
+    const trigger = document.getElementById('trackingTriggerBtn');
+    if(trigger) trigger.classList.remove('active');
+  }
   document.querySelectorAll('.vnav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('[id^="vt-"]').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('[id^="vt-"]').forEach(t=>t.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const el=document.getElementById('vt-'+tab);if(el)el.classList.add('active');
@@ -1366,11 +1492,17 @@ function renderJobs(){
     if(sf&&j.section!==sf)return false;if(cf&&j.category!==cf)return false;
     if(vf&&(j.vendor||'')!==vf)return false;
     if(pf==='ns'&&j.completion>0)return false;if(pf==='ip'&&(j.completion===0||j.completion>=100))return false;
-    if(pf==='done'&&j.completion<100)return false;return true;
+    if(pf==='done'&&j.completion<100)return false;
+    // 퀵필터
+    if(_qfJob==='wip'&&(j.completion===0||j.completion>=100))return false;
+    if(_qfJob==='ns'&&j.completion>0)return false;
+    if(_qfJob==='done'&&j.completion<100)return false;
+    if(_qfJob==='novendor'&&(j.vendor||'').trim()!=='')return false;
+    return true;
   });
 
   // 검색/필터 중이면 계층 정렬만, 아니면 트리 구조 표시
-  const isFiltering = q||sf||cf||vf||pf;
+  const isFiltering = q||sf||cf||vf||pf||_qfJob;
   if(isFiltering){
     fil.sort((a,b)=>{
       let av=a[sKey], bv=b[sKey];
@@ -2371,6 +2503,33 @@ function buildGantt(sf,cf,btn){
   document.querySelectorAll('.g-chip').forEach(c=>c.classList.remove('active'));
   if(btn)btn.classList.add('active');else document.querySelector('.g-chip')?.classList.add('active');
   if(!VID)return;
+
+  const jobs_all = FLEET[VID].jobs||[];
+
+  if(sf || cf) {
+    // 필터 적용 시 → 전체 펼침
+    catCollapsed.clear();
+    jobCollapsed.clear();
+    _expandAll = true;
+    const expandBtn = document.getElementById('btn-gantt-expand');
+    if(expandBtn) expandBtn.textContent = '▼ 전체 접기';
+  } else {
+    // All Sections → 대분류만 보이게 (중분류·소분류 전부 접기)
+    catCollapsed.clear();
+    jobCollapsed.clear();
+    _catEverSeen.clear();
+    _expandAll = false;
+    const cats = [...new Set(jobs_all.map(j=>j.category||'Uncategorized'))];
+    cats.forEach(c => {
+      // 중분류(section 그룹) 접기
+      const secs = [...new Set(jobs_all.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
+      secs.forEach(s => catCollapsed.add(c+'::'+s));
+    });
+    // 소분류(개별 job 하위) 접기
+    jobs_all.forEach(j => { if(j.number && hasChildren(j.number, jobs_all)) jobCollapsed.add(j.number); });
+    const expandBtn = document.getElementById('btn-gantt-expand');
+    if(expandBtn) expandBtn.textContent = '▶ 전체 펼치기';
+  }
   const info=FLEET[VID].info;
   const ds=info.dockIn?new Date(info.dockIn):new Date();
   const de=info.dockOut?new Date(info.dockOut):new Date(ds.getTime()+25*86400000);
@@ -2742,6 +2901,10 @@ function renderClass(){
     if(sf&&c.status!==sf)return false;
     if(bf&&!(c.by||'').includes(bf))return false;
     if(pf&&(c.priority||'Normal')!==pf)return false;
+    // 퀵필터
+    if(_qfCls==='critical'&&(c.priority||'Normal')!=='Critical')return false;
+    if(_qfCls==='urgent'&&(c.priority||'Normal')!=='Urgent')return false;
+    if(_qfCls==='open'&&c.status!=='Open')return false;
     return true;
   });
   document.getElementById('c-cnt').textContent=`${fil.length} items`;
