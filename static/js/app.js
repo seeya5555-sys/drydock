@@ -1034,11 +1034,33 @@ function renderActionsCell(actions, legacyAction) {
   const list = Array.isArray(actions) ? actions
     : (legacyAction ? [{date:'', progress:legacyAction, important:false}] : []);
   if (!list.length) return '—';
-  return list.map(r => {
-    const dateSpan = r.date ? `<span class="rm-date">${r.date}</span>` : '';
-    const cls = r.important ? 'rm-text important' : 'rm-text';
-    return `<div class="remark-entry">${dateSpan}<span class="${cls}">${r.progress||''}</span></div>`;
-  }).join('');
+
+  const mkRow = r => {
+    const ds = r.date ? `<span class="rm-date" style="display:inline-block;min-width:72px">${r.date}</span>` : '<span style="display:inline-block;min-width:72px"></span>';
+    const importantStyle = r.important ? 'color:#dc2626;font-weight:700;' : '';
+    return `<div style="display:block;line-height:1.6">${ds}<span style="font-size:12px;${importantStyle}">${r.progress||''}</span></div>`;
+  };
+
+  const last = list[list.length - 1];
+  if (list.length === 1) return mkRow(last);
+
+  const uid = 'ac_' + Math.random().toString(36).slice(2,8);
+
+  const collapsedHtml =
+    `<div style="display:flex;align-items:center;gap:4px;">` +
+    `<span onclick="event.stopPropagation();toggleRemark('${uid}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none">▶</span>` +
+    mkRow(last) +
+    `</div>`;
+
+  const expandedHtml =
+    `<div style="display:flex;align-items:flex-start;gap:4px;">` +
+    `<span onclick="event.stopPropagation();toggleRemark('${uid}')" style="cursor:pointer;font-size:9px;color:var(--txt-m);flex-shrink:0;user-select:none;margin-top:3px">▼</span>` +
+    `<div>${list.map(r => mkRow(r)).join('')}</div>` +
+    `</div>`;
+
+  return `<div id="${uid}" data-open="0"
+    data-c="${encodeURIComponent(collapsedHtml)}"
+    data-e="${encodeURIComponent(expandedHtml)}">${collapsedHtml}</div>`;
 }
 
 // ══ CSV 업로드 ════════════════════════════════════════
