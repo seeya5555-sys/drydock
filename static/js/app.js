@@ -3858,12 +3858,12 @@ function filterDocs() {
       item.style.display = match ? '' : 'none';
       if(match) visibleCount++;
     });
-    // 검색 중이면 매칭된 섹션 자동 펼치기
+    // 검색 중이면 매칭 파일 있는 섹션만 펼치기, 없는 섹션은 접기
     const hdr = listEl.previousElementSibling;
     if(q) {
-      listEl.style.display = 'block';
-      if(hdr){ const arrow=hdr.querySelector('span'); if(arrow) arrow.style.transform='rotate(90deg)'; }
-      _docCollapsed.delete(t.key);
+      const shouldExpand = visibleCount > 0;
+      listEl.style.display = shouldExpand ? 'block' : 'none';
+      if(hdr){ const arrow=hdr.querySelector('span'); if(arrow) arrow.style.transform=shouldExpand?'rotate(90deg)':'rotate(0deg)'; }
     }
     // 검색어 없으면 원래 접힘 상태로
     if(!q) {
