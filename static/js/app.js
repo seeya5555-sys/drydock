@@ -3718,7 +3718,7 @@ async function uploadTrackingXlsx(input){
 
     const resEl = document.getElementById('xlsx-result');
     resEl.style.display='block';
-    resEl.innerHTML=`<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px;font-size:13px;color:var(--green)">✅ 업로드 완료!<br><span style="font-size:12px;color:var(--txt-s)">${summary}</span></div>`;
+    resEl.innerHTML=`<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px;font-size:13px;color:var(--green)">✅ 업로드 완료! (기존 No. 일치 → 덮어쓰기, 신규 → 추가, 빈 시트 → 유지)<br><span style="font-size:12px;color:var(--txt-s)">${summary}</span></div>`;
 
     for(const [apiKey, fKey] of [
       ['outfitting','outfit'],['wbt_cot','wbt'],
