@@ -147,11 +147,11 @@ async function loadAll(){
         imo:'',shipyard:'',classSociety:'',dockIn:'',dockOut:'',duration:'',grt:''
       });
       IDX=[v.id];
-      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set()};
+      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set()};
     } else {
       for(const e of summary){
         const id=e.info.id; IDX.push(id);
-        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],
+        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],
           attachSet: new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`))};
         // secBudget 로드
         (e.secBudget||[]).forEach(sb => {
@@ -606,7 +606,7 @@ function printCurrentTab() {
 
 function showTab(tab,btn){
   // 일반 탭 이동 시 tracking 서브탭 닫기
-  if(!['steel','outfit','wbt','fan','staging','gasfree'].includes(tab)) {
+  if(!['steel','pipe','outfit','wbt','fan','staging','gasfree'].includes(tab)) {
     const menu = document.getElementById('trackingMenu');
     if(menu) menu.classList.remove('open');
     document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
@@ -642,6 +642,7 @@ function showTab(tab,btn){
   if(tab==='class')renderClass();
   if(tab==='daily'){buildDDF();renderDisc();}
   if(tab==='steel')renderTracking('steel');
+  if(tab==='pipe')renderTracking('pipe');
   if(tab==='outfit')renderTracking('outfit');
   if(tab==='wbt')renderTracking('wbt');
   if(tab==='fan')renderTracking('fan');
@@ -3401,11 +3402,19 @@ function toast(msg,isErr=false){
 const TRACKING_CFG = {
   steel: {
     api: 'steel_repair', key: 'steel', tbody: 'steel-body',
-    cols: ['no','description','location','priority','status','start_date','completion_date','remark'],
-    headers: ['No.','Description','Location','Priority','Status','Start Date','Completion','Remark'],
-    widths: ['50px','','120px','90px','120px','130px','130px',''],
+    cols: ['no','position_tank','frame_no','location_detail','type','length_l','width_w','thickness_t','steel_grade','new_weight','space_type','shape','remark','priority','status','start_date','completion_date'],
+    headers: ['No.','Position/Tank','Frame No.','Location','Type','L(mm)','W(mm)','T(mm)','Grade','New Wt(kg)★','Space Type','Shape','Remark','Priority','Status','Start Date','Completion'],
+    widths: ['44px','100px','80px','110px','110px','70px','70px','65px','80px','90px','120px','100px','','80px','105px','95px','95px'],
     priCol: 'priority', statCol: 'status',
-    newRow: ()=>({no:'',description:'',location:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:'',remark:''}),
+    newRow: ()=>({no:'',position_tank:'',frame_no:'',location_detail:'',type:'',length_l:'',width_w:'',thickness_t:'',steel_grade:'',new_weight:'',space_type:'Open Space',shape:'Flat',remark:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:''}),
+  },
+  pipe: {
+    api: 'pipe_repair', key: 'pipe', tbody: 'pipe-body',
+    cols: ['no','system_line','position_tank','frame_no','location_detail','pipe_od','schedule','material','length_m','bend_qty','flange_qty','valve_type','valve_size','valve_qty','remark','priority','status','start_date','completion_date'],
+    headers: ['No.','System/Line','Position/Tank','Frame No.','Location','OD(mm)','Schedule','Material','Length(m)','Bend(pc)','Flange(pc)','Valve Type','V.Size(mm)','V.Qty','Remark','Priority','Status','Start Date','Completion'],
+    widths: ['44px','100px','100px','75px','110px','70px','70px','110px','75px','70px','75px','90px','80px','65px','','80px','105px','95px','95px'],
+    priCol: 'priority', statCol: 'status',
+    newRow: ()=>({no:'',system_line:'',position_tank:'',frame_no:'',location_detail:'',pipe_od:'',schedule:'Sch40',material:'Carbon Steel',length_m:'',bend_qty:'',flange_qty:'',valve_type:'None',valve_size:'',valve_qty:'',remark:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:''}),
   },
   outfit: {
     api: 'outfitting', key: 'outfit', tbody: 'outfit-body',
@@ -3453,9 +3462,27 @@ const TRACKING_CFG = {
 const PRI_OPTS  = ['Normal','Urgent','Critical','On Hold'];
 const PRI_OPTS_LMH = ['Low','Medium','High'];
 const STAT_OPTS = ['Not Started','In Progress','Completed','On Hold'];
+const STEEL_TYPE_OPTS = ['Shell Plate','Stiffener','Longitudinal','Bulb Bar','Angle Bar','Flat Bar','Checked Plate','Web Plate','Other'];
+const STEEL_GRADE_OPTS = ['A','B','AH32','AH36','DH32','EH32','Other'];
+const STEEL_SPACE_OPTS = ['Open Space','Closed Space','DBT / FPT / Oil Tank','Dry Dock (Underwater)'];
+const STEEL_SHAPE_OPTS = ['Flat','Single Curved','Double Curved','Profiled (Bulb/Angle/Bar)'];
+const STEEL_TEST_OPTS  = ['None','UT Gauging','Dye-Check','Vacuum Test','X-Ray','UT Detection'];
+const PIPE_OD_OPTS  = ['25','40','50','65','80','90','100','125','150','200','250','300','350','400','450','500'];
+const PIPE_SCH_OPTS = ['Sch40','Sch80','Other'];
+const PIPE_MAT_OPTS = ['Carbon Steel','Galvanized','Stainless Steel','Hydraulic','Acid Treatment','Other'];
+const PIPE_VALVE_OPTS = ['None','Globe','Gate','Butterfly','Check','Ball'];
+const PIPE_SPACE_OPTS = ['Open Deck / Open Space','Engine Room','Closed Space / Cargo Hold','DBT / WBT / Duct Keel','Oil Tank / Pump Room','Lavatory'];
+const PIPE_RR_OPTS = ['Not Required','Yes - Open/Deck (30%)','Yes - Engine Room (35%)','Yes - Confined Space (40%)'];
 
-// Priority/Status 옵션 인덱스로 전달 (따옴표 충돌 방지)
-const TRACKING_OPTS = { pri: PRI_OPTS, pri_lmh: PRI_OPTS_LMH, stat: STAT_OPTS };
+const TRACKING_OPTS = {
+  pri: PRI_OPTS, pri_lmh: PRI_OPTS_LMH, stat: STAT_OPTS,
+  steel_type: STEEL_TYPE_OPTS, steel_grade: STEEL_GRADE_OPTS,
+  steel_space: STEEL_SPACE_OPTS, steel_shape: STEEL_SHAPE_OPTS,
+  steel_test: STEEL_TEST_OPTS,
+  pipe_od: PIPE_OD_OPTS, pipe_sch: PIPE_SCH_OPTS,
+  pipe_mat: PIPE_MAT_OPTS, pipe_valve: PIPE_VALVE_OPTS,
+  pipe_space: PIPE_SPACE_OPTS, pipe_rr: PIPE_RR_OPTS,
+};
 
 // 데이터 로드 + 렌더
 async function renderTracking(key){
@@ -3474,18 +3501,24 @@ function _renderTrackingTable(key){
   const tbody = document.getElementById(cfg.tbody);
   if(!tbody) return;
 
+  // 컬럼별 select 옵션 키 매핑 (steel/pipe)
+  const SELECT_MAP = {
+    steel: {type:'steel_type', steel_grade:'steel_grade', space_type:'steel_space', shape:'steel_shape', priority:'pri', status:'stat'},
+    pipe:  {schedule:'pipe_sch', material:'pipe_mat', valve_type:'pipe_valve', priority:'pri', status:'stat'},
+  };
+  const selMap = SELECT_MAP[key] || {};
+
   tbody.innerHTML = data.map((row, ri) => {
     const rowId = row.id;
     const cells = cfg.cols.map((col, ci) => {
       const v = row[col] || '';
-      // dateCols 설정이 있으면 우선, 없으면 컬럼명에 date 포함 여부
       const isDate = cfg.dateCols
         ? cfg.dateCols.includes(col)
         : (col.includes('date') || col === 'date');
 
       // Priority 배지
       if(col === cfg.priCol){
-        const priKey = (key === 'steel' || key === 'outfit') ? 'pri_lmh' : 'pri';
+        const priKey = (key==='steel'||key==='pipe') ? 'pri' : (key==='outfit'?'pri_lmh':'pri');
         return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${priKey}')">${priorityBadge(v||'Normal')}</span></td>`;
       }
       // Status 배지
@@ -3493,7 +3526,7 @@ function _renderTrackingTable(key){
         const sc = v==='Completed'?'c-closed':v==='Not Started'||!v?'c-open':'cat-badge cat-sh';
         return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','stat')"><span class="c-badge ${sc}">${v||'Not Started'}</span></span></td>`;
       }
-      // 날짜 컬럼 — 캘린더 버튼 포함
+      // 날짜 컬럼
       if(isDate){
         const dv = v ? String(v).slice(0,10) : '';
         return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap">
@@ -3507,8 +3540,33 @@ function _renderTrackingTable(key){
       if(col === 'no'){
         return `<td data-label="No."><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${v||'—'}</span></td>`;
       }
-      // 기본
-      return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-size:13px;color:var(--txt-b)">${v||'—'}</span></td>`;
+      // select 컬럼 (steel/pipe 전용)
+      if(selMap[col]){
+        const optKey = selMap[col];
+        const dispV = v || '—';
+        // space_type 배지
+        if(col === 'space_type'){
+          const spColor = v.includes('DBT')||v.includes('Oil')?'#f59e0b':v.includes('Engine')||v.includes('Closed')||v.includes('Cargo')?'#6366f1':v.includes('Dry')?'#ef4444':'#64748b';
+          return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:11px;font-weight:600;color:${spColor}">${dispV}</span></td>`;
+        }
+        return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:12px;color:var(--txt-s)">${dispV}</span></td>`;
+      }
+      // new_weight (steel 전용) — 자동계산값, read-only 표시
+      if(col === 'new_weight' && key === 'steel'){
+        const calc = calcSteelWeight(row);
+        const display = calc !== '' ? calc : (v || '—');
+        const isAuto = calc !== '';
+        return `<td data-label="${cfg.headers[ci]}" style="text-align:right">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:${isAuto?'#1D6FDB':'var(--txt-s)'};" title="${isAuto?'자동계산 (L×W×T×8.0/1,000,000)':'수동 입력값'}">${display}</span>
+          ${isAuto?'<span style="font-size:9px;color:#94a3b8;margin-left:2px">kg</span>':''}
+        </td>`;
+      }
+      // 숫자/비용 컬럼 (우측 정렬)
+      if(['length_l','width_w','thickness_t','new_weight','staging_m3','est_cost','actual_charged','length_m','bend_qty','flange_qty','valve_qty','valve_size','pipe_od'].includes(col)){
+        return `<td data-label="${cfg.headers[ci]}" style="text-align:right"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h)">${v||'—'}</span></td>`;
+      }
+      // 기본 텍스트
+      return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-size:12px;color:var(--txt-b)">${v||'—'}</span></td>`;
     });
     return `<tr data-id="${rowId}">${cells.join('')}<td><button class="edit-btn" style="color:var(--red)" onclick="deleteTrackingRow('${key}','${rowId}')">✕</button></td></tr>`;
   }).join('');
@@ -3567,9 +3625,25 @@ function startTrackingEdit(span, key, rowId, col, type, optsOrKey){
   span.replaceWith(inp); inp.focus(); inp.select();
 }
 
+// Steel 중량 자동계산: L(mm) × W(mm) × T(mm) × 8.0 / 1,000,000,000 → ton
+function calcSteelWeight(row) {
+  const l = parseFloat(row.length_l);
+  const w = parseFloat(row.width_w);
+  const t = parseFloat(row.thickness_t);
+  if(isNaN(l) || isNaN(w) || isNaN(t) || l<=0 || w<=0 || t<=0) return '';
+  const ton = l * w * t * 8.0 / 1000000;
+  return ton.toFixed(2);
+}
+
 // 저장
 async function saveTrackingRow(key, id, row){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+
+  // Steel: L/W/T 입력 시 중량 자동계산
+  if(key === 'steel') {
+    const calc = calcSteelWeight(row);
+    if(calc !== '') row.new_weight = calc;
+  }
 
   const cfg = TRACKING_CFG[key];
   setSS('saving');
@@ -3638,7 +3712,7 @@ async function uploadTrackingXlsx(input){
     setSS('synced');
     const imp = data.imported || {};
     const summary = Object.entries({
-      steel_repair:'Steel Repair', outfitting:'Outfitting', wbt_cot:'WBT & COT',
+      outfitting:'Outfitting', wbt_cot:'WBT & COT',
       portable_fan:'Portable Fan', staging:'Staging', gas_free:'Gas Free'
     }).map(([k,label])=>imp[k]!=null?`${label}: <b>${imp[k]}건</b>`:'').filter(Boolean).join(' &nbsp;|&nbsp; ');
 
@@ -3646,8 +3720,10 @@ async function uploadTrackingXlsx(input){
     resEl.style.display='block';
     resEl.innerHTML=`<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px;font-size:13px;color:var(--green)">✅ 업로드 완료!<br><span style="font-size:12px;color:var(--txt-s)">${summary}</span></div>`;
 
-    // 현재 탭 데이터 갱신
-    for(const [apiKey, fKey] of [['steel_repair','steel'],['outfitting','outfit'],['wbt_cot','wbt'],['portable_fan','fan'],['staging','staging'],['gas_free','gasfree']]){
+    for(const [apiKey, fKey] of [
+      ['outfitting','outfit'],['wbt_cot','wbt'],
+      ['portable_fan','fan'],['staging','staging'],['gas_free','gasfree']
+    ]){
       if(imp[apiKey] != null){
         const fresh = await apiFetch(`${API}/vessels/${VID}/${apiKey}`);
         FLEET[VID][fKey] = fresh;
