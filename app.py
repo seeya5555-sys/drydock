@@ -1250,87 +1250,163 @@ def upload_tracking_xlsx(vid):
     # Steel Repair — xlsx 자동 업로드 제외 (직접 입력 전용)
     # Pipe Repair — xlsx 자동 업로드 제외 (직접 입력 전용)
 
+    # ── Upsert 헬퍼 ──────────────────────────────────────────────
+    # 시트가 비어있으면 → 기존 데이터 유지 (skip)
+    # No. 일치 → UPDATE, 신규 No. → INSERT
+    def upsert_tracking(sheet_name, table, no_col, data_rows_fn, insert_fn, update_fn):
+        if sheet_name not in wb.sheetnames:
+            return None
+        ws = wb[sheet_name]
+        rows_in_sheet = data_rows_fn(ws)
+        valid_rows = [r for r in rows_in_sheet if any(v for v in r)]
+        if not valid_rows:
+            return 0  # 시트 비어있음 → 기존 데이터 유지, 0건 처리
+        # 기존 No. 목록 조회
+        existing = {r[no_col]: r['id']
+                    for r in db.execute(
+                        f"SELECT id, {no_col} FROM {table} WHERE vessel_id=? AND {no_col} IS NOT NULL AND {no_col}!=''",
+                        (vid,)).fetchall()}
+        cnt_upsert = 0
+        for r in valid_rows:
+            no_val = insert_fn(r, existing, db, vid)
+            if no_val:
+                cnt_upsert += 1
+        return cnt_upsert
+
     # Outfitting Daily Log
     # Template: A(0)=No, B(1)=Description, C(2)=Location, D(3)=Priority,
     #           E(4)=Start Date, F(5)=Completion, G(6)=Status, H(7)=Remark
     if "Outfitting Daily Log" in wb.sheetnames:
         ws = wb["Outfitting Daily Log"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM outfitting WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 2 and any(v for v in r):
-                db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (vid, val(r[0]), val(r[1]), val(r[2]),
-                     norm_pri(val(r[3])), norm_stat(val(r[6]) if len(r)>6 else ''),
-                     val(r[4]) or None, val(r[5]) or None,
-                     val(r[7]) if len(r)>7 else ''))
+        sheet_rows = get_data_rows(ws, 4)
+        valid_rows = [r for r in sheet_rows if any(v for v in r)]
+        if valid_rows:
+            existing = {str(r['no']): r['id'] for r in db.execute(
+                "SELECT id, no FROM outfitting WHERE vessel_id=? AND no IS NOT NULL AND no!=''", (vid,)).fetchall()}
+            cnt = 0
+            for r in valid_rows:
+                no_val = val(r[0])
+                fields = (val(r[1]), val(r[2]), norm_pri(val(r[3])),
+                          norm_stat(val(r[6]) if len(r)>6 else ''),
+                          val(r[4]) or None, val(r[5]) or None,
+                          val(r[7]) if len(r)>7 else '')
+                if no_val and no_val in existing:
+                    db.execute("""UPDATE outfitting SET description=?,location=?,priority=?,status=?,
+                        start_date=?,completion_date=?,remark=?,last_updated=datetime('now')
+                        WHERE id=?""", fields + (existing[no_val],))
+                else:
+                    db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (vid, no_val) + fields)
                 cnt += 1
-        result["outfitting"] = cnt
+            result["outfitting"] = cnt
+        else:
+            result["outfitting"] = 0
 
     # WBT & COT
     # Template: A(0)=AutoNo, B(1)=No, C(2)=Tank, D(3)=Manhole,
     #           E(4)=OpenDate, F(5)=CloseDate, G(6)=BottomPlugOpen, H(7)=BottomPlugClose, I(8)=Remark
     if "WBT & COT" in wb.sheetnames:
         ws = wb["WBT & COT"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM wbt_cot WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 3 and any(v for v in r):
-                db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]) or None, val(r[5]) or None,
-                     val(r[6]), val(r[7]),
-                     val(r[8]) if len(r)>8 else ''))
+        sheet_rows = get_data_rows(ws, 4)
+        valid_rows = [r for r in sheet_rows if len(r)>=3 and any(v for v in r)]
+        if valid_rows:
+            existing = {str(r['no']): r['id'] for r in db.execute(
+                "SELECT id, no FROM wbt_cot WHERE vessel_id=? AND no IS NOT NULL AND no!=''", (vid,)).fetchall()}
+            cnt = 0
+            for r in valid_rows:
+                no_val = val(r[1])
+                fields = (val(r[2]), val(r[3]),
+                          val(r[4]) or None, val(r[5]) or None,
+                          val(r[6]), val(r[7]),
+                          val(r[8]) if len(r)>8 else '')
+                if no_val and no_val in existing:
+                    db.execute("""UPDATE wbt_cot SET tank_name=?,manhole_status=?,open_date=?,close_date=?,
+                        bottom_plug_open=?,bottom_plug_close=?,remark=?,updated_at=datetime('now')
+                        WHERE id=?""", fields + (existing[no_val],))
+                else:
+                    db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (vid, no_val) + fields)
                 cnt += 1
-        result["wbt_cot"] = cnt
+            result["wbt_cot"] = cnt
+        else:
+            result["wbt_cot"] = 0
 
     # Portable Fan Installation
     # Template: A(0)=AutoNo, B(1)=No, C(2)=Location, D(3)=Qty, E(4)=StartDate, F(5)=StopDate, G(6)=Remark
     if "Portable Fan Installation" in wb.sheetnames:
         ws = wb["Portable Fan Installation"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM portable_fan WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 3 and any(v for v in r):
-                db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]) or None, val(r[5]) or None,
-                     val(r[6]) if len(r)>6 else ''))
+        sheet_rows = get_data_rows(ws, 4)
+        valid_rows = [r for r in sheet_rows if len(r)>=3 and any(v for v in r)]
+        if valid_rows:
+            existing = {str(r['no']): r['id'] for r in db.execute(
+                "SELECT id, no FROM portable_fan WHERE vessel_id=? AND no IS NOT NULL AND no!=''", (vid,)).fetchall()}
+            cnt = 0
+            for r in valid_rows:
+                no_val = val(r[1])
+                fields = (val(r[2]), val(r[3]),
+                          val(r[4]) or None, val(r[5]) or None,
+                          val(r[6]) if len(r)>6 else '')
+                if no_val and no_val in existing:
+                    db.execute("""UPDATE portable_fan SET location=?,qty=?,start_date=?,stop_date=?,
+                        remark=?,updated_at=datetime('now') WHERE id=?""", fields + (existing[no_val],))
+                else:
+                    db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
+                        (vid, no_val) + fields)
                 cnt += 1
-        result["portable_fan"] = cnt
+            result["portable_fan"] = cnt
+        else:
+            result["portable_fan"] = 0
 
     # Staging
     # Template: A(0)=AutoNo, B(1)=No, C(2)=Location/Frame, D(3)=StagingArea, E(4)=Qty, F(5)=Remark
     if "Staging" in wb.sheetnames:
         ws = wb["Staging"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM staging WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 3 and any(v for v in r):
-                db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]), val(r[5]) if len(r)>5 else ''))
+        sheet_rows = get_data_rows(ws, 4)
+        valid_rows = [r for r in sheet_rows if len(r)>=3 and any(v for v in r)]
+        if valid_rows:
+            existing = {str(r['no']): r['id'] for r in db.execute(
+                "SELECT id, no FROM staging WHERE vessel_id=? AND no IS NOT NULL AND no!=''", (vid,)).fetchall()}
+            cnt = 0
+            for r in valid_rows:
+                no_val = val(r[1])
+                fields = (val(r[2]), val(r[3]), val(r[4]),
+                          val(r[5]) if len(r)>5 else '')
+                if no_val and no_val in existing:
+                    db.execute("""UPDATE staging SET location=?,staging_area=?,qty=?,
+                        remark=?,updated_at=datetime('now') WHERE id=?""", fields + (existing[no_val],))
+                else:
+                    db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
+                        (vid, no_val) + fields)
                 cnt += 1
-        result["staging"] = cnt
+            result["staging"] = cnt
+        else:
+            result["staging"] = 0
 
     # Gas Free Certificate
     # Template: A(0)=AutoNo, B(1)=No, C(2)=Tank, D(3)=Certificate, E(4)=Date, F(5)=Remark
     if "Gas Free Certificate" in wb.sheetnames:
         ws = wb["Gas Free Certificate"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM gas_free WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 3 and any(v for v in r):
-                db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]) or None, val(r[5]) if len(r)>5 else ''))
+        sheet_rows = get_data_rows(ws, 4)
+        valid_rows = [r for r in sheet_rows if len(r)>=3 and any(v for v in r)]
+        if valid_rows:
+            existing = {str(r['no']): r['id'] for r in db.execute(
+                "SELECT id, no FROM gas_free WHERE vessel_id=? AND no IS NOT NULL AND no!=''", (vid,)).fetchall()}
+            cnt = 0
+            for r in valid_rows:
+                no_val = val(r[1])
+                fields = (val(r[2]), val(r[3]),
+                          val(r[4]) or None,
+                          val(r[5]) if len(r)>5 else '')
+                if no_val and no_val in existing:
+                    db.execute("""UPDATE gas_free SET tank=?,certificate=?,date=?,
+                        remark=?,updated_at=datetime('now') WHERE id=?""", fields + (existing[no_val],))
+                else:
+                    db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
+                        (vid, no_val) + fields)
                 cnt += 1
-        result["gas_free"] = cnt
+            result["gas_free"] = cnt
+        else:
+            result["gas_free"] = 0
 
     db.commit()
     return jsonify({"success": True, "imported": result}), 201
