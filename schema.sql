@@ -83,17 +83,62 @@ CREATE TABLE IF NOT EXISTS attachments (
     uploaded_at TEXT    DEFAULT (datetime('now'))
 );
 
--- ── Steel Repair ──────────────────────────────────────────
+-- ── Steel Repair (REV2) ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS steel_repair (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     vessel_id       TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
     no              TEXT,
     description     TEXT,
     location        TEXT,
+    position_tank   TEXT,
+    frame_no        TEXT,
+    location_detail TEXT,
+    type            TEXT,
+    length_l        TEXT,
+    width_w         TEXT,
+    thickness_t     TEXT,
+    steel_grade     TEXT,
+    new_weight      TEXT,
+    space_type      TEXT DEFAULT 'Open Space',
+    shape           TEXT DEFAULT 'Flat',
     priority        TEXT DEFAULT 'Normal',
     status          TEXT DEFAULT 'Not Started',
     start_date      TEXT,
     completion_date TEXT,
+    test_required   TEXT DEFAULT 'None',
+    staging_m3      TEXT,
+    est_cost        TEXT,
+    actual_charged  TEXT,
+    remark          TEXT,
+    last_updated    TEXT DEFAULT (datetime('now'))
+);
+
+-- ── Pipe Repair (NEW) ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS pipe_repair (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id       TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+    no              TEXT,
+    system_line     TEXT,
+    position_tank   TEXT,
+    frame_no        TEXT,
+    location_detail TEXT,
+    pipe_od         TEXT,
+    schedule        TEXT DEFAULT 'Sch40',
+    material        TEXT DEFAULT 'Carbon Steel',
+    length_m        TEXT,
+    bend_qty        TEXT,
+    flange_qty      TEXT,
+    valve_type      TEXT DEFAULT 'None',
+    valve_size      TEXT,
+    valve_qty       TEXT,
+    space_type      TEXT DEFAULT 'Open Deck / Open Space',
+    removal_refit   TEXT DEFAULT 'Not Required',
+    priority        TEXT DEFAULT 'Normal',
+    status          TEXT DEFAULT 'Not Started',
+    start_date      TEXT,
+    completion_date TEXT,
+    est_cost        TEXT,
+    actual_charged  TEXT,
     remark          TEXT,
     last_updated    TEXT DEFAULT (datetime('now'))
 );
@@ -174,6 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_disc_date        ON discussions(date);
 CREATE INDEX IF NOT EXISTS idx_attach_ref       ON attachments(vessel_id, ref_type, ref_id);
 CREATE INDEX IF NOT EXISTS idx_outfit_vessel    ON outfitting(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_steel_vessel     ON steel_repair(vessel_id);
+CREATE INDEX IF NOT EXISTS idx_pipe_vessel      ON pipe_repair(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_wbt_vessel       ON wbt_cot(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_fan_vessel       ON portable_fan(vessel_id);
 CREATE INDEX IF NOT EXISTS idx_staging_vessel   ON staging(vessel_id);
