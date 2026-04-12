@@ -94,6 +94,51 @@ with app.app_context():
             db.execute(f"ALTER TABLE vessels ADD COLUMN {col} TEXT")
         except:
             pass
+    # steel_repair REV2 컬럼 추가 (기존 데이터 보존)
+    for col, default in [
+        ('position_tank',   "''"), ('frame_no',       "''"),
+        ('location_detail', "''"), ('type',            "''"),
+        ('length_l',        "''"), ('width_w',         "''"),
+        ('thickness_t',     "''"), ('steel_grade',     "''"),
+        ('new_weight',      "''"), ('space_type',      "'Open Space'"),
+        ('shape',           "'Flat'"), ('test_required', "'None'"),
+        ('staging_m3',      "''"), ('est_cost',        "''"),
+        ('actual_charged',  "''"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE steel_repair ADD COLUMN {col} TEXT DEFAULT {default}")
+        except:
+            pass
+    # pipe_repair 테이블 생성
+    db.execute("""CREATE TABLE IF NOT EXISTS pipe_repair (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        vessel_id       TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+        no              TEXT,
+        system_line     TEXT,
+        position_tank   TEXT,
+        frame_no        TEXT,
+        location_detail TEXT,
+        pipe_od         TEXT,
+        schedule        TEXT DEFAULT 'Sch40',
+        material        TEXT DEFAULT 'Carbon Steel',
+        length_m        TEXT,
+        bend_qty        TEXT,
+        flange_qty      TEXT,
+        valve_type      TEXT DEFAULT 'None',
+        valve_size      TEXT,
+        valve_qty       TEXT,
+        space_type      TEXT DEFAULT 'Open Deck / Open Space',
+        removal_refit   TEXT DEFAULT 'Not Required',
+        priority        TEXT DEFAULT 'Normal',
+        status          TEXT DEFAULT 'Not Started',
+        start_date      TEXT,
+        completion_date TEXT,
+        est_cost        TEXT,
+        actual_charged  TEXT,
+        remark          TEXT,
+        last_updated    TEXT DEFAULT (datetime('now'))
+    )""")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_pipe_vessel ON pipe_repair(vessel_id)")
     db.commit()
     db = get_db()
     # Documents 테이블 생성
@@ -891,10 +936,20 @@ def create_steel_repair(vid):
 def update_steel_repair(rid):
     d = request.get_json(force=True)
     return _tracking_update("steel_repair", rid,
-        "UPDATE steel_repair SET no=?,description=?,location=?,priority=?,status=?,start_date=?,completion_date=?,remark=?,last_updated=datetime('now') WHERE id=?",
-        (d.get("no",""), d.get("description",""), d.get("location",""),
+        """UPDATE steel_repair SET no=?,position_tank=?,frame_no=?,location_detail=?,
+           type=?,length_l=?,width_w=?,thickness_t=?,steel_grade=?,new_weight=?,
+           space_type=?,shape=?,priority=?,status=?,start_date=?,completion_date=?,
+           test_required=?,staging_m3=?,est_cost=?,actual_charged=?,remark=?,
+           last_updated=datetime('now') WHERE id=?""",
+        (d.get("no",""), d.get("position_tank",""), d.get("frame_no",""),
+         d.get("location_detail",""), d.get("type",""),
+         d.get("length_l",""), d.get("width_w",""), d.get("thickness_t",""),
+         d.get("steel_grade",""), d.get("new_weight",""),
+         d.get("space_type","Open Space"), d.get("shape","Flat"),
          d.get("priority","Normal"), d.get("status","Not Started"),
-         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+         d.get("start_date") or None, d.get("completion_date") or None,
+         d.get("test_required","None"), d.get("staging_m3",""),
+         d.get("est_cost",""), d.get("actual_charged",""), d.get("remark","")))
 
 @app.route("/api/steel_repair/<int:rid>", methods=["DELETE"])
 def delete_steel_repair(rid): return _tracking_delete("steel_repair", rid)
@@ -902,11 +957,79 @@ def delete_steel_repair(rid): return _tracking_delete("steel_repair", rid)
 @app.route("/api/vessels/<vid>/steel_repair/bulk", methods=["PUT"])
 def bulk_steel_repair(vid):
     def ins(db, vid, item):
-        db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
-            (vid, item.get("no",""), item.get("description",""), item.get("location",""),
+        db.execute("""INSERT INTO steel_repair
+            (vessel_id,no,position_tank,frame_no,location_detail,type,
+             length_l,width_w,thickness_t,steel_grade,new_weight,
+             space_type,shape,priority,status,start_date,completion_date,
+             test_required,staging_m3,est_cost,actual_charged,remark)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (vid, item.get("no",""), item.get("position_tank",""),
+             item.get("frame_no",""), item.get("location_detail",""), item.get("type",""),
+             item.get("length_l",""), item.get("width_w",""), item.get("thickness_t",""),
+             item.get("steel_grade",""), item.get("new_weight",""),
+             item.get("space_type","Open Space"), item.get("shape","Flat"),
              item.get("priority","Normal"), item.get("status","Not Started"),
-             item.get("start_date") or None, item.get("completion_date") or None, item.get("remark","")))
+             item.get("start_date") or None, item.get("completion_date") or None,
+             item.get("test_required","None"), item.get("staging_m3",""),
+             item.get("est_cost",""), item.get("actual_charged",""), item.get("remark","")))
     return _tracking_bulk("steel_repair", vid, request.get_json(force=True), ins)
+
+
+# ── Pipe Repair ───────────────────────────────────────────────
+def _pipe_row(d):
+    return (d.get("no",""), d.get("system_line",""), d.get("position_tank",""),
+            d.get("frame_no",""), d.get("location_detail",""),
+            d.get("pipe_od",""), d.get("schedule","Sch40"),
+            d.get("material","Carbon Steel"),
+            d.get("length_m",""), d.get("bend_qty",""), d.get("flange_qty",""),
+            d.get("valve_type","None"), d.get("valve_size",""), d.get("valve_qty",""),
+            d.get("space_type","Open Deck / Open Space"),
+            d.get("removal_refit","Not Required"),
+            d.get("priority","Normal"), d.get("status","Not Started"),
+            d.get("start_date") or None, d.get("completion_date") or None,
+            d.get("est_cost",""), d.get("actual_charged",""), d.get("remark",""))
+
+@app.route("/api/vessels/<vid>/pipe_repair", methods=["GET"])
+def get_pipe_repair(vid): return _tracking_get("pipe_repair", vid)
+
+@app.route("/api/vessels/<vid>/pipe_repair", methods=["POST"])
+def create_pipe_repair(vid):
+    d = request.get_json(force=True); db = get_db()
+    cur = db.execute("""INSERT INTO pipe_repair
+        (vessel_id,no,system_line,position_tank,frame_no,location_detail,
+         pipe_od,schedule,material,length_m,bend_qty,flange_qty,
+         valve_type,valve_size,valve_qty,space_type,removal_refit,
+         priority,status,start_date,completion_date,est_cost,actual_charged,remark)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (vid,) + _pipe_row(d))
+    db.commit()
+    return jsonify(dict(get_db().execute("SELECT * FROM pipe_repair WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+
+@app.route("/api/pipe_repair/<int:rid>", methods=["PUT"])
+def update_pipe_repair(rid):
+    d = request.get_json(force=True)
+    return _tracking_update("pipe_repair", rid,
+        """UPDATE pipe_repair SET no=?,system_line=?,position_tank=?,frame_no=?,location_detail=?,
+           pipe_od=?,schedule=?,material=?,length_m=?,bend_qty=?,flange_qty=?,
+           valve_type=?,valve_size=?,valve_qty=?,space_type=?,removal_refit=?,
+           priority=?,status=?,start_date=?,completion_date=?,
+           est_cost=?,actual_charged=?,remark=?,last_updated=datetime('now') WHERE id=?""",
+        _pipe_row(d))
+
+@app.route("/api/pipe_repair/<int:rid>", methods=["DELETE"])
+def delete_pipe_repair(rid): return _tracking_delete("pipe_repair", rid)
+
+@app.route("/api/vessels/<vid>/pipe_repair/bulk", methods=["PUT"])
+def bulk_pipe_repair(vid):
+    def ins(db, vid, item):
+        db.execute("""INSERT INTO pipe_repair
+            (vessel_id,no,system_line,position_tank,frame_no,location_detail,
+             pipe_od,schedule,material,length_m,bend_qty,flange_qty,
+             valve_type,valve_size,valve_qty,space_type,removal_refit,
+             priority,status,start_date,completion_date,est_cost,actual_charged,remark)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (vid,) + _pipe_row(item))
+    return _tracking_bulk("pipe_repair", vid, request.get_json(force=True), ins)
 
 
 # ── Outfitting ────────────────────────────────────────────────
@@ -1077,11 +1200,14 @@ def bulk_gas_free(vid):
 @app.route("/api/tracking/template")
 def download_tracking_template():
     """Daily Tracking Log 템플릿 xlsx 다운로드"""
-    template_path = os.path.join(os.path.dirname(__file__), "static", "templates", "DD_DAILY_LOG_TEMPLATE.xlsx")
+    template_path = os.path.join(os.path.dirname(__file__), "static", "templates", "DD_DAILY_LOG_TEMPLATE_REV2.xlsx")
+    if not os.path.exists(template_path):
+        # fallback to old template name
+        template_path = os.path.join(os.path.dirname(__file__), "static", "templates", "DD_DAILY_LOG_TEMPLATE.xlsx")
     return send_file(template_path,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                      as_attachment=True,
-                     download_name="DD_DAILY_LOG_TEMPLATE.xlsx")
+                     download_name="DD_DAILY_LOG_TEMPLATE_REV2.xlsx")
 
 
 # ── XLSX 통합 업로드 ──────────────────────────────────────────
@@ -1121,87 +1247,88 @@ def upload_tracking_xlsx(vid):
         rows = list(ws.iter_rows(min_row=header_row+1, values_only=True))
         return [r for r in rows if any(v is not None and str(v).strip() for v in r)]
 
-    # Steel Repair
-    if "Steel Repair" in wb.sheetnames:
-        ws = wb["Steel Repair"]
-        data_rows = get_data_rows(ws, 4)
-        db.execute("DELETE FROM steel_repair WHERE vessel_id=?", (vid,))
-        cnt = 0
-        for r in data_rows:
-            if len(r) >= 9 and any(v for v in r):
-                db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (vid, val(r[0]), val(r[1]), val(r[2]),
-                     norm_pri(r[3]), norm_stat(r[4]),
-                     val(r[5]) or None, val(r[6]) or None, val(r[7])))
-                cnt += 1
-        result["steel_repair"] = cnt
+    # Steel Repair — xlsx 자동 업로드 제외 (직접 입력 전용)
+    # Pipe Repair — xlsx 자동 업로드 제외 (직접 입력 전용)
 
     # Outfitting Daily Log
+    # Template: A(0)=No, B(1)=Description, C(2)=Location, D(3)=Priority,
+    #           E(4)=Start Date, F(5)=Completion, G(6)=Status, H(7)=Remark
     if "Outfitting Daily Log" in wb.sheetnames:
         ws = wb["Outfitting Daily Log"]
         data_rows = get_data_rows(ws, 4)
         db.execute("DELETE FROM outfitting WHERE vessel_id=?", (vid,))
         cnt = 0
         for r in data_rows:
-            if len(r) >= 9 and any(v for v in r):
+            if len(r) >= 2 and any(v for v in r):
                 db.execute("INSERT INTO outfitting(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
                     (vid, val(r[0]), val(r[1]), val(r[2]),
-                     norm_pri(r[3]), norm_stat(r[4]),
-                     val(r[5]) or None, val(r[6]) or None, val(r[7])))
+                     norm_pri(val(r[3])), norm_stat(val(r[6]) if len(r)>6 else ''),
+                     val(r[4]) or None, val(r[5]) or None,
+                     val(r[7]) if len(r)>7 else ''))
                 cnt += 1
         result["outfitting"] = cnt
 
     # WBT & COT
+    # Template: A(0)=AutoNo, B(1)=No, C(2)=Tank, D(3)=Manhole,
+    #           E(4)=OpenDate, F(5)=CloseDate, G(6)=BottomPlugOpen, H(7)=BottomPlugClose, I(8)=Remark
     if "WBT & COT" in wb.sheetnames:
         ws = wb["WBT & COT"]
         data_rows = get_data_rows(ws, 4)
         db.execute("DELETE FROM wbt_cot WHERE vessel_id=?", (vid,))
         cnt = 0
         for r in data_rows:
-            if len(r) >= 9 and any(v for v in r):
+            if len(r) >= 3 and any(v for v in r):
                 db.execute("INSERT INTO wbt_cot(vessel_id,no,tank_name,manhole_status,open_date,close_date,bottom_plug_open,bottom_plug_close,remark) VALUES(?,?,?,?,?,?,?,?,?)",
                     (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]) or None, val(r[5]) or None, val(r[6]), val(r[7]), val(r[8])))
+                     val(r[4]) or None, val(r[5]) or None,
+                     val(r[6]), val(r[7]),
+                     val(r[8]) if len(r)>8 else ''))
                 cnt += 1
         result["wbt_cot"] = cnt
 
-    # Portable Fan
+    # Portable Fan Installation
+    # Template: A(0)=AutoNo, B(1)=No, C(2)=Location, D(3)=Qty, E(4)=StartDate, F(5)=StopDate, G(6)=Remark
     if "Portable Fan Installation" in wb.sheetnames:
         ws = wb["Portable Fan Installation"]
         data_rows = get_data_rows(ws, 4)
         db.execute("DELETE FROM portable_fan WHERE vessel_id=?", (vid,))
         cnt = 0
         for r in data_rows:
-            if len(r) >= 7 and any(v for v in r):
+            if len(r) >= 3 and any(v for v in r):
                 db.execute("INSERT INTO portable_fan(vessel_id,no,location,qty,start_date,stop_date,remark) VALUES(?,?,?,?,?,?,?)",
                     (vid, val(r[1]), val(r[2]), val(r[3]),
-                     val(r[4]) or None, val(r[5]) or None, val(r[6])))
+                     val(r[4]) or None, val(r[5]) or None,
+                     val(r[6]) if len(r)>6 else ''))
                 cnt += 1
         result["portable_fan"] = cnt
 
     # Staging
+    # Template: A(0)=AutoNo, B(1)=No, C(2)=Location/Frame, D(3)=StagingArea, E(4)=Qty, F(5)=Remark
     if "Staging" in wb.sheetnames:
         ws = wb["Staging"]
         data_rows = get_data_rows(ws, 4)
         db.execute("DELETE FROM staging WHERE vessel_id=?", (vid,))
         cnt = 0
         for r in data_rows:
-            if len(r) >= 6 and any(v for v in r):
+            if len(r) >= 3 and any(v for v in r):
                 db.execute("INSERT INTO staging(vessel_id,no,location,staging_area,qty,remark) VALUES(?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]), val(r[4]), val(r[5])))
+                    (vid, val(r[1]), val(r[2]), val(r[3]),
+                     val(r[4]), val(r[5]) if len(r)>5 else ''))
                 cnt += 1
         result["staging"] = cnt
 
-    # Gas Free
+    # Gas Free Certificate
+    # Template: A(0)=AutoNo, B(1)=No, C(2)=Tank, D(3)=Certificate, E(4)=Date, F(5)=Remark
     if "Gas Free Certificate" in wb.sheetnames:
         ws = wb["Gas Free Certificate"]
         data_rows = get_data_rows(ws, 4)
         db.execute("DELETE FROM gas_free WHERE vessel_id=?", (vid,))
         cnt = 0
         for r in data_rows:
-            if len(r) >= 6 and any(v for v in r):
+            if len(r) >= 3 and any(v for v in r):
                 db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
-                    (vid, val(r[1]), val(r[2]), val(r[3]), val(r[4]) or None, val(r[5])))
+                    (vid, val(r[1]), val(r[2]), val(r[3]),
+                     val(r[4]) or None, val(r[5]) if len(r)>5 else ''))
                 cnt += 1
         result["gas_free"] = cnt
 
