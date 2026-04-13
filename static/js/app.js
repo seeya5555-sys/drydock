@@ -4562,17 +4562,65 @@ function addTankSection() {
   _layoutEditing.sections.push({id:'sec_'+Date.now(),label:'새 섹션',sublabel:'',columns:[]});
   _renderLayoutEditor();
 }
+// 레이아웃에서 모든 탱크를 {id → name} 맵으로 평탄화
+function _flattenTankNames(layout) {
+  const map = {};
+  (layout.sections||[]).forEach(sec => {
+    (sec.columns||[]).forEach(col => {
+      ['p','c','s'].forEach(f => {
+        const t = col[f];
+        if(t && !t.empty && t.id && t.name) map[t.id] = t.name;
+      });
+    });
+  });
+  return map;
+}
+
 async function saveTankLayoutToDb() {
   setSS('saving');
   try {
-    await apiFetch(`${API}/vessels/${VID}/tank_layout`,'PUT',_layoutEditing);
-    _tankLayout=JSON.parse(JSON.stringify(_layoutEditing));
+    // ── 탱크명 변경 감지 ──────────────────────────────────────
+    const renames = [];
+    if(_tankLayout) {
+      const oldNames = _flattenTankNames(_tankLayout);
+      const newNames = _flattenTankNames(_layoutEditing);
+      for(const [id, newName] of Object.entries(newNames)) {
+        const oldName = oldNames[id];
+        if(oldName && oldName !== newName)
+          renames.push({old: oldName, new: newName});
+      }
+    }
+
+    // ── 레이아웃 저장 ─────────────────────────────────────────
+    await apiFetch(`${API}/vessels/${VID}/tank_layout`, 'PUT', _layoutEditing);
+    _tankLayout = JSON.parse(JSON.stringify(_layoutEditing));
+
+    // ── position_tank 자동 업데이트 ───────────────────────────
+    if(renames.length) {
+      const result = await apiFetch(`${API}/vessels/${VID}/position_rename`, 'PUT', renames).catch(()=>null);
+      const updated = result?.updated || 0;
+      // 메모리 동기화
+      const renameMap = Object.fromEntries(renames.map(r=>[r.old, r.new]));
+      [FLEET[VID]?.steel, FLEET[VID]?.pipe, _tankPlanData, _pipePlanData].forEach(arr => {
+        (arr||[]).forEach(item => {
+          if(item.position_tank && renameMap[item.position_tank])
+            item.position_tank = renameMap[item.position_tank];
+        });
+      });
+      const names = renames.map(r=>`"${r.old}"→"${r.new}"`).join(', ');
+      toast(`저장 완료 · ${names}${updated?' · DB '+updated+'건 자동 업데이트':''}`);
+    } else {
+      toast('레이아웃이 저장됐습니다');
+    }
+
     setSS('synced');
     closeM('m-tank-layout');
-    const wrap=document.getElementById('tank-svg-wrap');
-    if(wrap) { const _cf=_makeColFn(_tankPlanData,'#dbeafe','#3b82f6','#1d4ed8'); wrap.innerHTML=_svgFromLayout(_tankLayout,'openTankModal',_cf); }
-    toast('레이아웃이 저장됐습니다');
-  } catch(e){setSS('error');toast('저장 실패: '+e.message,true);}
+    const tw = document.getElementById('tank-svg-wrap');
+    if(tw) tw.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', _tankCol);
+    const pw = document.getElementById('pipe-svg-wrap');
+    if(pw) pw.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', _pipePlanCol);
+
+  } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
 }
 
 // ══ PIPE PLAN ═════════════════════════════════════════════════
