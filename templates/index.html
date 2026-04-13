@@ -588,7 +588,10 @@
   <!-- ── Steel Repair ──────────────────────────────────────────── -->
   <div id="vt-steel" class="page"><main>
     <div class="sec-hdr">
-      <div style="display:flex;gap:8px;">
+      <div class="sec-title">Steel Repair</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-sec" style="font-size:11px" onclick="expandAllTrackingGroups('steel')">▼ 전체 펼치기</button>
+        <button class="btn-sec" style="font-size:11px" onclick="collapseAllTrackingGroups('steel')">▶ 전체 접기</button>
         <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
         <button class="btn-add" onclick="addTrackingRow('steel')">+ Add Row</button>
       </div>
@@ -623,7 +626,9 @@
   <div id="vt-pipe" class="page"><main>
     <div class="sec-hdr">
       <div class="sec-title">Pipe Repair</div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-sec" style="font-size:11px" onclick="expandAllTrackingGroups('pipe')">▼ 전체 펼치기</button>
+        <button class="btn-sec" style="font-size:11px" onclick="collapseAllTrackingGroups('pipe')">▶ 전체 접기</button>
         <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
         <button class="btn-add" onclick="addTrackingRow('pipe')">+ Add Row</button>
       </div>
