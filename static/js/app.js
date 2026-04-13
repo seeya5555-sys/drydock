@@ -3496,21 +3496,12 @@ async function renderTracking(key){
     FLEET[VID][cfg.key] = data;
   } catch(e) { toast('로드 실패: '+e.message, true); return; }
 
-  // steel/pipe: 첫 로드 시 전체 접힌 상태로 시작 (바로가기 중에는 현재 상태 유지)
+  // steel/pipe: 첫 로드 시에만 전체 접힌 상태로 초기화 (이미 상태 있으면 유지)
   if((key === 'steel' || key === 'pipe') && !_trackingGroupCollapsed[key]) {
     const d = FLEET[VID][cfg.key] || [];
     _trackingGroupCollapsed[key] = new Set(
       d.map(r => (r.position_tank || '').trim() || '(미지정)')
     );
-  } else if((key === 'steel' || key === 'pipe') && _highlightRowKey === key) {
-    // 바로가기로 이동 중: 새 데이터로 그룹 재구성하되 펼친 그룹은 유지
-    const d = FLEET[VID][cfg.key] || [];
-    const allGroups = new Set(d.map(r => (r.position_tank||'').trim()||'(미지정)'));
-    const existing  = _trackingGroupCollapsed[key];
-    // 새로 생긴 그룹은 접힌 상태로 추가, 기존 상태는 유지
-    allGroups.forEach(g => { if(!existing.has(g)) existing.add(g); });
-    // 더 이상 없는 그룹 제거
-    [...existing].forEach(g => { if(!allGroups.has(g)) existing.delete(g); });
   }
 
   _renderTrackingTable(key);
