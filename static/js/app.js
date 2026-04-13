@@ -3686,7 +3686,7 @@ function _renderGroupedTrackingTable(key, cfg, data, tbody) {
       if(!row) return;
       row.scrollIntoView({behavior:'smooth', block:'center'});
       row.style.transition = 'background .2s';
-      row.style.background = key === 'pipe' ? '#d1fae5' : '#fffbeb';
+      row.style.background = '#fecaca';  // 연한 빨강
       setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
     });
   }
@@ -4117,8 +4117,30 @@ async function renderTankPlan() {
   const total=_tankPlanData.length, cr=_tankPlanData.filter(i=>i.priority==='Critical').length;
   const ug=_tankPlanData.filter(i=>i.priority==='Urgent').length;
   const tnks=new Set(_tankPlanData.map(i=>i.position_tank).filter(Boolean)).size;
+
+  // 총 강재량 계산 (new_weight 우선, 없으면 L×W×T 자동계산)
+  let totalKg = 0, itemsWithWeight = 0;
+  _tankPlanData.forEach(i => {
+    const wt = parseFloat(i.new_weight) || parseFloat(calcSteelWeight(i)) || 0;
+    if(wt > 0) { totalKg += wt; itemsWithWeight++; }
+  });
+  const totalTon = (totalKg / 1000).toFixed(3);
+  const weightStr = totalKg >= 1000
+    ? `<b style="color:#1d4ed8;font-size:14px">${totalTon}</b> <span style="font-size:11px">T</span>`
+    : `<b style="color:#1d4ed8;font-size:14px">${totalKg.toFixed(1)}</b> <span style="font-size:11px">kg</span>`;
+  const weightNote = itemsWithWeight < total
+    ? `<span style="font-size:10px;color:#94a3b8">(${itemsWithWeight}/${total}건 집계)</span>` : '';
+
   const st=document.getElementById('tank-plan-stats');
-  if(st) st.innerHTML=`전체 <b>${total}</b>건 · 탱크 <b>${tnks}</b>개 · <span style="color:#fca5a5">🔴 Critical <b>${cr}</b></span> · <span style="color:#fde68a">🟡 Urgent <b>${ug}</b></span>`;
+  if(st) st.innerHTML=`
+    <span style="display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:4px 10px;margin-right:8px">
+      ⚖ 총 강재량 ${weightStr} ${weightNote}
+    </span>
+    <span style="font-size:12px;color:var(--txt-s)">
+      전체 <b>${total}</b>건 · <b>${tnks}</b>개 구역
+      ${cr ? ` · <span style="color:#ef4444">🔴 <b>${cr}</b></span>` : ''}
+      ${ug ? ` · <span style="color:#f59e0b">🟡 <b>${ug}</b></span>` : ''}
+    </span>`;
 }
 
 // ── Tank Modal ────────────────────────────────────────────────
