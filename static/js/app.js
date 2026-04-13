@@ -120,7 +120,8 @@ function applyRoleUI() {
         button[onclick*="downloadCSVTemplate"],
         button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
         button[onclick*="openTrackingXlsx"],
-        button[onclick*="showTankAddForm"], button[onclick*="saveTankItem"]
+        button[onclick*="showTankAddForm"], button[onclick*="saveTankItem"],
+        button[onclick*="openTankLayoutEditor"], button[onclick*="openOrphanRecovery"]
         { display: none !important; }
         .cell-edit { pointer-events: none !important; cursor: default !important; }
         .tracking-date-cell input, .tracking-date-cell select
@@ -4957,6 +4958,102 @@ async function savePipeItem() {
     });
     toast('Pipe Repair 항목이 추가됐습니다');
   } catch(e){setSS('error');toast('추가 실패: '+e.message,true);}
+}
+
+// ── 데이터 복구 (Orphan Position Recovery) ───────────────────
+async function openOrphanRecovery() {
+  if(!VID) return;
+  document.getElementById('m-orphan-body').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--txt-m)">조회 중…</div>';
+  openM('m-orphan');
+
+  const orphans = await apiFetch(`${API}/vessels/${VID}/orphan_positions`).catch(()=>({}));
+
+  // 현재 레이아웃 탱크명 목록
+  const layoutNames = [];
+  (_tankLayout?.sections||[]).forEach(sec =>
+    (sec.columns||[]).forEach(col =>
+      ['p','c','s'].forEach(f => {
+        const t = col[f];
+        if(t && !t.empty && t.name) layoutNames.push(t.name);
+      })
+    )
+  );
+  layoutNames.sort();
+
+  const body = document.getElementById('m-orphan-body');
+  const keys = Object.keys(orphans || {});
+  if(!keys.length) {
+    body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--green)">
+      <div style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-size:14px;font-weight:600">누락된 데이터가 없습니다.</div>
+      <div style="font-size:12px;color:var(--txt-m);margin-top:6px">모든 항목이 현재 레이아웃과 일치합니다.</div>
+    </div>`;
+    return;
+  }
+
+  const opts = layoutNames.map(n =>
+    `<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`
+  ).join('');
+
+  body.innerHTML = `
+    <div style="padding:12px 20px;background:#fef9c3;border-bottom:1px solid #fde047;font-size:12px;color:#92400e">
+      ⚠ 아래 항목들은 현재 레이아웃에 없는 <b>position_tank</b> 값을 갖고 있습니다.
+      올바른 탱크명으로 변경하면 데이터가 다시 표시됩니다.
+    </div>
+    ${keys.map(oldName => {
+      const g = orphans[oldName];
+      const steelCnt = g.steel?.length || 0;
+      const pipeCnt  = g.pipe?.length  || 0;
+      const id = 'orph_' + oldName.replace(/\W/g,'_');
+      return `<div style="padding:12px 20px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--red)">"${oldName}"</div>
+            <div style="font-size:11px;color:var(--txt-m);margin-top:2px">
+              ${steelCnt ? `🔧 Steel ${steelCnt}건 ` : ''}${pipeCnt ? `🔩 Pipe ${pipeCnt}건` : ''}
+            </div>
+          </div>
+          <div style="font-size:18px;color:var(--txt-m)">→</div>
+          <div style="flex:1;min-width:160px">
+            <select class="fi" id="${id}" style="width:100%">
+              <option value="">— 탱크 선택 —</option>
+              ${opts}
+            </select>
+          </div>
+          <button class="btn-pri" style="font-size:11px;white-space:nowrap"
+                  onclick="applyOrphanRename('${oldName.replace(/'/g,"\\'")}','${id}')">
+            적용
+          </button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+async function applyOrphanRename(oldName, selectId) {
+  const newName = document.getElementById(selectId)?.value;
+  if(!newName) { toast('탱크를 선택하세요', true); return; }
+  setSS('saving');
+  try {
+    const result = await apiFetch(`${API}/vessels/${VID}/position_rename`, 'PUT',
+      [{old: oldName, new: newName}]);
+    const updated = result?.updated || 0;
+    // 메모리 동기화
+    [FLEET[VID]?.steel, FLEET[VID]?.pipe, _tankPlanData, _pipePlanData].forEach(arr => {
+      (arr||[]).forEach(item => {
+        if(item.position_tank === oldName) item.position_tank = newName;
+      });
+    });
+    setSS('synced');
+    toast(`"${oldName}" → "${newName}" · ${updated}건 업데이트 완료`);
+    // 해당 행 제거 후 재조회
+    openOrphanRecovery();
+    // SVG 재렌더
+    const tw=document.getElementById('tank-svg-wrap');
+    if(tw&&_tankLayout) tw.innerHTML=_svgFromLayout(_tankLayout,'openTankModal',_tankCol);
+    const pw=document.getElementById('pipe-svg-wrap');
+    if(pw&&_tankLayout) pw.innerHTML=_svgFromLayout(_tankLayout,'openPipeModal',_pipePlanCol);
+  } catch(e){ setSS('error'); toast('실패: '+e.message, true); }
 }
 
 // ══ CALENDAR ═════════════════════════════════════════════════
