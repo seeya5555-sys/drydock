@@ -3498,13 +3498,34 @@ async function renderTracking(key){
   _renderTrackingTable(key);
 }
 
+// Position/Tank 그룹 접힘 상태 (key → Set of collapsed group names)
+const _trackingGroupCollapsed = {};
+
+function toggleTrackingGroup(key, groupName) {
+  if(!_trackingGroupCollapsed[key]) _trackingGroupCollapsed[key] = new Set();
+  const s = _trackingGroupCollapsed[key];
+  if(s.has(groupName)) s.delete(groupName); else s.add(groupName);
+  _renderTrackingTable(key);
+}
+function expandAllTrackingGroups(key)  { _trackingGroupCollapsed[key] = new Set(); _renderTrackingTable(key); }
+function collapseAllTrackingGroups(key) {
+  const cfg = TRACKING_CFG[key];
+  const data = FLEET[VID]?.[cfg.key] || [];
+  _trackingGroupCollapsed[key] = new Set(data.map(r=>(r.position_tank||'').trim()||'(미지정)'));
+  _renderTrackingTable(key);
+}
+
 function _renderTrackingTable(key){
   const cfg = TRACKING_CFG[key];
   const data = FLEET[VID][cfg.key] || [];
   const tbody = document.getElementById(cfg.tbody);
   if(!tbody) return;
 
-  // 컬럼별 select 옵션 키 매핑 (steel/pipe)
+  if(key === 'steel' || key === 'pipe') {
+    return _renderGroupedTrackingTable(key, cfg, data, tbody);
+  }
+
+  // 컬럼별 select 옵션 키 매핑
   const SELECT_MAP = {
     steel: {type:'steel_type', steel_grade:'steel_grade', space_type:'steel_space', shape:'steel_shape', priority:'pri', status:'stat'},
     pipe:  {schedule:'pipe_sch', material:'pipe_mat', valve_type:'pipe_valve', priority:'pri', status:'stat'},
@@ -3515,70 +3536,136 @@ function _renderTrackingTable(key){
     const rowId = row.id;
     const cells = cfg.cols.map((col, ci) => {
       const v = row[col] || '';
-      const isDate = cfg.dateCols
-        ? cfg.dateCols.includes(col)
-        : (col.includes('date') || col === 'date');
-
-      // Priority 배지
+      const isDate = cfg.dateCols ? cfg.dateCols.includes(col) : (col.includes('date') || col === 'date');
       if(col === cfg.priCol){
         const priKey = (key==='steel'||key==='pipe') ? 'pri' : (key==='outfit'?'pri_lmh':'pri');
         return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${priKey}')">${priorityBadge(v||'Normal')}</span></td>`;
       }
-      // Status 배지
       if(col === cfg.statCol){
         const sc = v==='Completed'?'c-closed':v==='Not Started'||!v?'c-open':'cat-badge cat-sh';
         return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','stat')"><span class="c-badge ${sc}">${v||'Not Started'}</span></span></td>`;
       }
-      // 날짜 컬럼
       if(isDate){
         const dv = v ? String(v).slice(0,10) : '';
         return `<td data-label="${cfg.headers[ci]}" style="white-space:nowrap">
           <div style="display:flex;align-items:center;gap:4px;">
             <span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s);white-space:nowrap">${dv||'—'}</span>
-            <span class="cal-btn" style="width:28px;height:24px;font-size:13px;flex-shrink:0;" title="날짜 선택">📅<input type="date" ${dv?`value="${dv}"`:''}  onchange="setTrackingDate('${key}','${rowId}','${col}',this.value)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;"></span>
+            <span class="cal-btn" style="width:28px;height:24px;font-size:13px;flex-shrink:0;" title="날짜 선택">📅<input type="date" ${dv?'value="'+dv+'"':''}  onchange="setTrackingDate('${key}','${rowId}','${col}',this.value)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;"></span>
           </div>
         </td>`;
       }
-      // No. 컬럼
-      if(col === 'no'){
-        return `<td data-label="No."><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${v||'—'}</span></td>`;
-      }
-      // select 컬럼 (steel/pipe 전용)
+      if(col === 'no') return `<td data-label="No."><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${v||'—'}</span></td>`;
       if(selMap[col]){
         const optKey = selMap[col];
         const dispV = v || '—';
-        // space_type 배지
         if(col === 'space_type'){
           const spColor = v.includes('DBT')||v.includes('Oil')?'#f59e0b':v.includes('Engine')||v.includes('Closed')||v.includes('Cargo')?'#6366f1':v.includes('Dry')?'#ef4444':'#64748b';
           return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:11px;font-weight:600;color:${spColor}">${dispV}</span></td>`;
         }
         return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:12px;color:var(--txt-s)">${dispV}</span></td>`;
       }
-      // new_weight (steel 전용) — 자동계산값, read-only 표시
-      if(col === 'new_weight' && key === 'steel'){
-        const calc = calcSteelWeight(row);
-        const display = calc !== '' ? calc : (v || '—');
-        const isAuto = calc !== '';
-        return `<td data-label="${cfg.headers[ci]}" style="text-align:right">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:${isAuto?'#1D6FDB':'var(--txt-s)'};" title="${isAuto?'자동계산 (L×W×T×8.0/1,000,000)':'수동 입력값'}">${display}</span>
-          ${isAuto?'<span style="font-size:9px;color:#94a3b8;margin-left:2px">kg</span>':''}
-        </td>`;
-      }
-      // 숫자/비용 컬럼 (우측 정렬)
-      if(['length_l','width_w','thickness_t','new_weight','staging_m3','est_cost','actual_charged','length_m','bend_qty','flange_qty','valve_qty','valve_size','pipe_od'].includes(col)){
+      if(['length_l','width_w','thickness_t','new_weight','staging_m3','est_cost','actual_charged','length_m','bend_qty','flange_qty','valve_qty','valve_size','pipe_od'].includes(col))
         return `<td data-label="${cfg.headers[ci]}" style="text-align:right"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h)">${v||'—'}</span></td>`;
-      }
-      // 기본 텍스트
       return `<td data-label="${cfg.headers[ci]}"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-size:12px;color:var(--txt-b)">${v||'—'}</span></td>`;
     });
     return `<tr data-id="${rowId}">${cells.join('')}<td><button class="edit-btn" style="color:var(--red)" onclick="deleteTrackingRow('${key}','${rowId}')">✕</button></td></tr>`;
   }).join('');
 
-  if(!data.length){
-    tbody.innerHTML = `<tr><td colspan="${cfg.cols.length+1}" class="empty-state">데이터가 없습니다. xlsx 업로드 또는 + Add Row를 사용하세요.</td></tr>`;
-  }
+  if(!data.length) tbody.innerHTML = `<tr><td colspan="${cfg.cols.length+1}" class="empty-state">데이터가 없습니다. xlsx 업로드 또는 + Add Row를 사용하세요.</td></tr>`;
 }
 
+function _renderGroupedTrackingTable(key, cfg, data, tbody) {
+  if(!data.length) {
+    tbody.innerHTML = `<tr><td colspan="${cfg.cols.length+1}" class="empty-state">데이터가 없습니다. + Add Row를 사용하세요.</td></tr>`;
+    return;
+  }
+  if(!_trackingGroupCollapsed[key]) _trackingGroupCollapsed[key] = new Set();
+  const collapsed = _trackingGroupCollapsed[key];
+
+  const SELECT_MAP = {
+    steel: {type:'steel_type', steel_grade:'steel_grade', space_type:'steel_space', shape:'steel_shape', priority:'pri', status:'stat'},
+    pipe:  {schedule:'pipe_sch', material:'pipe_mat', valve_type:'pipe_valve', priority:'pri', status:'stat'},
+  };
+  const selMap = SELECT_MAP[key] || {};
+
+  // 그룹핑 (순서 유지)
+  const groupOrder = [], groups = {};
+  data.forEach(row => {
+    const g = (row.position_tank || '').trim() || '(미지정)';
+    if(!groups[g]) { groups[g] = []; groupOrder.push(g); }
+    groups[g].push(row);
+  });
+
+  const renderCell = (col, ci, row) => {
+    const rowId = row.id;
+    const v = row[col] || '';
+    const isDate = cfg.dateCols ? cfg.dateCols.includes(col) : (col.includes('date') || col === 'date');
+    if(col === cfg.priCol) return `<td><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','pri')">${priorityBadge(v||'Normal')}</span></td>`;
+    if(col === cfg.statCol){
+      const sc = v==='Completed'?'c-closed':v==='Not Started'||!v?'c-open':'cat-badge cat-sh';
+      return `<td style="white-space:nowrap"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','stat')"><span class="c-badge ${sc}">${v||'Not Started'}</span></span></td>`;
+    }
+    if(isDate){
+      const dv = v ? String(v).slice(0,10) : '';
+      return `<td style="white-space:nowrap"><div style="display:flex;align-items:center;gap:4px;">
+        <span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-s)">${dv||'—'}</span>
+        <span class="cal-btn" style="width:28px;height:24px;font-size:13px;flex-shrink:0;">📅<input type="date" ${dv?'value="'+dv+'"':''}  onchange="setTrackingDate('${key}','${rowId}','${col}',this.value)" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;"></span>
+      </div></td>`;
+    }
+    if(col === 'no') return `<td><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);font-weight:600">${v||'—'}</span></td>`;
+    if(col === 'new_weight' && key === 'steel'){
+      const calc = calcSteelWeight(row);
+      const display = calc !== '' ? calc : (v || '—');
+      const isAuto = calc !== '';
+      return `<td style="text-align:right"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:${isAuto?'#1D6FDB':'var(--txt-s)'};">${display}</span>${isAuto?'<span style="font-size:9px;color:#94a3b8;margin-left:2px">kg</span>':''}</td>`;
+    }
+    if(selMap[col]){
+      const optKey = selMap[col], dispV = v || '—';
+      if(col === 'space_type'){
+        const spColor = v.includes('DBT')||v.includes('Oil')?'#f59e0b':v.includes('Engine')||v.includes('Closed')||v.includes('Cargo')?'#6366f1':v.includes('Dry')?'#ef4444':'#64748b';
+        return `<td><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:11px;font-weight:600;color:${spColor}">${dispV}</span></td>`;
+      }
+      return `<td><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','select','${optKey}')" style="font-size:12px;color:var(--txt-s)">${dispV}</span></td>`;
+    }
+    if(['length_l','width_w','thickness_t','length_m','bend_qty','flange_qty','valve_qty','valve_size','pipe_od'].includes(col))
+      return `<td style="text-align:right"><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h)">${v||'—'}</span></td>`;
+    return `<td><span class="cell-edit" onclick="startTrackingEdit(this,'${key}','${rowId}','${col}','text')" style="font-size:12px;color:var(--txt-b)">${v||'—'}</span></td>`;
+  };
+
+  const colCount = cfg.cols.length + 1;
+  let html = '';
+
+  groupOrder.forEach(gName => {
+    const rows = groups[gName];
+    const isCollapsed = collapsed.has(gName);
+    const cr = rows.filter(r=>r.priority==='Critical').length;
+    const ug = rows.filter(r=>r.priority==='Urgent').length;
+    const dn = rows.filter(r=>(r.status||'')==='Completed').length;
+    const priBadge = cr ? `<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:3px;font-weight:600">🔴 ${cr}</span>`
+                   : ug ? `<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-weight:600">🟡 ${ug}</span>` : '';
+    const doneTag = dn===rows.length && dn>0
+      ? `<span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:3px">✅ 전체완료</span>`
+      : dn ? `<span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:3px">✅ ${dn}/${rows.length}</span>` : '';
+    const gKey = gName.replace(/'/g, "\\'");
+    html += `<tr style="background:#dbeafe;cursor:pointer" onclick="toggleTrackingGroup('${key}','${gKey}')">
+      <td colspan="${colCount}" style="padding:7px 14px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:#1d4ed8">${isCollapsed?'▶':'▼'}</span>
+          <span style="font-size:12px;font-weight:700;color:#1e3a8a">${gName}</span>
+          <span style="font-size:11px;color:#3b82f6">${rows.length}건</span>
+          ${priBadge}${doneTag}
+        </div>
+      </td>
+    </tr>`;
+    if(!isCollapsed) {
+      rows.forEach(row => {
+        const cells = cfg.cols.map((col,ci) => renderCell(col, ci, row));
+        html += `<tr data-id="${row.id}">${cells.join('')}<td><button class="edit-btn" style="color:var(--red)" onclick="deleteTrackingRow('${key}','${row.id}')">✕</button></td></tr>`;
+      });
+    }
+  });
+  tbody.innerHTML = html;
+}
 // 캘린더로 날짜 직접 설정
 async function setTrackingDate(key, rowId, col, val){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
