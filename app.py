@@ -138,7 +138,17 @@ with app.app_context():
         remark          TEXT,
         last_updated    TEXT DEFAULT (datetime('now'))
     )""")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_pipe_vessel ON pipe_repair(vessel_id)")
+    # pipe_repair description 컬럼 추가
+    try:
+        db.execute("ALTER TABLE pipe_repair ADD COLUMN description TEXT DEFAULT ''")
+    except:
+        pass
+    # Tank layout per vessel
+    db.execute("""CREATE TABLE IF NOT EXISTS vessel_tank_layout (
+        vessel_id   TEXT PRIMARY KEY REFERENCES vessels(id) ON DELETE CASCADE,
+        layout_json TEXT NOT NULL,
+        updated_at  TEXT DEFAULT (datetime('now'))
+    )""")
     db.commit()
     db = get_db()
     # Documents 테이블 생성
@@ -925,10 +935,23 @@ def get_steel_repair(vid): return _tracking_get("steel_repair", vid)
 @app.route("/api/vessels/<vid>/steel_repair", methods=["POST"])
 def create_steel_repair(vid):
     d = request.get_json(force=True); db = get_db()
-    cur = db.execute("INSERT INTO steel_repair(vessel_id,no,description,location,priority,status,start_date,completion_date,remark) VALUES(?,?,?,?,?,?,?,?,?)",
-        (vid, d.get("no",""), d.get("description",""), d.get("location",""),
+    cur = db.execute("""INSERT INTO steel_repair
+        (vessel_id,no,position_tank,frame_no,location_detail,type,
+         length_l,width_w,thickness_t,steel_grade,new_weight,
+         space_type,shape,priority,status,start_date,completion_date,
+         remark,description)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (vid,
+         d.get("no",""),
+         d.get("position_tank",""), d.get("frame_no",""),
+         d.get("location_detail",""), d.get("type",""),
+         d.get("length_l",""), d.get("width_w",""), d.get("thickness_t",""),
+         d.get("steel_grade",""), d.get("new_weight",""),
+         d.get("space_type","Open Space"), d.get("shape","Flat"),
          d.get("priority","Normal"), d.get("status","Not Started"),
-         d.get("start_date") or None, d.get("completion_date") or None, d.get("remark","")))
+         d.get("start_date") or None, d.get("completion_date") or None,
+         d.get("remark",""),
+         d.get("description","")))
     db.commit()
     return jsonify(dict(get_db().execute("SELECT * FROM steel_repair WHERE id=?", (cur.lastrowid,)).fetchone())), 201
 
@@ -938,18 +961,17 @@ def update_steel_repair(rid):
     return _tracking_update("steel_repair", rid,
         """UPDATE steel_repair SET no=?,position_tank=?,frame_no=?,location_detail=?,
            type=?,length_l=?,width_w=?,thickness_t=?,steel_grade=?,new_weight=?,
-           space_type=?,shape=?,priority=?,status=?,start_date=?,completion_date=?,
-           test_required=?,staging_m3=?,est_cost=?,actual_charged=?,remark=?,
+           space_type=?,shape=?,remark=?,priority=?,status=?,
+           start_date=?,completion_date=?,
            last_updated=datetime('now') WHERE id=?""",
         (d.get("no",""), d.get("position_tank",""), d.get("frame_no",""),
          d.get("location_detail",""), d.get("type",""),
          d.get("length_l",""), d.get("width_w",""), d.get("thickness_t",""),
          d.get("steel_grade",""), d.get("new_weight",""),
          d.get("space_type","Open Space"), d.get("shape","Flat"),
+         d.get("remark",""),
          d.get("priority","Normal"), d.get("status","Not Started"),
-         d.get("start_date") or None, d.get("completion_date") or None,
-         d.get("test_required","None"), d.get("staging_m3",""),
-         d.get("est_cost",""), d.get("actual_charged",""), d.get("remark","")))
+         d.get("start_date") or None, d.get("completion_date") or None))
 
 @app.route("/api/steel_repair/<int:rid>", methods=["DELETE"])
 def delete_steel_repair(rid): return _tracking_delete("steel_repair", rid)
@@ -987,7 +1009,8 @@ def _pipe_row(d):
             d.get("removal_refit","Not Required"),
             d.get("priority","Normal"), d.get("status","Not Started"),
             d.get("start_date") or None, d.get("completion_date") or None,
-            d.get("est_cost",""), d.get("actual_charged",""), d.get("remark",""))
+            d.get("est_cost",""), d.get("actual_charged",""),
+            d.get("description",""), d.get("remark",""))
 
 @app.route("/api/vessels/<vid>/pipe_repair", methods=["GET"])
 def get_pipe_repair(vid): return _tracking_get("pipe_repair", vid)
@@ -999,8 +1022,8 @@ def create_pipe_repair(vid):
         (vessel_id,no,system_line,position_tank,frame_no,location_detail,
          pipe_od,schedule,material,length_m,bend_qty,flange_qty,
          valve_type,valve_size,valve_qty,space_type,removal_refit,
-         priority,status,start_date,completion_date,est_cost,actual_charged,remark)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+         priority,status,start_date,completion_date,est_cost,actual_charged,description,remark)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (vid,) + _pipe_row(d))
     db.commit()
     return jsonify(dict(get_db().execute("SELECT * FROM pipe_repair WHERE id=?", (cur.lastrowid,)).fetchone())), 201
@@ -1013,7 +1036,7 @@ def update_pipe_repair(rid):
            pipe_od=?,schedule=?,material=?,length_m=?,bend_qty=?,flange_qty=?,
            valve_type=?,valve_size=?,valve_qty=?,space_type=?,removal_refit=?,
            priority=?,status=?,start_date=?,completion_date=?,
-           est_cost=?,actual_charged=?,remark=?,last_updated=datetime('now') WHERE id=?""",
+           est_cost=?,actual_charged=?,description=?,remark=?,last_updated=datetime('now') WHERE id=?""",
         _pipe_row(d))
 
 @app.route("/api/pipe_repair/<int:rid>", methods=["DELETE"])
@@ -1026,8 +1049,8 @@ def bulk_pipe_repair(vid):
             (vessel_id,no,system_line,position_tank,frame_no,location_detail,
              pipe_od,schedule,material,length_m,bend_qty,flange_qty,
              valve_type,valve_size,valve_qty,space_type,removal_refit,
-             priority,status,start_date,completion_date,est_cost,actual_charged,remark)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             priority,status,start_date,completion_date,est_cost,actual_charged,description,remark)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (vid,) + _pipe_row(item))
     return _tracking_bulk("pipe_repair", vid, request.get_json(force=True), ins)
 
@@ -1195,6 +1218,51 @@ def bulk_gas_free(vid):
         db.execute("INSERT INTO gas_free(vessel_id,no,tank,certificate,date,remark) VALUES(?,?,?,?,?,?)",
             (vid, item.get("no",""), item.get("tank",""), item.get("certificate",""), item.get("date") or None, item.get("remark","")))
     return _tracking_bulk("gas_free", vid, request.get_json(force=True), ins)
+
+
+# ── Tank Plan ─────────────────────────────────────────────────
+@app.route("/api/vessels/<vid>/tank_plan", methods=["GET"])
+@login_required
+def get_tank_plan(vid):
+    items = [dict(r) for r in get_db().execute(
+        """SELECT id, no, position_tank, frame_no, location_detail,
+                  type, priority, status, description,
+                  length_l, width_w, thickness_t, new_weight, space_type
+           FROM steel_repair WHERE vessel_id=? ORDER BY id""",
+        (vid,)).fetchall()]
+    return jsonify(items)
+
+
+@app.route("/api/vessels/<vid>/pipe_plan", methods=["GET"])
+@login_required
+def get_pipe_plan(vid):
+    items = [dict(r) for r in get_db().execute(
+        """SELECT id, no, system_line, position_tank, frame_no, location_detail,
+                  pipe_od, schedule, material, length_m, bend_qty, flange_qty,
+                  valve_type, valve_size, valve_qty, priority, status, description
+           FROM pipe_repair WHERE vessel_id=? ORDER BY id""",
+        (vid,)).fetchall()]
+    return jsonify(items)
+
+
+@app.route("/api/vessels/<vid>/tank_layout", methods=["GET"])
+@login_required
+def get_tank_layout(vid):
+    r = get_db().execute(
+        "SELECT layout_json FROM vessel_tank_layout WHERE vessel_id=?", (vid,)).fetchone()
+    return jsonify(json.loads(r['layout_json'])) if r else jsonify(None)
+
+
+@app.route("/api/vessels/<vid>/tank_layout", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def save_tank_layout(vid):
+    layout_str = json.dumps(request.get_json(force=True))
+    db = get_db()
+    db.execute("""INSERT OR REPLACE INTO vessel_tank_layout(vessel_id, layout_json, updated_at)
+                  VALUES(?, ?, datetime('now'))""", (vid, layout_str))
+    db.commit()
+    return jsonify({"success": True})
 
 
 @app.route("/api/tracking/template")
