@@ -3495,6 +3495,15 @@ async function renderTracking(key){
     const data = await apiFetch(`${API}/vessels/${VID}/${cfg.api}`);
     FLEET[VID][cfg.key] = data;
   } catch(e) { toast('로드 실패: '+e.message, true); return; }
+
+  // steel/pipe: 첫 로드 시 전체 접힌 상태로 시작
+  if((key === 'steel' || key === 'pipe') && !_trackingGroupCollapsed[key]) {
+    const data = FLEET[VID][cfg.key] || [];
+    _trackingGroupCollapsed[key] = new Set(
+      data.map(r => (r.position_tank || '').trim() || '(미지정)')
+    );
+  }
+
   _renderTrackingTable(key);
 }
 
