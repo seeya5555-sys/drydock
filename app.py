@@ -1265,6 +1265,30 @@ def save_tank_layout(vid):
     return jsonify({"success": True})
 
 
+@app.route("/api/vessels/<vid>/position_rename", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def rename_position(vid):
+    """레이아웃 탱크명 변경 시 steel_repair / pipe_repair의 position_tank 자동 업데이트"""
+    renames = request.get_json(force=True)  # [{old: "DBT 1P", new: "WBT 1P"}, ...]
+    if not isinstance(renames, list) or not renames:
+        return jsonify({"success": True, "updated": 0})
+    db = get_db()
+    total = 0
+    for r in renames:
+        old_name = r.get("old", "").strip()
+        new_name = r.get("new", "").strip()
+        if not old_name or not new_name or old_name == new_name:
+            continue
+        for table in ("steel_repair", "pipe_repair"):
+            cur = db.execute(
+                f"UPDATE {table} SET position_tank=? WHERE vessel_id=? AND position_tank=?",
+                (new_name, vid, old_name))
+            total += cur.rowcount
+    db.commit()
+    return jsonify({"success": True, "updated": total})
+
+
 @app.route("/api/tracking/template")
 def download_tracking_template():
     """Daily Tracking Log 템플릿 xlsx 다운로드"""
