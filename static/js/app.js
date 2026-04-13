@@ -119,7 +119,8 @@ function applyRoleUI() {
         button[onclick*="csv-upload-input"],
         button[onclick*="downloadCSVTemplate"],
         button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
-        button[onclick*="openTrackingXlsx"]
+        button[onclick*="openTrackingXlsx"],
+        button[onclick*="showTankAddForm"], button[onclick*="saveTankItem"]
         { display: none !important; }
         .cell-edit { pointer-events: none !important; cursor: default !important; }
         .tracking-date-cell input, .tracking-date-cell select
@@ -650,6 +651,8 @@ function showTab(tab,btn){
   if(tab==='gasfree')renderTracking('gasfree');
   if(tab==='calendar')renderCalendar();
   if(tab==='documents')renderDocuments();
+  if(tab==='tankplan')renderTankPlan();
+  if(tab==='pipeplan')renderPipePlan();
 }
 
 async function loadAttachStates(refType, idKey, btnPrefix) {
@@ -1604,20 +1607,18 @@ function renderJobs(){
     if(!catJobs.length) return;
     const isCollapsed = catCollapsed.has(cat);
 
-    // 집계 (STORE 섹션은 수동입력값 우선)
+    // 집계 (STORE 섹션은 수동입력값 우선 — Section 레벨과 동일 로직)
     let totalBudget = 0, totalConsumed = 0;
     const secMap = {};
     catJobs.forEach(j => { const s = j.section||'GENERAL'; if(!secMap[s]) secMap[s]=[]; secMap[s].push(j); });
     Object.entries(secMap).forEach(([sec, sJobs]) => {
       const sk = `${VID}::${cat}::${sec}`;
       const sd = window._secManualBudget?.[sk] || {};
-      if(sec === 'STORE' && (sd.budget > 0 || sd.consumed > 0)) {
-        totalBudget   += sd.budget   || 0;
-        totalConsumed += sd.consumed || 0;
-      } else {
-        totalBudget   += sJobs.reduce((s,j) => s + (+j.budget||0), 0);
-        totalConsumed += sJobs.reduce((s,j) => s + (+j.consumption||0), 0);
-      }
+      const jobBudget   = sJobs.reduce((s,j) => s + (+j.budget||0), 0);
+      const jobConsumed = sJobs.reduce((s,j) => s + (+j.consumption||0), 0);
+      // STORE: 수동입력값 우선, 없으면 job 합산 (Section 헤더와 동일 로직)
+      totalBudget   += (sec === 'STORE' && (sd.budget   || 0) > 0) ? (sd.budget   || 0) : jobBudget;
+      totalConsumed += (sec === 'STORE' && (sd.consumed || 0) > 0) ? (sd.consumed || 0) : jobConsumed;
     });
 
     // 계산 기준: 자식 없는 단독항목 그자체 + 자식 있는 부모항목 자체값
@@ -2302,7 +2303,7 @@ async function addInlineRow() {
     try {
       const newJob = await apiFetch(`${API}/vessels/${VID}/jobs`, 'POST', {
         number:num, section:sec, category:cat,
-        description:desc, vendor:vend, budget:bud,
+        description:desc, remark:desc, vendor:vend, budget:bud,
         consumption:0, start_date:'', end_date:'', completion:0, remarks:[]
       });
       FLEET[VID].jobs = [...(FLEET[VID].jobs||[]), dbJ(newJob)];
@@ -2830,7 +2831,7 @@ async function loadJobAttachStates() {
 }
 
 // ══ GENERIC ATTACHMENTS (Class / Daily Log) ═══════════
-const GEN_ATTACH_PREFIX = { class: 'cattbtn', disc: 'dattbtn' };
+const GEN_ATTACH_PREFIX = { class: 'cattbtn', disc: 'dattbtn', steel: 'tattbtn', pipe: 'pipebtn' };
 
 async function openGenAttach(refType, refId) {
   if(!VID) return;
@@ -3410,11 +3411,11 @@ const TRACKING_CFG = {
   },
   pipe: {
     api: 'pipe_repair', key: 'pipe', tbody: 'pipe-body',
-    cols: ['no','system_line','position_tank','frame_no','location_detail','pipe_od','schedule','material','length_m','bend_qty','flange_qty','valve_type','valve_size','valve_qty','remark','priority','status','start_date','completion_date'],
-    headers: ['No.','System/Line','Position/Tank','Frame No.','Location','OD(mm)','Schedule','Material','Length(m)','Bend(pc)','Flange(pc)','Valve Type','V.Size(mm)','V.Qty','Remark','Priority','Status','Start Date','Completion'],
-    widths: ['44px','100px','100px','75px','110px','70px','70px','110px','75px','70px','75px','90px','80px','65px','','80px','105px','95px','95px'],
+    cols: ['no','system_line','position_tank','frame_no','location_detail','description','pipe_od','schedule','material','length_m','bend_qty','flange_qty','valve_type','valve_size','valve_qty','remark','priority','status','start_date','completion_date'],
+    headers: ['No.','System/Line','Position/Tank','Frame No.','Location','Description','OD(mm)','Schedule','Material','Length(m)','Bend(pc)','Flange(pc)','Valve Type','V.Size(mm)','V.Qty','Remark','Priority','Status','Start Date','Completion'],
+    widths: ['44px','100px','100px','75px','110px','','70px','70px','110px','75px','70px','75px','90px','80px','65px','','80px','105px','95px','95px'],
     priCol: 'priority', statCol: 'status',
-    newRow: ()=>({no:'',system_line:'',position_tank:'',frame_no:'',location_detail:'',pipe_od:'',schedule:'Sch40',material:'Carbon Steel',length_m:'',bend_qty:'',flange_qty:'',valve_type:'None',valve_size:'',valve_qty:'',remark:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:''}),
+    newRow: ()=>({no:'',system_line:'',position_tank:'',frame_no:'',location_detail:'',description:'',pipe_od:'',schedule:'Sch40',material:'Carbon Steel',length_m:'',bend_qty:'',flange_qty:'',valve_type:'None',valve_size:'',valve_qty:'',remark:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:''}),
   },
   outfit: {
     api: 'outfitting', key: 'outfit', tbody: 'outfit-body',
@@ -3737,6 +3738,1178 @@ async function uploadTrackingXlsx(input){
   input.value='';
 }
 
+
+// ══ TANK PLAN ════════════════════════════════════════════════
+
+let _tankPlanData  = [];
+let _tankLayout    = null;
+let _layoutEditing = null;
+let _curTankId     = null;
+let _curTankName   = null;
+
+// ── Type color map ────────────────────────────────────────────
+const TANK_BASE_COLORS = {
+  WBT: {f:'#e0f2fe',s:'#7dd3fc'},  // WBT = same as DBT
+  COT: {f:'#dbeafe',s:'#93c5fd'}, DBT: {f:'#e0f2fe',s:'#7dd3fc'},
+  SLOP:{f:'#ede9fe',s:'#c4b5fd'}, FOT: {f:'#dcfce7',s:'#86efac'},
+  WBT: {f:'#e0f2fe',s:'#7dd3fc'}, FPT: {f:'#fef9c3',s:'#fde047'},
+  APT: {f:'#fef9c3',s:'#fde047'}, ER:  {f:'#f1f5f9',s:'#cbd5e1'},
+  MISC:{f:'#f8fafc',s:'#e2e8f0'},
+};
+
+// ── Default VLCC Layout — AFT(좌) → FWD(우) ──────────────────
+const TANK_LAYOUT_VERSION = 6;  // bump to force-reset saved layouts
+function _defaultVLCCLayout() {
+  const mk = (id,name,type,cl) => ({id,name,type,cl});
+  // P/C/S 3행 COT 컬럼
+  const mkpcs = (n, w) => ({
+    id:`cC${n}`, w,
+    p: mk(`COT${n}P`,`COT ${n}P`,'COT',true),
+    c: mk(`COT${n}C`,`COT ${n}C`,'COT',true),
+    s: mk(`COT${n}S`,`COT ${n}S`,'COT',true),
+  });
+  // P/S 2행 컬럼 (Center 없음 - 3행 섹션 안에서 P=상단, S=하단)
+  const mkps = (id, pName, sName, type, w) => ({
+    id, w,
+    p: mk(id+'P', pName, type, true),
+    c: null,
+    s: mk(id+'S', sName, type, true),
+  });
+
+  // 폭 계산 (GAP=2):
+  // Cargo: 55 + 90×3 + 190×5 + 8gap×2 = 1291
+  // DBT:   75 + 197  + 190×5 + 55 + 7gap×2 = 1291 ✓
+  return {
+    version: TANK_LAYOUT_VERSION,
+    direction: 'aft-fwd',
+    sections: [
+      {
+        id:'s_cargo', label:'CARGO TANK ARRANGEMENT', sublabel:'',
+        columns: [
+          {id:'cER',   w:55,  p:mk('ER',    'E/R',          'ER',  true), c:null, s:null},
+          mkps('cHFO2','No.2 HFO BT P','No.2 HFO BT S','FOT', 90),
+          mkps('cHFO1','LSHFO BT',     'No.1 HFO BT',  'FOT', 90),
+          mkps('cSLP', 'SLOP P',       'SLOP S',        'SLOP',90),
+          mkpcs(5, 190), mkpcs(4, 190), mkpcs(3, 190), mkpcs(2, 190), mkpcs(1, 190),
+        ]
+      },
+      {
+        id:'s_dbt', label:'WATER BALLAST TANK ARRANGEMENT', sublabel:'',
+        columns: [
+          {id:'dAPT', w:75,  p:mk('APT',   'APT',       'APT',true), c:null, s:null},
+          {id:'dPR',  w:197, p:mk('PR',    'Pump Room', 'ER', true), c:null, s:null},
+          {id:'dD5',  w:190, p:mk('DBT5P','DBT 5P',    'DBT',true), c:null, s:mk('WBT5S','WBT 5S','WBT',true)},
+          {id:'dD4',  w:190, p:mk('DBT4P','DBT 4P',    'DBT',true), c:null, s:mk('WBT4S','WBT 4S','WBT',true)},
+          {id:'dD3',  w:190, p:mk('DBT3P','DBT 3P',    'DBT',true), c:null, s:mk('WBT3S','WBT 3S','WBT',true)},
+          {id:'dD2',  w:190, p:mk('DBT2P','DBT 2P',    'DBT',true), c:null, s:mk('WBT2S','WBT 2S','WBT',true)},
+          {id:'dD1',  w:190, p:mk('DBT1P','DBT 1P',    'DBT',true), c:null, s:mk('WBT1S','WBT 1S','WBT',true)},
+          {id:'dFPT', w:55,  p:mk('FPT',  'FPT',        'FPT',true), c:null, s:null},
+        ]
+      }
+    ]
+  };
+}
+
+// ── Item matching ────────────────────────────────────────────
+function _matchItems(tankName) { return _matchItemsFrom(tankName, _tankPlanData); }
+function _matchItemsFrom(tankName, data) {
+  if(!tankName || !Array.isArray(data)) return [];
+  const tn = tankName.replace(/\s+/g,'').toUpperCase();
+  return data.filter(i => {
+    if(!i.position_tank) return false;
+    const pt = i.position_tank.replace(/\s+/g,'').toUpperCase();
+    return pt.includes(tn) || tn.includes(pt);
+  });
+}
+
+// 색상 생성 헬퍼 — data 배열을 캡처한 colFn 반환
+function _makeColFn(data, hasItemsFill, hasItemsStroke, hasItemsText) {
+  return function(name, type, clickable) {
+    const b = TANK_BASE_COLORS[type] || TANK_BASE_COLORS.MISC;
+    if(!clickable) return {fill:'#f1f5f9', stroke:'#cbd5e1', text:'#94a3b8', count:0};
+    const items = _matchItemsFrom(name, data);
+    if(!items.length) return {fill:b.f, stroke:b.s, text:'#475569', count:0};
+    const cr = items.filter(i=>i.priority==='Critical').length;
+    const ug = items.filter(i=>i.priority==='Urgent').length;
+    if(cr>0) return {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b', count:items.length, critical:cr};
+    if(ug>0) return {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e', count:items.length};
+    return {fill:hasItemsFill, stroke:hasItemsStroke, text:hasItemsText, count:items.length};
+  };
+}
+
+// ── SVG Generator ────────────────────────────────────────────
+function _svgFromLayout(layout, clickFn, colFn) {
+  const dir  = layout.direction || 'aft-fwd';
+  const lLbl = dir==='aft-fwd' ? '◄  AFT' : '◄  FWD';
+  const rLbl = dir==='aft-fwd' ? 'FWD  ►' : 'AFT  ►';
+  const LM=14, RM=14, ROWH=76, GAP=2, SECHDR=22, SECGAP=32, LGND=92;
+
+  const esc = s => (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+  // 각 섹션의 행 수: Center(c) 있는 컬럼이 하나라도 있으면 3행 (empty 마커 제외)
+  const secRowCount = (sec) => {
+    if(!sec.columns||!sec.columns.length) return 2;
+    return sec.columns.some(col => col.c && typeof col.c === 'object' && !col.c.empty) ? 3 : 2;
+  };
+  const secBodyH = (sec) => {
+    const n = secRowCount(sec);
+    return n * ROWH + (n-1) * GAP;
+  };
+  const secTotalH = (sec) => SECHDR + secBodyH(sec);
+
+  // 최대 컬럼 폭
+  const maxCW = Math.max(...layout.sections.map(sec =>
+    (sec.columns||[]).reduce((s,c) => s + (c.w||100) + GAP, 0) - GAP
+  ), 100);
+  const SVG_W = LM + maxCW + RM + LGND;
+
+  // 전체 높이
+  const SVG_H = layout.sections.reduce((acc, sec, i) =>
+    acc + secTotalH(sec) + (i < layout.sections.length-1 ? SECGAP : 0)
+  , 0) + 30;
+
+  let sv = `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" xmlns="http://www.w3.org/2000/svg"
+    style="width:100%;min-width:700px;display:block;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
+  <style>.tk rect{transition:filter .1s;} .tk:hover rect{filter:brightness(.9);}</style>
+  <text x="${LM}" y="13" font-family="IBM Plex Mono" font-size="10" fill="#94a3b8">${lLbl}</text>
+  <text x="${LM+maxCW}" y="13" font-family="IBM Plex Mono" font-size="10" fill="#94a3b8" text-anchor="end">${rLbl}</text>`;
+
+  // 탱크 셀 그리기 헬퍼 — null 또는 empty:true 이면 빈 공간
+  const drawCell = (t, cx, ry, w, h) => {
+    if(!t || t.empty) return '';  // empty 마커 = 빈 공간
+    const c = colFn(t.name, t.type, t.cl);
+    const oc = t.cl ? `onclick="${clickFn||'openTankModal'}('${esc(t.id)}','${esc(t.name)}')"` : '';
+    const cursor = t.cl ? 'pointer' : 'default';
+    const badge = c.count > 0
+      ? `<rect x="${cx+w-20}" y="${ry+h-16}" width="17" height="13" rx="2"
+           fill="${c.critical?'#ef4444':'#3b82f6'}" opacity=".9"/>
+         <text x="${cx+w-11.5}" y="${ry+h-6}" font-family="IBM Plex Mono" font-size="9"
+           font-weight="700" fill="white" text-anchor="middle">${c.count}</text>`
+      : '';
+    const nl = t.name.split(/[\n\/]/);
+    const ty = ry + h/2;
+    const nameEl = nl.map((l,i) =>
+      `<text x="${cx+w/2}" y="${ty+(i-(nl.length-1)/2)*13}"
+        font-family="IBM Plex Sans,Arial" font-size="${nl.length>1?9:10}" font-weight="700"
+        fill="${c.text}" text-anchor="middle" dominant-baseline="central">${l}</text>`
+    ).join('');
+    return `<g class="${t.cl?'tk':''}" style="cursor:${cursor}" ${oc}>
+      <rect x="${cx}" y="${ry}" width="${w}" height="${h}" rx="2"
+        fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5"/>
+      ${nameEl}${badge}</g>`;
+  };
+
+  // 섹션 그리기
+  let secY = 17;
+  layout.sections.forEach(sec => {
+    const nRows   = secRowCount(sec);
+    const bodyH   = secBodyH(sec);
+    const totalH  = secTotalH(sec);
+    const topY    = secY + SECHDR;          // 첫 행 시작 y
+    const rowYs   = Array.from({length:nRows}, (_,i) => topY + i*(ROWH+GAP));
+
+    // 섹션 레이블
+    const labelText = sec.label||'';
+    const subText   = sec.sublabel ? ` — ${sec.sublabel}` : '';
+    sv += `<text x="${LM+maxCW/2}" y="${secY+14}"
+      font-family="IBM Plex Sans,Arial" font-size="11" font-weight="700" fill="#475569"
+      text-anchor="middle" letter-spacing="2">${labelText}${subText}</text>`;
+
+    // 행 레이블 (P/C/S 또는 P/S)
+    const rowLabels = nRows===3 ? ['P','C','S'] : ['P','S'];
+    rowLabels.forEach((lbl, i) => {
+      const midY = rowYs[i] + ROWH/2;
+      sv += `<text x="7" y="${midY}" font-family="IBM Plex Sans" font-size="9" fill="#94a3b8"
+        text-anchor="middle" dominant-baseline="central"
+        transform="rotate(-90,7,${midY})">${lbl}</text>`;
+    });
+
+    // 섹션 테두리
+    sv += `<rect x="${LM-1}" y="${topY-1}" width="${maxCW+2}" height="${bodyH+2}" rx="3"
+      fill="none" stroke="#cbd5e1" stroke-width="1.5"/>`;
+
+    // 행 구분선
+    for(let i=0; i<nRows-1; i++) {
+      const lineY = rowYs[i] + ROWH + GAP/2;
+      sv += `<line x1="${LM}" y1="${lineY}" x2="${LM+maxCW}" y2="${lineY}"
+        stroke="#e2e8f0" stroke-width=".8" stroke-dasharray="6,3"/>`;
+    }
+
+    // 컬럼 그리기
+    let cx = LM;
+    (sec.columns||[]).forEach(col => {
+      const w = col.w || 100;
+      const hasCenter = col.c && typeof col.c === 'object' && !col.c.empty;
+      const isSpan    = !col.s && !hasCenter && !(col.s?.empty);  // p만 있고 s/c 없음 → 전체 SPAN
+
+      if(isSpan) {
+        // SPAN: p가 전체 bodyH 차지
+        sv += drawCell(col.p, cx, topY, w, bodyH);
+      } else if(hasCenter) {
+        // 3행: P/C/S
+        [[col.p,0],[col.c,1],[col.s,2]].forEach(([t,ri]) => {
+          sv += drawCell(t, cx, rowYs[ri], w, ROWH);
+        });
+      } else {
+        // 2행: P/S — P는 최상단, S는 최하단 (3행 섹션이어도 STBD 위치 유지)
+        if(col.p) sv += drawCell(col.p, cx, rowYs[0],          w, ROWH);
+        if(col.s) sv += drawCell(col.s, cx, rowYs[nRows-1],    w, ROWH);
+      }
+      cx += w + GAP;
+    });
+
+    secY += totalH + SECGAP;
+  });
+
+  // Legend
+  const lgX = LM + maxCW + RM + 4;
+  sv += `<text x="${lgX}" y="30" font-family="IBM Plex Sans" font-size="9" fill="#475569"
+    font-weight="700" letter-spacing="1">LEGEND</text>`;
+  [['No items','#dbeafe','#93c5fd'],['Has items','#dbeafe','#3b82f6'],
+   ['Urgent','#fef3c7','#f59e0b'],['Critical','#fee2e2','#ef4444']].forEach(([lbl,f,s],i)=>{
+    sv += `<rect x="${lgX}" y="${37+i*17}" width="12" height="10" rx="1" fill="${f}" stroke="${s}" stroke-width="1"/>
+      <text x="${lgX+17}" y="${46+i*17}" font-family="IBM Plex Sans" font-size="9" fill="#64748b">${lbl}</text>`;
+  });
+  return sv + '</svg>';
+}
+
+// ── Render ───────────────────────────────────────────────────
+async function renderTankPlan() {
+  if(!VID) return;
+  const wrap = document.getElementById('tank-svg-wrap');
+  if(wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#334155;font-size:13px">로딩 중…</div>';
+
+  const [items, saved] = await Promise.all([
+    apiFetch(`${API}/vessels/${VID}/tank_plan`).catch(()=>[]),
+    apiFetch(`${API}/vessels/${VID}/tank_layout`).catch(()=>null),
+  ]);
+  _tankPlanData = items || [];
+  // 구버전 레이아웃 감지 (Cargo에 FPT 포함 or DBT에 WBT FWD 포함) → 기본값 재설정
+  let layout = saved;
+  if(layout) {
+    const cargoCols = (layout.sections||[]).find(s=>s.id==='s_cargo')?.columns||[];
+    const dbtCols   = (layout.sections||[]).find(s=>s.id==='s_dbt')?.columns||[];
+    const hasOldFPTinCargo = cargoCols.some(c=>c.p?.id==='FPT'||c.s?.id==='FPT');
+    const hasNoCenterRow   = cargoCols.some(c=>c.id?.startsWith('cC')&&c.c===undefined);
+    const hasWBTFWD        = dbtCols.some(c=>c.p?.id==='WBTF'||c.p?.name==='WBT FWD');
+    if(hasOldFPTinCargo || hasWBTFWD || hasNoCenterRow) layout = null;
+  }
+  _tankLayout = layout || _defaultVLCCLayout();
+
+  // Steel Plan 색상: 파란색 — 렌더 시점 데이터 캡처
+  const _tankColFn = _makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8');
+  if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', _tankColFn);
+
+  const total=_tankPlanData.length, cr=_tankPlanData.filter(i=>i.priority==='Critical').length;
+  const ug=_tankPlanData.filter(i=>i.priority==='Urgent').length;
+  const tnks=new Set(_tankPlanData.map(i=>i.position_tank).filter(Boolean)).size;
+  const st=document.getElementById('tank-plan-stats');
+  if(st) st.innerHTML=`전체 <b>${total}</b>건 · 탱크 <b>${tnks}</b>개 · <span style="color:#fca5a5">🔴 Critical <b>${cr}</b></span> · <span style="color:#fde68a">🟡 Urgent <b>${ug}</b></span>`;
+}
+
+// ── Tank Modal ────────────────────────────────────────────────
+async function openTankModal(tankId, tankName) {
+  _curTankId = tankId; _curTankName = tankName;
+  _editTankItemId = null;
+  document.getElementById('m-tank-title').textContent = tankName + ' — Steel Repair Items';
+  document.getElementById('m-tank-body').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--txt-m)">로딩 중…</div>';
+  hideTankAddForm();
+  openM('m-tank');
+  if(!FLEET[VID].steel || !FLEET[VID].steel.length) {
+    try { FLEET[VID].steel = await apiFetch(`${API}/vessels/${VID}/steel_repair`); } catch(e) {}
+  }
+  _renderTankModalBody();
+}
+
+let _editTankItemId  = null;   // 현재 편집 중인 Tank modal item ID
+let _editPipeItemId  = null;   // 현재 편집 중인 Pipe modal item ID
+
+// ── Steel inline edit helpers ─────────────────────────────────
+function startTankItemEdit(id) { _editTankItemId = id; _renderTankModalBody(); }
+function cancelTankItemEdit()  { _editTankItemId = null; _renderTankModalBody(); }
+
+async function saveTankItemEdit(id) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+  const row = (FLEET[VID].steel||[]).find(r=>r.id===id);
+  if(!row) return;
+  const g = (sid) => document.getElementById(sid)?.value ?? row[sid.replace('te-','')]??'';
+
+  const l = g('te-length_l'), w = g('te-width_w'), t = g('te-thickness_t');
+  const calcWt = (!isNaN(+l)&&!isNaN(+w)&&!isNaN(+t)&&+l>0&&+w>0&&+t>0)
+    ? (+l * +w * +t * 8.0 / 1000000).toFixed(2) : (row.new_weight||'');
+
+  const updated = {
+    ...row,
+    description:     document.getElementById('te-description')?.value    ?? row.description,
+    frame_no:        document.getElementById('te-frame_no')?.value        ?? row.frame_no,
+    location_detail: document.getElementById('te-location_detail')?.value ?? row.location_detail,
+    type:            document.getElementById('te-type')?.value             ?? row.type,
+    steel_grade:     document.getElementById('te-steel_grade')?.value      ?? row.steel_grade,
+    length_l:        l, width_w: w, thickness_t: t,
+    new_weight:      document.getElementById('te-new_weight')?.value || calcWt,
+    space_type:      document.getElementById('te-space_type')?.value       ?? row.space_type,
+    priority:        document.getElementById('te-priority')?.value         ?? row.priority,
+    status:          document.getElementById('te-status')?.value           ?? row.status,
+    remark:          document.getElementById('te-remark')?.value           ?? row.remark,
+  };
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/steel_repair/${id}`, 'PUT', updated);
+    Object.assign(row, updated);
+    // _tankPlanData 동기화
+    const tp = _tankPlanData.find(r=>r.id===id);
+    if(tp) Object.assign(tp, {priority:updated.priority, status:updated.status, new_weight:updated.new_weight});
+    setSS('synced'); _editTankItemId = null; _renderTankModalBody();
+    toast('저장됐습니다');
+  } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
+}
+
+function _tankEditForm(item) {
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const sel = (id, opts, val) =>
+    `<select class="form-ctrl" id="${id}" style="font-size:11px">
+      ${opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}
+     </select>`;
+  return `<div style="padding:10px 14px 12px;background:#f8fafc;border-top:1px solid var(--border)">
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group" style="flex:3">
+        <label class="form-lbl">Description</label>
+        <input class="form-ctrl" id="te-description" value="${esc(item.description)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Priority</label>
+        ${sel('te-priority',['Normal','Urgent','Critical'],item.priority)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Status</label>
+        ${sel('te-status',['Not Started','In Progress','Completed','On Hold'],item.status)}
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group">
+        <label class="form-lbl">Type</label>
+        ${sel('te-type',['','Shell Plate','Stiffener','Longitudinal','Bulb Bar','Angle Bar','Flat Bar','Checked Plate','Web Plate','Other'],item.type)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Grade</label>
+        ${sel('te-steel_grade',['','A','B','AH32','AH36','DH32','EH32','Other'],item.steel_grade)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Space Type</label>
+        ${sel('te-space_type',['Open Space','Closed Space','DBT / FPT / Oil Tank','Dry Dock (Underwater)'],item.space_type)}
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group">
+        <label class="form-lbl">Frame No.</label>
+        <input class="form-ctrl" id="te-frame_no" value="${esc(item.frame_no)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Location</label>
+        <input class="form-ctrl" id="te-location_detail" value="${esc(item.location_detail)}" style="font-size:11px">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px;align-items:flex-end">
+      <div class="form-group">
+        <label class="form-lbl">L (mm)</label>
+        <input class="form-ctrl" id="te-length_l" type="number" value="${item.length_l||''}" oninput="tankEditAutoWeight()" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">W (mm)</label>
+        <input class="form-ctrl" id="te-width_w" type="number" value="${item.width_w||''}" oninput="tankEditAutoWeight()" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">T (mm)</label>
+        <input class="form-ctrl" id="te-thickness_t" type="number" value="${item.thickness_t||''}" oninput="tankEditAutoWeight()" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">New Wt (kg)</label>
+        <input class="form-ctrl" id="te-new_weight" type="number" value="${item.new_weight||''}" style="font-size:11px;color:var(--blue);font-weight:700">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group" style="flex:1">
+        <label class="form-lbl">Remark</label>
+        <input class="form-ctrl" id="te-remark" value="${esc(item.remark)}" style="font-size:11px">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
+      <button class="btn-sec" style="font-size:11px" onclick="cancelTankItemEdit()">취소</button>
+      <button class="btn-pri" style="font-size:11px" onclick="saveTankItemEdit(${item.id})">💾 저장</button>
+    </div>
+  </div>`;
+}
+
+function tankEditAutoWeight() {
+  const l=+document.getElementById('te-length_l')?.value||0;
+  const w=+document.getElementById('te-width_w')?.value||0;
+  const t=+document.getElementById('te-thickness_t')?.value||0;
+  const wt=document.getElementById('te-new_weight');
+  if(wt&&l>0&&w>0&&t>0) wt.value=(l*w*t*8.0/1000000).toFixed(2);
+}
+
+function _renderTankModalBody() {
+  const items = (FLEET[VID].steel||[]).filter(i => {
+    if(!i.position_tank) return false;
+    const pt=i.position_tank.replace(/\s+/g,'').toUpperCase();
+    const tn=(_curTankName||'').replace(/\s+/g,'').toUpperCase();
+    return pt.includes(tn)||tn.includes(pt);
+  });
+  const sum=document.getElementById('m-tank-summary');
+  if(sum){
+    const cr=items.filter(i=>i.priority==='Critical').length;
+    const ug=items.filter(i=>i.priority==='Urgent').length;
+    const dn=items.filter(i=>i.status==='Completed').length;
+    sum.innerHTML=`<span style="font-size:12px;color:var(--txt-s)">총 <b style="color:var(--txt-h)">${items.length}</b>건
+      ${cr?` · <span style="color:#ef4444">🔴 Critical <b>${cr}</b></span>`:''}
+      ${ug?` · <span style="color:#d97706">🟡 Urgent <b>${ug}</b></span>`:''}
+      ${dn?` · ✅ Completed <b style="color:var(--green)">${dn}</b>`:''}
+    </span>`;
+  }
+  const body=document.getElementById('m-tank-body');
+  if(!items.length){
+    body.innerHTML=`<div style="text-align:center;padding:32px;color:var(--txt-m)">
+      <div style="font-size:28px;margin-bottom:8px">🔧</div>
+      <div>이 탱크에 등록된 Steel Repair 항목이 없습니다.</div>
+      <div style="font-size:12px;margin-top:4px">아래 ＋ Add Item으로 추가하세요.</div>
+    </div>`;
+    return;
+  }
+  body.innerHTML=items.map((item,idx)=>{
+    const isEditing = _editTankItemId === item.id;
+    const ph=priorityBadge(item.priority||'Normal');
+    const stCls=item.status==='Completed'?'c-closed':item.status==='Not Started'||!item.status?'c-open':'cat-badge cat-sh';
+    const dims=[item.length_l,item.width_w,item.thickness_t].filter(Boolean);
+    return `<div class="tank-item-row" style="flex-direction:column;align-items:stretch;padding:0">
+      <div style="display:flex;align-items:flex-start;gap:10px;width:100%;padding:10px 18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);
+                    font-weight:700;min-width:28px;padding-top:1px">${item.no||idx+1}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">${item.description||'—'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${ph}
+            <span class="c-badge ${stCls}" style="font-size:10px">${item.status||'Not Started'}</span>
+            ${item.type?`<span style="font-size:11px;color:var(--txt-s);background:var(--bg);padding:1px 6px;border-radius:4px">${item.type}</span>`:''}
+            ${item.steel_grade?`<span style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:1px 6px;border-radius:4px;font-weight:600">${item.steel_grade}</span>`:''}
+            ${dims.length?`<span style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${dims.join('×')}mm</span>`:''}
+            ${item.new_weight?`<span style="font-size:11px;color:var(--blue);font-family:'IBM Plex Mono',monospace;font-weight:600">${item.new_weight}kg</span>`:''}
+          </div>
+          ${item.frame_no?`<div style="font-size:11px;color:var(--txt-m);margin-top:3px">📐 Fr.${item.frame_no}${item.location_detail?' &nbsp;·&nbsp; '+item.location_detail:''}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
+                  onclick="${isEditing?'cancelTankItemEdit()':'startTankItemEdit('+item.id+')'}">
+            ${isEditing?'✕ 닫기':'✎ 편집'}</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
+                  onclick="goToSteelItem(${item.id})">↗ 바로가기</button>
+          <button class="btn-sec attach-btn" id="tattbtn-${item.id}"
+                  style="font-size:11px;padding:4px 8px;${(FLEET[VID].attachSet||new Set()).has('steel:'+item.id)?'background:var(--blue);color:var(--white)':''}"
+                  onclick="openGenAttach('steel',${item.id})">
+            ${(FLEET[VID].attachSet||new Set()).has('steel:'+item.id)?'📎 +':'📎'}
+          </button>
+        </div>
+      </div>
+      ${isEditing ? _tankEditForm(item) : ''}
+    </div>`;
+  }).join('');
+}
+
+// 탱크 모달 → Steel Repair 탭 해당 행으로 바로가기
+function goToSteelItem(itemId) {
+  closeM('m-tank');
+
+  // Tracking 메뉴 열고 Steel Repair 탭 활성화
+  const trigger = document.getElementById('trackingTriggerBtn');
+  const menu    = document.getElementById('trackingMenu');
+  if(trigger && menu) {
+    trigger.classList.add('active');
+    menu.classList.add('open');
+  }
+  // 서브탭 버튼 active 처리
+  document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
+  const steelBtn = document.querySelector('.tracking-sub-btn[onclick*="steel"]');
+  if(steelBtn) steelBtn.classList.add('active');
+
+  // 탭 전환
+  showTab('steel', trigger);
+
+  // 잠시 후 해당 행 스크롤 + 하이라이트
+  setTimeout(() => {
+    const row = document.querySelector(`#steel-body tr[data-id="${itemId}"]`);
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.style.transition = 'background .2s';
+    row.style.background = 'var(--amber-bg, #fffbeb)';
+    setTimeout(() => {
+      row.style.background = '';
+      setTimeout(() => row.style.transition = '', 600);
+    }, 1800);
+  }, 300);
+}
+
+function showTankAddForm() {
+  document.getElementById('m-tank-addform').style.display='';
+  document.getElementById('m-tank-addbtn').style.display='none';
+  document.getElementById('m-tank-savebtn').style.display='';
+  document.getElementById('m-tank-cancelbtn').style.display='';
+  document.getElementById('m-tank-add-pos').value=_curTankName||'';
+  setTimeout(()=>document.getElementById('m-tank-add-desc')?.focus(),50);
+}
+
+// L×W×T 입력 시 중량 자동계산
+function tankAutoWeight() {
+  const l = parseFloat(document.getElementById('m-tank-add-L')?.value);
+  const w = parseFloat(document.getElementById('m-tank-add-W')?.value);
+  const t = parseFloat(document.getElementById('m-tank-add-T')?.value);
+  const wtEl = document.getElementById('m-tank-add-wt');
+  if(!wtEl) return;
+  if(!isNaN(l) && !isNaN(w) && !isNaN(t) && l>0 && w>0 && t>0) {
+    wtEl.value = (l * w * t * 8.0 / 1000000).toFixed(2);
+  }
+}
+
+function hideTankAddForm() {
+  ['m-tank-addform'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const ab=document.getElementById('m-tank-addbtn');if(ab)ab.style.display='';
+  const sb=document.getElementById('m-tank-savebtn');if(sb)sb.style.display='none';
+  const cb=document.getElementById('m-tank-cancelbtn');if(cb)cb.style.display='none';
+  ['m-tank-add-desc','m-tank-add-frame','m-tank-add-loc',
+   'm-tank-add-L','m-tank-add-W','m-tank-add-T','m-tank-add-wt'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.value='';
+  });
+  const ts=document.getElementById('m-tank-add-type'); if(ts) ts.value='';
+  const gs=document.getElementById('m-tank-add-grade'); if(gs) gs.value='';
+  const ps=document.getElementById('m-tank-add-pri'); if(ps) ps.value='Normal';
+}
+async function saveTankItem() {
+  if(isViewer()){toast('읽기 전용 계정입니다',true);return;}
+  const desc=(document.getElementById('m-tank-add-desc')?.value||'').trim();
+  if(!desc){toast('Description을 입력하세요',true);return;}
+  const L  = document.getElementById('m-tank-add-L')?.value  || '';
+  const W  = document.getElementById('m-tank-add-W')?.value  || '';
+  const T  = document.getElementById('m-tank-add-T')?.value  || '';
+  const wt = document.getElementById('m-tank-add-wt')?.value || '';
+  // 해당 탱크의 기존 항목 수 기준으로 No. 자동 채번
+  const existingItems = (FLEET[VID].steel||[]).filter(i => {
+    if(!i.position_tank) return false;
+    const pt=i.position_tank.replace(/\s+/g,'').toUpperCase();
+    const tn=(_curTankName||'').replace(/\s+/g,'').toUpperCase();
+    return pt.includes(tn)||tn.includes(pt);
+  });
+  const nextNo = String(existingItems.length + 1);
+  const payload={
+    no: nextNo, position_tank:_curTankName||'',
+    frame_no:        (document.getElementById('m-tank-add-frame')?.value||'').trim(),
+    location_detail: (document.getElementById('m-tank-add-loc')?.value||'').trim(),
+    type:            document.getElementById('m-tank-add-type')?.value||'',
+    steel_grade:     document.getElementById('m-tank-add-grade')?.value||'',
+    length_l:        L, width_w: W, thickness_t: T,
+    new_weight:      wt,
+    description:     desc,
+    priority:        document.getElementById('m-tank-add-pri')?.value||'Normal',
+    status:          'Not Started',
+    space_type:      'Closed Space', shape:'Flat',
+    remark:'', start_date:'', completion_date:'',
+  };
+  setSS('saving');
+  try {
+    const n=await apiFetch(`${API}/vessels/${VID}/steel_repair`,'POST',payload);
+    FLEET[VID].steel=[...(FLEET[VID].steel||[]),n];
+    _tankPlanData=[..._tankPlanData,{id:n.id,no:n.no,position_tank:n.position_tank||_curTankName,
+      priority:n.priority,status:n.status,description:n.description}];
+    setSS('synced'); hideTankAddForm(); _renderTankModalBody();
+    const wrap=document.getElementById('tank-svg-wrap');
+    if(wrap&&_tankLayout) {
+      const _cf=_makeColFn(_tankPlanData,'#dbeafe','#3b82f6','#1d4ed8');
+      wrap.innerHTML=_svgFromLayout(_tankLayout,'openTankModal',_cf);
+    }
+    toast('Steel Repair 항목이 추가됐습니다');
+  } catch(e){setSS('error');toast('추가 실패: '+e.message,true);}
+}
+
+// ── Tank Layout Editor ────────────────────────────────────────
+function openTankLayoutEditor() {
+  if(!_tankLayout) _tankLayout = _defaultVLCCLayout();
+  _layoutEditing = JSON.parse(JSON.stringify(_tankLayout));
+  _renderLayoutEditor();
+  openM('m-tank-layout');
+}
+
+function _renderLayoutEditor() {
+  const el = document.getElementById('m-tl-body');
+  if(!el) return;
+  const L = _layoutEditing;
+
+  // 섹션의 현재 행 구성 판별
+  const getSecMode = (sec) => {
+    if(!sec.columns||!sec.columns.length) return 'ps';
+    return sec.columns.some(col => col.c && typeof col.c==='object' && !col.c?.empty) ? 'pcs' : 'ps';
+  };
+  // 컬럼의 현재 레이아웃 모드
+  const getColMode = (col) => {
+    const isSpan = col.s===null && !(col.c && !col.c?.empty);
+    if(isSpan) return 'span';
+    const hasC = col.c && typeof col.c==='object' && !col.c?.empty;
+    return hasC ? 'pcs' : 'ps';
+  };
+
+  let html = `<div style="display:flex;gap:16px;align-items:center;padding:10px 20px;
+      border-bottom:1px solid var(--border);background:var(--bg-panel);flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:var(--txt-s)">표시 방향:</span>
+    <label style="font-size:12px;cursor:pointer;display:flex;gap:6px;align-items:center">
+      <input type="radio" name="tp-dir" value="aft-fwd" ${L.direction==='aft-fwd'?'checked':''}
+             onchange="_layoutEditing.direction=this.value">
+      <b>AFT</b> ← 좌측 &nbsp;·&nbsp; <b>FWD</b> → 우측
+    </label>
+    <label style="font-size:12px;cursor:pointer;display:flex;gap:6px;align-items:center">
+      <input type="radio" name="tp-dir" value="fwd-aft" ${L.direction!=='aft-fwd'?'checked':''}
+             onchange="_layoutEditing.direction=this.value">
+      <b>FWD</b> ← 좌측 &nbsp;·&nbsp; <b>AFT</b> → 우측
+    </label>
+    <button class="btn-sec" style="font-size:11px;margin-left:auto" onclick="resetToDefaultLayout()">↺ VLCC 기본값</button>
+  </div>`;
+
+  L.sections.forEach((sec, si) => {
+    const secMode = getSecMode(sec);
+    html += `<div style="border-bottom:2px solid var(--border);padding:12px 20px">
+      <!-- 섹션 헤더 -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-size:10px;font-weight:700;color:var(--blue);min-width:56px;text-transform:uppercase">Section ${si+1}</span>
+        <input class="fi" value="${(sec.label||'').replace(/"/g,'&quot;')}" placeholder="Section Label"
+               style="flex:1;font-size:13px;font-weight:600;min-width:160px"
+               onchange="_layoutEditing.sections[${si}].label=this.value">
+        <input class="fi" value="${(sec.sublabel||'').replace(/"/g,'&quot;')}" placeholder="Sub Label"
+               style="width:140px;font-size:12px"
+               onchange="_layoutEditing.sections[${si}].sublabel=this.value">
+        <!-- 섹션 기본 행 수 -->
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:11px;color:var(--txt-s)">기본 행:</span>
+          <select class="fi" style="width:100px;font-size:11px" onchange="setSectionRowMode(${si},this.value)">
+            <option value="ps"  ${secMode==='ps' ?'selected':''}>2행 (P/S)</option>
+            <option value="pcs" ${secMode==='pcs'?'selected':''}>3행 (P/C/S)</option>
+          </select>
+        </div>
+        ${L.sections.length>1?`<button class="edit-btn" style="color:var(--red)" onclick="deleteTankSection(${si})">✕ 삭제</button>`:''}
+      </div>
+
+      <!-- 컬럼 테이블 -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:540px">
+          <thead>
+            <tr style="background:var(--bg-panel)">
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:center;width:50px">이동</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:center;width:100px">행 구성</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:left">Port (P)</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:left">Center (C)</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:left">Stbd (S)</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:center;width:62px">폭(px)</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:center;width:68px">Type</th>
+              <th style="padding:5px 6px;color:var(--txt-m);text-align:center;width:42px">클릭</th>
+              <th style="width:28px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sec.columns.map((col, ci) => {
+              const typ = col.p?.type || col.c?.type || col.s?.type || 'MISC';
+              const colMode = getColMode(col);
+
+              // 셀 이름 입력 헬퍼
+              const cellInput = (field, tank, placeholder) => {
+                if(!tank) return `<span style="font-size:10px;color:#cbd5e1;padding:0 4px">—</span>`;
+                if(tank.empty)
+                  return `<span style="display:inline-flex;align-items:center;gap:2px">
+                    <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:600">EMPTY</span>
+                    <button class="edit-btn" onclick="setTankCellEmpty(${si},${ci},'${field}',false)" title="해제">↺</button>
+                  </span>`;
+                return `<span style="display:inline-flex;align-items:center;gap:2px">
+                  <input class="fi" style="width:84px;font-size:11px" value="${(tank.name||'').replace(/"/g,'&quot;')}"
+                         placeholder="${placeholder}" onchange="updateColField(${si},${ci},'${field}',this.value)">
+                  <button class="edit-btn" onclick="setTankCellEmpty(${si},${ci},'${field}',true)"
+                          title="빈 공간" style="font-size:10px;color:#94a3b8">○</button>
+                </span>`;
+              };
+
+              return `<tr style="border-top:1px solid var(--border)">
+                <td style="padding:4px 6px;text-align:center">
+                  <button class="edit-btn" onclick="moveTankCol(${si},${ci},-1)" ${ci===0?'style="opacity:.3"':''}>◄</button>
+                  <button class="edit-btn" onclick="moveTankCol(${si},${ci},1)" ${ci===sec.columns.length-1?'style="opacity:.3"':''}>►</button>
+                </td>
+                <!-- 행 구성 드롭다운 -->
+                <td style="padding:4px 6px;text-align:center">
+                  <select class="fi" style="width:92px;font-size:11px" onchange="setColLayout(${si},${ci},this.value)">
+                    <option value="span" ${colMode==='span'?'selected':''}>▣ SPAN</option>
+                    <option value="ps"   ${colMode==='ps'  ?'selected':''}>P / S</option>
+                    <option value="pcs"  ${colMode==='pcs' ?'selected':''}>P / C / S</option>
+                  </select>
+                </td>
+                <td style="padding:4px 6px">${cellInput('p', col.p, 'Port명')}</td>
+                <td style="padding:4px 6px">
+                  ${colMode==='span' ? `<span style="font-size:10px;color:#cbd5e1">—</span>`
+                  : colMode==='pcs'  ? cellInput('c', col.c, 'Center명')
+                                     : `<span style="font-size:10px;color:#cbd5e1">—</span>`}
+                </td>
+                <td style="padding:4px 6px">
+                  ${colMode==='span' ? `<span style="font-size:10px;color:#cbd5e1">—</span>`
+                                     : cellInput('s', col.s, 'Stbd명')}
+                </td>
+                <td style="padding:4px 6px;text-align:center">
+                  <input type="number" class="fi" style="width:54px;text-align:center;font-size:11px"
+                         value="${col.w||100}" min="20" max="600"
+                         onchange="updateColField(${si},${ci},'w',+this.value)">
+                </td>
+                <td style="padding:4px 6px;text-align:center">
+                  <select class="fi" style="width:64px;font-size:11px" onchange="updateColField(${si},${ci},'type',this.value)">
+                    ${['COT','WBT','DBT','SLOP','FOT','FPT','APT','ER','MISC'].map(t=>
+                      `<option ${typ===t?'selected':''}>${t}</option>`
+                    ).join('')}
+                  </select>
+                </td>
+                <td style="padding:4px 6px;text-align:center">
+                  <input type="checkbox" ${col.p?.cl||col.c?.cl||col.s?.cl?'checked':''}
+                         onchange="updateColField(${si},${ci},'cl',this.checked)">
+                </td>
+                <td style="padding:4px 6px">
+                  <button class="edit-btn" style="color:var(--red)" onclick="deleteTankCol(${si},${ci})">✕</button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <button class="btn-sec" style="font-size:11px;margin-top:8px" onclick="addTankCol(${si})">＋ 열 추가</button>
+    </div>`;
+  });
+
+  html += `<div style="padding:12px 20px">
+    <button class="btn-sec" style="font-size:12px" onclick="addTankSection()">＋ 섹션 추가</button>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function resetToDefaultLayout() {
+  if(!confirm('VLCC 기본 레이아웃으로 초기화하시겠습니까?')) return;
+  _layoutEditing = _defaultVLCCLayout();
+  _renderLayoutEditor();
+  toast('VLCC 기본 레이아웃으로 초기화됐습니다');
+}
+function moveTankCol(si, ci, dir) {
+  const cols=_layoutEditing.sections[si].columns;
+  const ni=ci+dir; if(ni<0||ni>=cols.length) return;
+  [cols[ci],cols[ni]]=[cols[ni],cols[ci]];
+  _renderLayoutEditor();
+}
+function updateColField(si, ci, field, value) {
+  const col=_layoutEditing.sections[si].columns[ci];
+  if(field==='p'){if(!col.p)col.p={id:'',name:'',type:'MISC',cl:true};col.p.name=value;col.p.id=value.replace(/\s+/g,'').toUpperCase();}
+  else if(field==='c'){if(!col.c)col.c={id:'',name:'',type:'MISC',cl:true};col.c.name=value;col.c.id=value.replace(/\s+/g,'').toUpperCase();}
+  else if(field==='s'){if(!col.s)col.s={id:'',name:'',type:'MISC',cl:true};col.s.name=value;col.s.id=value.replace(/\s+/g,'').toUpperCase();}
+  else if(field==='w'){col.w=value||100;}
+  else if(field==='type'){if(col.p)col.p.type=value;if(col.c)col.c.type=value;if(col.s)col.s.type=value;}
+  else if(field==='cl'){if(col.p)col.p.cl=value;if(col.c)col.c.cl=value;if(col.s)col.s.cl=value;}
+}
+// 컬럼 행 구성 드롭다운 변경
+function setColLayout(si, ci, mode) {
+  const col  = _layoutEditing.sections[si].columns[ci];
+  const typ  = col.p?.type || col.c?.type || col.s?.type || 'MISC';
+  const base = (col.p?.name||'Tank').replace(/[\sPCS]+$/,'').trim();
+  const mk   = (sfx) => ({id:(base+sfx).replace(/\s+/g,'').toUpperCase(), name:base+' '+sfx, type:typ, cl:true});
+  if(mode==='span'){
+    col.s = null;
+    col.c = null;
+    if(!col.p) col.p = mk('P');
+  } else if(mode==='ps'){
+    col.c = null;
+    if(!col.p) col.p = mk('P');
+    if(!col.s || col.s===null) col.s = mk('S');
+  } else if(mode==='pcs'){
+    if(!col.p) col.p = mk('P');
+    if(!col.c || col.c===null) col.c = mk('C');
+    if(!col.s || col.s===null) col.s = mk('S');
+  }
+  _renderLayoutEditor();
+}
+
+// 섹션 기본 행 수 변경 — 전체 컬럼에 적용
+function setSectionRowMode(si, mode) {
+  const sec = _layoutEditing.sections[si];
+  sec.columns.forEach((col, ci) => {
+    const isSpan = col.s===null && !(col.c && !col.c?.empty);
+    if(isSpan) return; // SPAN 컬럼은 유지
+    setColLayout(si, ci, mode);
+  });
+  _renderLayoutEditor();
+}
+
+function addTankCol(si) {
+  const sec    = _layoutEditing.sections[si];
+  // 섹션의 현재 기본 행 수 자동 반영
+  const hasPCS = sec.columns.some(c => c.c && typeof c.c==='object' && !c.c?.empty);
+  const n = Date.now();
+  _layoutEditing.sections[si].columns.push({
+    id:'c_'+n, w:130,
+    p:{id:'NEWP'+n, name:'New P', type:'MISC', cl:true},
+    c: hasPCS ? {id:'NEWC'+n, name:'New C', type:'MISC', cl:true} : null,
+    s:{id:'NEWS'+n, name:'New S', type:'MISC', cl:true},
+  });
+  _renderLayoutEditor();
+}
+function deleteTankCol(si, ci) {
+  _layoutEditing.sections[si].columns.splice(ci,1);
+  _renderLayoutEditor();
+}
+function addTankSection() {
+  _layoutEditing.sections.push({id:'sec_'+Date.now(),label:'새 섹션',sublabel:'',columns:[]});
+  _renderLayoutEditor();
+}
+async function saveTankLayoutToDb() {
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/vessels/${VID}/tank_layout`,'PUT',_layoutEditing);
+    _tankLayout=JSON.parse(JSON.stringify(_layoutEditing));
+    setSS('synced');
+    closeM('m-tank-layout');
+    const wrap=document.getElementById('tank-svg-wrap');
+    if(wrap) { const _cf=_makeColFn(_tankPlanData,'#dbeafe','#3b82f6','#1d4ed8'); wrap.innerHTML=_svgFromLayout(_tankLayout,'openTankModal',_cf); }
+    toast('레이아웃이 저장됐습니다');
+  } catch(e){setSS('error');toast('저장 실패: '+e.message,true);}
+}
+
+// ══ PIPE PLAN ═════════════════════════════════════════════════
+
+let _pipePlanData = [];
+let _curPipeTankId = null, _curPipeTankName = null;
+
+// Pipe Plan 전용 색상 (초록 계열 — Steel Plan 파란색과 구분)
+const PIPE_PLAN_COLORS = {
+  noItems:  {fill:'#f0fdf4', stroke:'#86efac', text:'#4b7c5a'},
+  hasItems: {fill:'#d1fae5', stroke:'#10b981', text:'#065f46'},
+  urgent:   {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e'},
+  critical: {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b'},
+};
+
+// _pipePlanCol → _makeColFn으로 대체됨
+
+async function renderPipePlan() {
+  if(!VID) return;
+  const wrap = document.getElementById('pipe-svg-wrap');
+  if(wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#334155;font-size:13px">로딩 중…</div>';
+
+  const [items, saved] = await Promise.all([
+    apiFetch(`${API}/vessels/${VID}/pipe_plan`).catch(()=>[]),
+    apiFetch(`${API}/vessels/${VID}/tank_layout`).catch(()=>null),
+  ]);
+  _pipePlanData = items || [];
+
+  // 레이아웃은 Tank Plan과 공유
+  if(!_tankLayout) {
+    const layout = (saved && saved.version === TANK_LAYOUT_VERSION) ? saved : null;
+    _tankLayout = layout || _defaultVLCCLayout();
+  }
+
+  // Pipe Plan 색상: 초록색 — 렌더 시점 데이터 캡처
+  const _pipeColFn = _makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46');
+  if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', _pipeColFn);
+
+  const total=_pipePlanData.length;
+  const cr=_pipePlanData.filter(i=>i.priority==='Critical').length;
+  const ug=_pipePlanData.filter(i=>i.priority==='Urgent').length;
+  const tnks=new Set(_pipePlanData.map(i=>i.position_tank).filter(Boolean)).size;
+  const st=document.getElementById('pipe-plan-stats');
+  if(st) st.innerHTML=`전체 <b>${total}</b>건 · 공간 <b>${tnks}</b>개 · <span style="color:#fca5a5">🔴 Critical <b>${cr}</b></span> · <span style="color:#fde68a">🟡 Urgent <b>${ug}</b></span>`;
+}
+
+// ── Pipe Modal ────────────────────────────────────────────────
+async function openPipeModal(tankId, tankName) {
+  _curPipeTankId = tankId; _curPipeTankName = tankName;
+  _editPipeItemId = null;
+  document.getElementById('m-pipe-title').textContent = tankName + ' — Pipe Repair Items';
+  document.getElementById('m-pipe-body').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--txt-m)">로딩 중…</div>';
+  openM('m-pipe');
+
+  if(!FLEET[VID].pipe || !FLEET[VID].pipe.length) {
+    try { FLEET[VID].pipe = await apiFetch(`${API}/vessels/${VID}/pipe_repair`); } catch(e) {}
+  }
+  _renderPipeModalBody();
+}
+
+// ── Pipe inline edit helpers ──────────────────────────────────
+function startPipeItemEdit(id) { _editPipeItemId = id; _renderPipeModalBody(); }
+function cancelPipeItemEdit()  { _editPipeItemId = null; _renderPipeModalBody(); }
+
+async function savePipeItemEdit(id) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+  const row = (FLEET[VID].pipe||[]).find(r=>r.id===id);
+  if(!row) return;
+  const g = (sid) => document.getElementById(sid)?.value ?? '';
+  const updated = {
+    ...row,
+    system_line:     g('pe-system_line')     || row.system_line,
+    description:     g('pe-description')     || row.description,
+    frame_no:        g('pe-frame_no'),
+    location_detail: g('pe-location_detail'),
+    pipe_od:         g('pe-pipe_od'),
+    schedule:        g('pe-schedule')        || row.schedule,
+    material:        g('pe-material')        || row.material,
+    length_m:        g('pe-length_m'),
+    bend_qty:        g('pe-bend_qty'),
+    flange_qty:      g('pe-flange_qty'),
+    valve_type:      g('pe-valve_type')      || row.valve_type,
+    valve_size:      g('pe-valve_size'),
+    valve_qty:       g('pe-valve_qty'),
+    priority:        g('pe-priority')        || row.priority,
+    status:          g('pe-status')          || row.status,
+    remark:          g('pe-remark'),
+  };
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/pipe_repair/${id}`, 'PUT', updated);
+    Object.assign(row, updated);
+    const pp = _pipePlanData.find(r=>r.id===id);
+    if(pp) Object.assign(pp, {priority:updated.priority, status:updated.status, system_line:updated.system_line});
+    setSS('synced'); _editPipeItemId = null; _renderPipeModalBody();
+    toast('저장됐습니다');
+  } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
+}
+
+function _pipeEditForm(item) {
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const sel = (id, opts, val) =>
+    `<select class="form-ctrl" id="${id}" style="font-size:11px">
+      ${opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}
+     </select>`;
+  const SYS_OPTS = ['','Ballast','F.O.','C.O.','L.O.','S.W.','F.W.','Steam','Drain','Fire & GS','Comp. Air','Inert Gas','Hydraulic','Other'];
+  return `<div style="padding:10px 14px 12px;background:#f0fdf4;border-top:1px solid var(--border)">
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group">
+        <label class="form-lbl">System / Line</label>
+        ${sel('pe-system_line', SYS_OPTS, item.system_line)}
+      </div>
+      <div class="form-group" style="flex:2">
+        <label class="form-lbl">Description</label>
+        <input class="form-ctrl" id="pe-description" value="${esc(item.description)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Priority</label>
+        ${sel('pe-priority',['Normal','Urgent','Critical'],item.priority)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Status</label>
+        ${sel('pe-status',['Not Started','In Progress','Completed','On Hold'],item.status)}
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group">
+        <label class="form-lbl">Frame No.</label>
+        <input class="form-ctrl" id="pe-frame_no" value="${esc(item.frame_no)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Location</label>
+        <input class="form-ctrl" id="pe-location_detail" value="${esc(item.location_detail)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Pipe OD (mm)</label>
+        <input class="form-ctrl" id="pe-pipe_od" value="${esc(item.pipe_od)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Schedule</label>
+        ${sel('pe-schedule',['Sch40','Sch80','Other'],item.schedule)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Material</label>
+        ${sel('pe-material',['Carbon Steel','Galvanized','Stainless Steel','Hydraulic','Acid Treatment','Other'],item.material)}
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group">
+        <label class="form-lbl">Length (m)</label>
+        <input class="form-ctrl" id="pe-length_m" type="number" value="${item.length_m||''}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Bend (pc)</label>
+        <input class="form-ctrl" id="pe-bend_qty" type="number" value="${item.bend_qty||''}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Flange (pc)</label>
+        <input class="form-ctrl" id="pe-flange_qty" type="number" value="${item.flange_qty||''}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Valve Type</label>
+        ${sel('pe-valve_type',['None','Globe','Gate','Butterfly','Check','Ball'],item.valve_type)}
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">V.Size (mm)</label>
+        <input class="form-ctrl" id="pe-valve_size" value="${esc(item.valve_size)}" style="font-size:11px">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">V.Qty (pc)</label>
+        <input class="form-ctrl" id="pe-valve_qty" type="number" value="${item.valve_qty||''}" style="font-size:11px">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:6px">
+      <div class="form-group" style="flex:1">
+        <label class="form-lbl">Remark</label>
+        <input class="form-ctrl" id="pe-remark" value="${esc(item.remark)}" style="font-size:11px">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
+      <button class="btn-sec" style="font-size:11px" onclick="cancelPipeItemEdit()">취소</button>
+      <button class="btn-pri" style="font-size:11px" onclick="savePipeItemEdit(${item.id})">💾 저장</button>
+    </div>
+  </div>`;
+}
+
+function _renderPipeModalBody() {
+  const items = (FLEET[VID].pipe||[]).filter(i => {
+    if(!i.position_tank) return false;
+    const pt=i.position_tank.replace(/\s+/g,'').toUpperCase();
+    const tn=(_curPipeTankName||'').replace(/\s+/g,'').toUpperCase();
+    return pt.includes(tn)||tn.includes(pt);
+  });
+
+  const sum = document.getElementById('m-pipe-summary');
+  if(sum) {
+    const cr=items.filter(i=>i.priority==='Critical').length;
+    const ug=items.filter(i=>i.priority==='Urgent').length;
+    const dn=items.filter(i=>i.status==='Completed').length;
+    sum.innerHTML=`<span style="font-size:12px;color:var(--txt-s)">총 <b style="color:var(--txt-h)">${items.length}</b>건
+      ${cr?` · <span style="color:#ef4444">🔴 Critical <b>${cr}</b></span>`:''}
+      ${ug?` · <span style="color:#d97706">🟡 Urgent <b>${ug}</b></span>`:''}
+      ${dn?` · ✅ Completed <b style="color:var(--green)">${dn}</b>`:''}
+    </span>`;
+  }
+
+  const body = document.getElementById('m-pipe-body');
+  if(!items.length) {
+    body.innerHTML=`<div style="text-align:center;padding:32px;color:var(--txt-m)">
+      <div style="font-size:28px;margin-bottom:8px">🔩</div>
+      <div>이 공간에 등록된 Pipe Repair 항목이 없습니다.</div>
+      <div style="font-size:12px;margin-top:4px">아래 ＋ Add Item으로 추가하세요.</div>
+    </div>`;
+    return;
+  }
+
+  body.innerHTML = items.map((item, idx) => {
+    const isEditing = _editPipeItemId === item.id;
+    const ph = priorityBadge(item.priority||'Normal');
+    const stCls = item.status==='Completed'?'c-closed':item.status==='Not Started'||!item.status?'c-open':'cat-badge cat-sh';
+    const specs = [
+      item.pipe_od   ? `OD ${item.pipe_od}mm` : '',
+      item.schedule  || '',
+      item.material  || '',
+      item.length_m  ? `L=${item.length_m}m` : '',
+      item.bend_qty  ? `Bend×${item.bend_qty}` : '',
+      item.flange_qty? `Flange×${item.flange_qty}` : '',
+    ].filter(Boolean);
+    const valveInfo = item.valve_type && item.valve_type!=='None'
+      ? `🔧 ${item.valve_type}${item.valve_size?' '+item.valve_size+'mm':''}${item.valve_qty?' ×'+item.valve_qty:''}` : '';
+
+    return `<div class="tank-item-row" style="flex-direction:column;align-items:stretch;padding:0">
+      <div style="display:flex;align-items:flex-start;gap:10px;width:100%;padding:10px 18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#10b981;
+                    font-weight:700;min-width:28px;padding-top:1px">${item.no||idx+1}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">
+            ${item.system_line?`<span style="font-size:11px;font-weight:700;color:#0891b2;background:#e0f2fe;padding:1px 6px;border-radius:3px;margin-right:5px">${item.system_line}</span>`:''}
+            ${item.description||'—'}
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+            ${ph}
+            <span class="c-badge ${stCls}" style="font-size:10px">${item.status||'Not Started'}</span>
+            ${specs.length?`<span style="font-size:11px;color:var(--txt-m);font-family:'IBM Plex Mono',monospace">${specs.join(' · ')}</span>`:''}
+          </div>
+          ${valveInfo?`<div style="font-size:11px;color:var(--txt-m);margin-top:3px">${valveInfo}</div>`:''}
+          ${item.frame_no?`<div style="font-size:11px;color:var(--txt-m);margin-top:2px">📐 Fr.${item.frame_no}${item.location_detail?' &nbsp;·&nbsp; '+item.location_detail:''}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
+                  onclick="${isEditing?'cancelPipeItemEdit()':'startPipeItemEdit('+item.id+')'}">
+            ${isEditing?'✕ 닫기':'✎ 편집'}</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
+                  onclick="goToPipeItem(${item.id})">↗ 바로가기</button>
+          <button class="btn-sec attach-btn" id="pipebtn-${item.id}"
+                  style="font-size:11px;padding:4px 8px;${(FLEET[VID].attachSet||new Set()).has('pipe:'+item.id)?'background:var(--blue);color:var(--white)':''}"
+                  onclick="openGenAttach('pipe',${item.id})">
+            ${(FLEET[VID].attachSet||new Set()).has('pipe:'+item.id)?'📎 +':'📎'}
+          </button>
+        </div>
+      </div>
+      ${isEditing ? _pipeEditForm(item) : ''}
+    </div>`;
+  }).join('');
+}
+
+// Pipe Plan → Pipe Repair 탭 바로가기
+function goToPipeItem(itemId) {
+  closeM('m-pipe');
+  const trigger = document.getElementById('trackingTriggerBtn');
+  const menu    = document.getElementById('trackingMenu');
+  if(trigger && menu) { trigger.classList.add('active'); menu.classList.add('open'); }
+  document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
+  const pipeBtn = document.querySelector('.tracking-sub-btn[onclick*="\'pipe\'"]');
+  if(pipeBtn) pipeBtn.classList.add('active');
+  showTab('pipe', trigger);
+  setTimeout(() => {
+    const row = document.querySelector(`#pipe-body tr[data-id="${itemId}"]`);
+    if(!row) return;
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.style.transition='background .2s';
+    row.style.background='#d1fae5';
+    setTimeout(()=>{ row.style.background=''; setTimeout(()=>row.style.transition='',600); },1800);
+  }, 300);
+}
+
+// Pipe Plan Add Item
+async function savePipeItem() {
+  if(isViewer()){toast('읽기 전용 계정입니다',true);return;}
+  const sys = (document.getElementById('m-pipe-add-sys')?.value||'').trim();
+  const desc= (document.getElementById('m-pipe-add-desc')?.value||'').trim();
+  if(!desc){toast('Description을 입력하세요',true);return;}
+  const existingItems=(FLEET[VID].pipe||[]).filter(i=>{
+    if(!i.position_tank)return false;
+    const pt=i.position_tank.replace(/\s+/g,'').toUpperCase();
+    const tn=(_curPipeTankName||'').replace(/\s+/g,'').toUpperCase();
+    return pt.includes(tn)||tn.includes(pt);
+  });
+  const payload={
+    no:String(existingItems.length+1),
+    system_line:sys, position_tank:_curPipeTankName||'',
+    frame_no:(document.getElementById('m-pipe-add-frame')?.value||'').trim(),
+    location_detail:(document.getElementById('m-pipe-add-loc')?.value||'').trim(),
+    pipe_od:(document.getElementById('m-pipe-add-od')?.value||'').trim(),
+    schedule:document.getElementById('m-pipe-add-sch')?.value||'Sch40',
+    material:document.getElementById('m-pipe-add-mat')?.value||'Carbon Steel',
+    length_m:(document.getElementById('m-pipe-add-len')?.value||'').trim(),
+    description:desc, remark:'',
+    priority:document.getElementById('m-pipe-add-pri')?.value||'Normal',
+    status:'Not Started',
+    length_m:'',bend_qty:'',flange_qty:'',
+    valve_type:'None',valve_size:'',valve_qty:'',
+    start_date:'',completion_date:'',
+  };
+  setSS('saving');
+  try {
+    const n=await apiFetch(`${API}/vessels/${VID}/pipe_repair`,'POST',payload);
+    FLEET[VID].pipe=[...(FLEET[VID].pipe||[]),n];
+    _pipePlanData=[..._pipePlanData,{id:n.id,no:n.no,position_tank:n.position_tank||_curPipeTankName,
+      system_line:n.system_line,priority:n.priority,status:n.status,description:n.description}];
+    setSS('synced');
+    document.getElementById('m-pipe-addform').style.display='none';
+    document.getElementById('m-pipe-addbtn').style.display='';
+    _renderPipeModalBody();
+    const wrap=document.getElementById('pipe-svg-wrap');
+    if(wrap&&_tankLayout) {
+      const _cf=_makeColFn(_pipePlanData,'#d1fae5','#10b981','#065f46');
+      wrap.innerHTML=_svgFromLayout(_tankLayout,'openPipeModal',_cf);
+    }
+    // 폼 리셋
+    ['m-pipe-add-sys','m-pipe-add-desc','m-pipe-add-frame','m-pipe-add-loc','m-pipe-add-od','m-pipe-add-len'].forEach(id=>{
+      const e=document.getElementById(id);if(e)e.value='';
+    });
+    toast('Pipe Repair 항목이 추가됐습니다');
+  } catch(e){setSS('error');toast('추가 실패: '+e.message,true);}
+}
 
 // ══ CALENDAR ═════════════════════════════════════════════════
 let _calYear = new Date().getFullYear();
