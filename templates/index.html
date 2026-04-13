@@ -75,6 +75,8 @@
     <button class="vnav-btn" onclick="showTab('documents',this)">📁 Documents</button>
     <span class="vnav-sep"></span>
     <button class="vnav-btn vnav-tracking-trigger" id="trackingTriggerBtn" onclick="toggleTrackingMenu(this)">Tracking ▾</button>
+    <button class="vnav-btn" onclick="showTab('tankplan',this)">🛢 Tank Plan</button>
+    <button class="vnav-btn" onclick="showTab('pipeplan',this)">🔩 Pipe Plan</button>
     <div class="vnav-actions">
       <button class="btn-sec" onclick="printCurrentTab()" style="font-size:12px;padding:6px 12px">🖨 Print</button>
       <button class="btn-edit" onclick="openVesselEditModal()">✎ Edit Info</button>
@@ -320,9 +322,257 @@
     <div id="docs-grid" class="docs-grid"></div>
   </main></div>
 
+  <!-- ── Tank Plan ──────────────────────────────────────────── -->
+  <div id="vt-tankplan" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">🛢 Tank Plan — Steel Repair Visualization</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="tank-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
+        <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
+      </div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow-x:auto;margin-top:4px">
+      <div id="tank-svg-wrap"></div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--txt-m);padding:0 4px">
+      💡 탱크를 클릭하면 해당 탱크의 Steel Repair 항목을 조회하고 추가할 수 있습니다.
+      &nbsp;·&nbsp; 항목 건수는 Steel Repair 탭의 <b>Position/Tank</b> 필드 기준으로 자동 연동됩니다.
+    </div>
+  </main></div>
+
+  <!-- ── Pipe Plan ─────────────────────────────────────────── -->
+  <div id="vt-pipeplan" class="page"><main>
+    <div class="sec-hdr">
+      <div class="sec-title">🔩 Pipe Plan — Pipe Repair Visualization</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="pipe-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
+        <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
+      </div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow-x:auto;margin-top:4px">
+      <div id="pipe-svg-wrap"></div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--txt-m);padding:0 4px">
+      💡 공간을 클릭하면 해당 위치의 Pipe Repair 항목을 조회하고 추가할 수 있습니다.
+      &nbsp;·&nbsp; 항목 건수는 Pipe Repair 탭의 <b>Position/Tank</b> 필드 기준으로 자동 연동됩니다.
+    </div>
+  </main></div>
+
+  <!-- ── Pipe Plan Modal ───────────────────────────────────── -->
+  <div class="modal-overlay" id="m-pipe" onclick="if(event.target===this)closeM('m-pipe')">
+    <div class="modal" style="width:660px;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title" id="m-pipe-title">PIPE ITEMS</div>
+        <button class="modal-x" onclick="closeM('m-pipe')">✕</button>
+      </div>
+      <div id="m-pipe-summary"
+           style="padding:8px 20px;background:var(--bg-panel);border-bottom:1px solid var(--border);min-height:30px"></div>
+      <div id="m-pipe-body" style="overflow-y:auto;flex:1;padding:6px 0"></div>
+
+      <!-- Add form -->
+      <div id="m-pipe-addform" style="display:none;padding:14px 20px;border-top:1px solid var(--border);background:var(--bg-panel)">
+        <div style="font-size:11px;font-weight:700;color:var(--txt-s);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">
+          ➕ New Pipe Repair Item
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-lbl">Description *</label>
+            <input class="form-ctrl" id="m-pipe-add-desc" placeholder="작업 내용 입력">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Priority</label>
+            <select class="form-ctrl" id="m-pipe-add-pri">
+              <option>Normal</option><option>Urgent</option><option>Critical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-lbl">System / Line</label>
+            <select class="form-ctrl" id="m-pipe-add-sys">
+              <option value="">— Select —</option>
+              <option>Ballast</option><option>F.O.</option><option>C.O.</option>
+              <option>L.O.</option><option>S.W.</option><option>F.W.</option>
+              <option>Steam</option><option>Drain</option><option>Fire &amp; GS</option>
+              <option>Comp. Air</option><option>Inert Gas</option><option>Hydraulic</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Position / Tank</label>
+            <input class="form-ctrl" id="m-pipe-add-pos" readonly style="color:var(--txt-s)">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Frame No.</label>
+            <input class="form-ctrl" id="m-pipe-add-frame" placeholder="e.g. Fr.55~60">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-lbl">Pipe OD (mm)</label>
+            <input class="form-ctrl" id="m-pipe-add-od" placeholder="e.g. 150">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Schedule</label>
+            <select class="form-ctrl" id="m-pipe-add-sch">
+              <option>Sch40</option><option>Sch80</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Material</label>
+            <select class="form-ctrl" id="m-pipe-add-mat">
+              <option>Carbon Steel</option><option>Galvanized</option>
+              <option>Stainless Steel</option><option>Hydraulic</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Length (m)</label>
+            <input class="form-ctrl" id="m-pipe-add-len" type="number" min="0" step="0.1" placeholder="0.0">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Location Detail</label>
+            <input class="form-ctrl" id="m-pipe-add-loc" placeholder="e.g. Lower deck">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="gap:8px">
+        <button class="btn-add" id="m-pipe-addbtn"
+                onclick="document.getElementById('m-pipe-addform').style.display='';this.style.display='none';document.getElementById('m-pipe-add-pos').value=_curPipeTankName||'';setTimeout(()=>document.getElementById('m-pipe-add-desc')?.focus(),50)">
+          ＋ Add Item</button>
+        <button class="btn-pri" onclick="savePipeItem()">💾 Save</button>
+        <button class="btn-sec" onclick="document.getElementById('m-pipe-addform').style.display='none';document.getElementById('m-pipe-addbtn').style.display=''">Cancel</button>
+        <button class="btn-sec" onclick="closeM('m-pipe')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tank Layout Editor Modal ─────────────────────────── -->
+  <div class="modal-overlay" id="m-tank-layout" onclick="if(event.target===this)closeM('m-tank-layout')">
+    <div class="modal" style="width:920px;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title">⚙ Tank Layout Editor</div>
+        <button class="modal-x" onclick="closeM('m-tank-layout')">✕</button>
+      </div>
+      <div id="m-tl-body" style="overflow-y:auto;flex:1"></div>
+      <div class="modal-footer" style="gap:8px">
+        <button class="btn-pri" onclick="saveTankLayoutToDb()">💾 레이아웃 저장</button>
+        <button class="btn-sec" onclick="closeM('m-tank-layout')">취소</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="m-tank" onclick="if(event.target===this)closeM('m-tank')">
+    <div class="modal" style="width:640px;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title" id="m-tank-title">TANK ITEMS</div>
+        <button class="modal-x" onclick="closeM('m-tank')">✕</button>
+      </div>
+
+      <!-- Summary strip -->
+      <div id="m-tank-summary"
+           style="padding:8px 20px;background:var(--bg-panel);border-bottom:1px solid var(--border);min-height:30px"></div>
+
+      <!-- Item list -->
+      <div id="m-tank-body" style="overflow-y:auto;flex:1;padding:6px 0"></div>
+
+      <!-- Add form (hidden by default) -->
+      <div id="m-tank-addform" style="display:none;padding:14px 20px;border-top:1px solid var(--border);background:var(--bg-panel)">
+        <div style="font-size:11px;font-weight:700;color:var(--txt-s);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">
+          ➕ New Steel Repair Item
+        </div>
+        <!-- Row 1: Description + Priority -->
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-lbl">Description *</label>
+            <input class="form-ctrl" id="m-tank-add-desc" placeholder="작업 내용 입력">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Priority</label>
+            <select class="form-ctrl" id="m-tank-add-pri">
+              <option>Normal</option><option>Urgent</option><option>Critical</option>
+            </select>
+          </div>
+        </div>
+        <!-- Row 2: Position + Frame + Location -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-lbl">Position / Tank</label>
+            <input class="form-ctrl" id="m-tank-add-pos" readonly style="color:var(--txt-s)">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Frame No.</label>
+            <input class="form-ctrl" id="m-tank-add-frame" placeholder="e.g. Fr.55~60">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Location Detail</label>
+            <input class="form-ctrl" id="m-tank-add-loc" placeholder="e.g. Lower stool">
+          </div>
+        </div>
+        <!-- Row 3: Type + Steel Grade -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-lbl">Type</label>
+            <select class="form-ctrl" id="m-tank-add-type">
+              <option value="">— Select —</option>
+              <option>Shell Plate</option><option>Stiffener</option><option>Longitudinal</option>
+              <option>Bulb Bar</option><option>Angle Bar</option><option>Flat Bar</option>
+              <option>Checked Plate</option><option>Web Plate</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Steel Grade</label>
+            <select class="form-ctrl" id="m-tank-add-grade">
+              <option value="">— Select —</option>
+              <option>A</option><option>B</option>
+              <option>AH32</option><option>AH36</option>
+              <option>DH32</option><option>EH32</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+        <!-- Row 4: L × W × T + Auto Weight -->
+        <div class="form-row" style="align-items:flex-end">
+          <div class="form-group">
+            <label class="form-lbl">L (mm)</label>
+            <input class="form-ctrl" id="m-tank-add-L" type="number" min="0" placeholder="0"
+                   oninput="tankAutoWeight()">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">W (mm)</label>
+            <input class="form-ctrl" id="m-tank-add-W" type="number" min="0" placeholder="0"
+                   oninput="tankAutoWeight()">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">T (mm)</label>
+            <input class="form-ctrl" id="m-tank-add-T" type="number" min="0" placeholder="0"
+                   oninput="tankAutoWeight()">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">New Wt (kg) ★</label>
+            <div style="position:relative">
+              <input class="form-ctrl" id="m-tank-add-wt" type="number" min="0" placeholder="자동계산"
+                     style="font-weight:700;color:var(--blue)">
+              <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);
+                           font-size:10px;color:var(--txt-m);pointer-events:none">kg</span>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--txt-m);margin-top:-4px;padding-left:2px">
+          ✦ L×W×T 입력 시 중량 자동계산 (비중 8.0 g/cm³) · 직접 수정도 가능
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer" style="gap:8px">
+        <button class="btn-add" id="m-tank-addbtn" onclick="showTankAddForm()">＋ Add Item</button>
+        <button class="btn-pri" id="m-tank-savebtn" style="display:none" onclick="saveTankItem()">💾 Save</button>
+        <button class="btn-sec" id="m-tank-cancelbtn" style="display:none" onclick="hideTankAddForm()">Cancel</button>
+        <button class="btn-sec" onclick="closeM('m-tank')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Steel Repair ──────────────────────────────────────────── -->
   <div id="vt-steel" class="page"><main>
     <div class="sec-hdr">
-      <div class="sec-title">Steel Repair</div>
       <div style="display:flex;gap:8px;">
         <button class="btn-sec" onclick="openTrackingXlsx()">📂 xlsx 업로드</button>
         <button class="btn-add" onclick="addTrackingRow('steel')">+ Add Row</button>
@@ -364,12 +614,13 @@
       </div>
     </div>
     <div class="table-wrap" style="overflow-x:auto">
-      <table style="min-width:1400px"><thead><tr>
+      <table style="min-width:1550px"><thead><tr>
         <th style="width:44px">No.</th>
         <th style="width:100px">System/Line</th>
         <th style="width:100px">Position/Tank</th>
         <th style="width:75px">Frame No.</th>
         <th style="width:110px">Location</th>
+        <th>Description</th>
         <th style="width:75px">OD(mm)</th>
         <th style="width:70px">Schedule</th>
         <th style="width:110px">Material</th>
