@@ -121,7 +121,8 @@ function applyRoleUI() {
         button[onclick*="addTrackingRow"], button[onclick*="deleteTrackingRow"],
         button[onclick*="openTrackingXlsx"],
         button[onclick*="showTankAddForm"], button[onclick*="saveTankItem"],
-        button[onclick*="openTankLayoutEditor"], button[onclick*="openOrphanRecovery"]
+        button[onclick*="openTankLayoutEditor"], button[onclick*="openOrphanRecovery"],
+        button[onclick*="startTankItemEdit"], button[onclick*="startPipeItemEdit"]
         { display: none !important; }
         .cell-edit { pointer-events: none !important; cursor: default !important; }
         .tracking-date-cell input, .tracking-date-cell select
@@ -4199,9 +4200,9 @@ function _renderTankModalBody() {
           ${item.frame_no?`<div style="font-size:11px;color:var(--txt-m);margin-top:3px">📐 Fr.${item.frame_no}${item.location_detail?' &nbsp;·&nbsp; '+item.location_detail:''}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
+          ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
                   onclick="${isEditing?'cancelTankItemEdit()':'startTankItemEdit('+item.id+')'}">
-            ${isEditing?'✕ 닫기':'✎ 편집'}</button>
+            ${isEditing?'✕ 닫기':'✎ 편집'}</button>` : ''}
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
                   onclick="goToSteelItem(${item.id})">↗ 바로가기</button>
           <button class="btn-sec attach-btn" id="tattbtn-${item.id}"
@@ -4872,9 +4873,9 @@ function _renderPipeModalBody() {
           ${item.frame_no?`<div style="font-size:11px;color:var(--txt-m);margin-top:2px">📐 Fr.${item.frame_no}${item.location_detail?' &nbsp;·&nbsp; '+item.location_detail:''}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
+          ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
                   onclick="${isEditing?'cancelPipeItemEdit()':'startPipeItemEdit('+item.id+')'}">
-            ${isEditing?'✕ 닫기':'✎ 편집'}</button>
+            ${isEditing?'✕ 닫기':'✎ 편집'}</button>` : ''}
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
                   onclick="goToPipeItem(${item.id})">↗ 바로가기</button>
           <button class="btn-sec attach-btn" id="pipebtn-${item.id}"
