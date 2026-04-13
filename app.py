@@ -1265,6 +1265,43 @@ def save_tank_layout(vid):
     return jsonify({"success": True})
 
 
+@app.route("/api/vessels/<vid>/orphan_positions", methods=["GET"])
+@login_required
+def get_orphan_positions(vid):
+    """현재 레이아웃에 없는 position_tank 값을 가진 항목 조회"""
+    layout_row = get_db().execute(
+        "SELECT layout_json FROM vessel_tank_layout WHERE vessel_id=?", (vid,)).fetchone()
+    layout_names = set()
+    if layout_row:
+        import json as _json
+        layout = _json.loads(layout_row['layout_json'])
+        for sec in layout.get('sections', []):
+            for col in sec.get('columns', []):
+                for f in ('p','c','s'):
+                    t = col.get(f)
+                    if t and not t.get('empty') and t.get('name'):
+                        layout_names.add(t['name'].strip())
+
+    result = {}
+    for table in ('steel_repair', 'pipe_repair'):
+        rows = get_db().execute(
+            f"SELECT id, no, position_tank, description, priority, status FROM {table} "
+            f"WHERE vessel_id=? AND position_tank IS NOT NULL AND position_tank != ''",
+            (vid,)).fetchall()
+        for r in rows:
+            pt = (r['position_tank'] or '').strip()
+            if pt and pt not in layout_names:
+                if pt not in result:
+                    result[pt] = {'steel': [], 'pipe': []}
+                key = 'steel' if table == 'steel_repair' else 'pipe'
+                result[pt][key].append({
+                    'id': r['id'], 'no': r['no'],
+                    'description': r['description'] or '',
+                    'priority': r['priority'], 'status': r['status']
+                })
+    return jsonify(result)
+
+
 @app.route("/api/vessels/<vid>/position_rename", methods=["PUT"])
 @login_required
 @viewer_forbidden
