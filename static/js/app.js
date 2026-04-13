@@ -4317,32 +4317,31 @@ function _renderTankModalBody() {
 function goToSteelItem(itemId) {
   closeM('m-tank');
 
-  // Tracking 메뉴 열고 Steel Repair 탭 활성화
   const trigger = document.getElementById('trackingTriggerBtn');
   const menu    = document.getElementById('trackingMenu');
-  if(trigger && menu) {
-    trigger.classList.add('active');
-    menu.classList.add('open');
-  }
-  // 서브탭 버튼 active 처리
+  if(trigger && menu) { trigger.classList.add('active'); menu.classList.add('open'); }
   document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
   const steelBtn = document.querySelector('.tracking-sub-btn[onclick*="steel"]');
   if(steelBtn) steelBtn.classList.add('active');
-
-  // 탭 전환
   showTab('steel', trigger);
 
-  // 잠시 후 해당 행 스크롤 + 하이라이트
   setTimeout(() => {
-    const row = document.querySelector(`#steel-body tr[data-id="${itemId}"]`);
-    if(!row) return;
-    row.scrollIntoView({behavior:'smooth', block:'center'});
-    row.style.transition = 'background .2s';
-    row.style.background = 'var(--amber-bg, #fffbeb)';
+    // 해당 항목의 position_tank 그룹만 펼치기
+    const item = (FLEET[VID]?.steel||[]).find(r => String(r.id)===String(itemId));
+    if(item) {
+      const grp = (item.position_tank||'').trim() || '(미지정)';
+      if(!_trackingGroupCollapsed['steel']) _trackingGroupCollapsed['steel'] = new Set();
+      _trackingGroupCollapsed['steel'].delete(grp);  // 해당 그룹만 펼침
+      _renderTrackingTable('steel');
+    }
     setTimeout(() => {
-      row.style.background = '';
-      setTimeout(() => row.style.transition = '', 600);
-    }, 1800);
+      const row = document.querySelector(`#steel-body tr[data-id="${itemId}"]`);
+      if(!row) return;
+      row.scrollIntoView({behavior:'smooth', block:'center'});
+      row.style.transition = 'background .2s';
+      row.style.background = '#fffbeb';
+      setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
+    }, 80);
   }, 300);
 }
 
@@ -4996,13 +4995,24 @@ function goToPipeItem(itemId) {
   const pipeBtn = document.querySelector('.tracking-sub-btn[onclick*="\'pipe\'"]');
   if(pipeBtn) pipeBtn.classList.add('active');
   showTab('pipe', trigger);
+
   setTimeout(() => {
-    const row = document.querySelector(`#pipe-body tr[data-id="${itemId}"]`);
-    if(!row) return;
-    row.scrollIntoView({behavior:'smooth', block:'center'});
-    row.style.transition='background .2s';
-    row.style.background='#d1fae5';
-    setTimeout(()=>{ row.style.background=''; setTimeout(()=>row.style.transition='',600); },1800);
+    // 해당 항목의 position_tank 그룹만 펼치기
+    const item = (FLEET[VID]?.pipe||[]).find(r => String(r.id)===String(itemId));
+    if(item) {
+      const grp = (item.position_tank||'').trim() || '(미지정)';
+      if(!_trackingGroupCollapsed['pipe']) _trackingGroupCollapsed['pipe'] = new Set();
+      _trackingGroupCollapsed['pipe'].delete(grp);
+      _renderTrackingTable('pipe');
+    }
+    setTimeout(() => {
+      const row = document.querySelector(`#pipe-body tr[data-id="${itemId}"]`);
+      if(!row) return;
+      row.scrollIntoView({behavior:'smooth', block:'center'});
+      row.style.transition = 'background .2s';
+      row.style.background = '#d1fae5';
+      setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
+    }, 80);
   }, 300);
 }
 
