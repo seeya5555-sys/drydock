@@ -3496,12 +3496,21 @@ async function renderTracking(key){
     FLEET[VID][cfg.key] = data;
   } catch(e) { toast('로드 실패: '+e.message, true); return; }
 
-  // steel/pipe: 첫 로드 시 전체 접힌 상태로 시작
+  // steel/pipe: 첫 로드 시 전체 접힌 상태로 시작 (바로가기 중에는 현재 상태 유지)
   if((key === 'steel' || key === 'pipe') && !_trackingGroupCollapsed[key]) {
-    const data = FLEET[VID][cfg.key] || [];
+    const d = FLEET[VID][cfg.key] || [];
     _trackingGroupCollapsed[key] = new Set(
-      data.map(r => (r.position_tank || '').trim() || '(미지정)')
+      d.map(r => (r.position_tank || '').trim() || '(미지정)')
     );
+  } else if((key === 'steel' || key === 'pipe') && _highlightRowKey === key) {
+    // 바로가기로 이동 중: 새 데이터로 그룹 재구성하되 펼친 그룹은 유지
+    const d = FLEET[VID][cfg.key] || [];
+    const allGroups = new Set(d.map(r => (r.position_tank||'').trim()||'(미지정)'));
+    const existing  = _trackingGroupCollapsed[key];
+    // 새로 생긴 그룹은 접힌 상태로 추가, 기존 상태는 유지
+    allGroups.forEach(g => { if(!existing.has(g)) existing.add(g); });
+    // 더 이상 없는 그룹 제거
+    [...existing].forEach(g => { if(!allGroups.has(g)) existing.delete(g); });
   }
 
   _renderTrackingTable(key);
@@ -3509,6 +3518,8 @@ async function renderTracking(key){
 
 // Position/Tank 그룹 접힘 상태 (key → Set of collapsed group names)
 const _trackingGroupCollapsed = {};
+let _highlightRowId  = null;   // 렌더 후 하이라이트할 row id
+let _highlightRowKey = null;   // 어느 탭인지
 
 function toggleTrackingGroup(key, groupName) {
   if(!_trackingGroupCollapsed[key]) _trackingGroupCollapsed[key] = new Set();
@@ -3674,6 +3685,20 @@ function _renderGroupedTrackingTable(key, cfg, data, tbody) {
     }
   });
   tbody.innerHTML = html;
+
+  // 바로가기로 이동한 항목 하이라이트 처리
+  if(_highlightRowId !== null && _highlightRowKey === key) {
+    const id = _highlightRowId;
+    _highlightRowId = null; _highlightRowKey = null;
+    requestAnimationFrame(() => {
+      const row = tbody.querySelector(`tr[data-id="${id}"]`);
+      if(!row) return;
+      row.scrollIntoView({behavior:'smooth', block:'center'});
+      row.style.transition = 'background .2s';
+      row.style.background = key === 'pipe' ? '#d1fae5' : '#fffbeb';
+      setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
+    });
+  }
 }
 // 캘린더로 날짜 직접 설정
 async function setTrackingDate(key, rowId, col, val){
@@ -4323,26 +4348,20 @@ function goToSteelItem(itemId) {
   document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
   const steelBtn = document.querySelector('.tracking-sub-btn[onclick*="steel"]');
   if(steelBtn) steelBtn.classList.add('active');
-  showTab('steel', trigger);
 
-  setTimeout(() => {
-    // 해당 항목의 position_tank 그룹만 펼치기
-    const item = (FLEET[VID]?.steel||[]).find(r => String(r.id)===String(itemId));
-    if(item) {
-      const grp = (item.position_tank||'').trim() || '(미지정)';
-      if(!_trackingGroupCollapsed['steel']) _trackingGroupCollapsed['steel'] = new Set();
-      _trackingGroupCollapsed['steel'].delete(grp);  // 해당 그룹만 펼침
-      _renderTrackingTable('steel');
-    }
-    setTimeout(() => {
-      const row = document.querySelector(`#steel-body tr[data-id="${itemId}"]`);
-      if(!row) return;
-      row.scrollIntoView({behavior:'smooth', block:'center'});
-      row.style.transition = 'background .2s';
-      row.style.background = '#fffbeb';
-      setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
-    }, 80);
-  }, 300);
+  // 하이라이트 대상 저장 (renderTracking 완료 후 적용됨)
+  _highlightRowId  = String(itemId);
+  _highlightRowKey = 'steel';
+
+  // 해당 그룹만 펼치기 (데이터가 이미 로드된 경우)
+  const item = (FLEET[VID]?.steel||[]).find(r => String(r.id)===String(itemId));
+  if(item) {
+    const grp = (item.position_tank||'').trim() || '(미지정)';
+    if(!_trackingGroupCollapsed['steel']) _trackingGroupCollapsed['steel'] = new Set();
+    _trackingGroupCollapsed['steel'].delete(grp);
+  }
+
+  showTab('steel', trigger);
 }
 
 function showTankAddForm() {
@@ -4994,26 +5013,20 @@ function goToPipeItem(itemId) {
   document.querySelectorAll('.tracking-sub-btn').forEach(b => b.classList.remove('active'));
   const pipeBtn = document.querySelector('.tracking-sub-btn[onclick*="\'pipe\'"]');
   if(pipeBtn) pipeBtn.classList.add('active');
-  showTab('pipe', trigger);
 
-  setTimeout(() => {
-    // 해당 항목의 position_tank 그룹만 펼치기
-    const item = (FLEET[VID]?.pipe||[]).find(r => String(r.id)===String(itemId));
-    if(item) {
-      const grp = (item.position_tank||'').trim() || '(미지정)';
-      if(!_trackingGroupCollapsed['pipe']) _trackingGroupCollapsed['pipe'] = new Set();
-      _trackingGroupCollapsed['pipe'].delete(grp);
-      _renderTrackingTable('pipe');
-    }
-    setTimeout(() => {
-      const row = document.querySelector(`#pipe-body tr[data-id="${itemId}"]`);
-      if(!row) return;
-      row.scrollIntoView({behavior:'smooth', block:'center'});
-      row.style.transition = 'background .2s';
-      row.style.background = '#d1fae5';
-      setTimeout(() => { row.style.background = ''; setTimeout(() => row.style.transition = '', 600); }, 1800);
-    }, 80);
-  }, 300);
+  // 하이라이트 대상 저장
+  _highlightRowId  = String(itemId);
+  _highlightRowKey = 'pipe';
+
+  // 해당 그룹만 펼치기
+  const item = (FLEET[VID]?.pipe||[]).find(r => String(r.id)===String(itemId));
+  if(item) {
+    const grp = (item.position_tank||'').trim() || '(미지정)';
+    if(!_trackingGroupCollapsed['pipe']) _trackingGroupCollapsed['pipe'] = new Set();
+    _trackingGroupCollapsed['pipe'].delete(grp);
+  }
+
+  showTab('pipe', trigger);
 }
 
 // Pipe Plan Add Item
