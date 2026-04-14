@@ -4875,6 +4875,17 @@ async function _initPlanDocBadges() {
       _updatePlanDocBtn(docKey, (files||[]).length);
     } catch(e) {}
   }
+  // WPS 버튼 뱃지 별도 초기화
+  try {
+    const wpsFiles = await apiFetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`);
+    const cnt = (wpsFiles||[]).length;
+    const btn = document.getElementById('btn-wps-tank');
+    if(btn) {
+      btn.style.background = cnt > 0 ? 'var(--blue)' : '';
+      btn.style.color      = cnt > 0 ? 'var(--white)' : '';
+      btn.textContent      = cnt > 0 ? `🔥 WPS (${cnt})` : '🔥 WPS';
+    }
+  } catch(e) {}
 }
 
 // ══ WPS FIT-UP INSPECTOR ════════════════════════════════════════
