@@ -4886,21 +4886,12 @@ let _wpsCriteria = null;
 const WPS_DEFAULT_CRITERIA = {
   butt: {
     no_backing: {
-      root_gap_min:0, root_gap_max:4,      // t≤25mm 기준
+      root_gap_min:0, root_gap_max:4,
       groove_min:55,  groove_max:75,
-      face_gap_min:0, face_gap_max:null,   // 개선각으로 역산
     },
     backing_cases: [
-      { label:'Case 1', rg_min:0, rg_max:3,
-        root_gap_min:0, root_gap_max:3,
-        groove_min:55, groove_max:75,
-        face_gap_min:null, face_gap_max:null,
-        note:'루트갭 0~3mm' },
-      { label:'Case 2', rg_min:3, rg_max:10,
-        root_gap_min:3, root_gap_max:10,
-        groove_min:40, groove_max:55,
-        face_gap_min:null, face_gap_max:null,
-        note:'루트갭 3~10mm (확대 개선)' },
+      { label:'Case 1', rg_min:0, rg_max:3,  groove_min:55, groove_max:75 },
+      { label:'Case 2', rg_min:3, rg_max:10, groove_min:40, groove_max:55 },
     ],
     hi_lo_abs_max:3, hi_lo_max_pct:15,
     preheat:[{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
@@ -4908,16 +4899,11 @@ const WPS_DEFAULT_CRITERIA = {
   fillet: {
     no_backing: {
       root_gap_min:0, root_gap_max:1.5,
-      root_gap_allow:4,
-      leg_pct:70,
+      groove_min:0,   groove_max:90,
     },
     backing_cases: [
-      { label:'Case 1', rg_min:0, rg_max:3,
-        root_gap_min:0, root_gap_max:3,
-        leg_pct:70, note:'루트갭 0~3mm' },
-      { label:'Case 2', rg_min:3, rg_max:8,
-        root_gap_min:3, root_gap_max:8,
-        leg_pct:70, leg_add:true, note:'루트갭 3~8mm — 각장+루트갭' },
+      { label:'Case 1', rg_min:0, rg_max:3,  groove_min:45, groove_max:75 },
+      { label:'Case 2', rg_min:3, rg_max:8,  groove_min:35, groove_max:55 },
     ],
     preheat:[{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
   },
@@ -5037,8 +5023,9 @@ function _renderWpsInputs() {
   } else {
     html = N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()')
          + t2Row + backingRow
-         + N('wps_leg','각장 Leg Size (mm)','목표 각장')
          + N('wps_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
+         + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
+         + groovePreview
          + `<div class="form-group" style="grid-column:1/-1">
               <label class="form-lbl">용접 방법</label>
               <select class="form-ctrl" id="wps_process">${procOpts}</select>
@@ -5070,7 +5057,7 @@ function _autoGroove() {
   const el = document.getElementById('wps-groove-preview');
   if(!el) return;
   const t  = _val('wps_t1');
-  const rg = _val('wps_root_gap');
+  const rg = _wpsJoint==='fillet' ? _val('wps_gap') : _val('wps_root_gap');
   const fg = _val('wps_face_gap');
   const backing = document.getElementById('wps_backing')?.value || 'none';
 
@@ -5189,30 +5176,38 @@ function runWpsCalc() {
 
   } else { // fillet
     const t1=_val('wps_t1'), t2=_valT2(), tMax=Math.max(t1,t2);
-    const leg=_val('wps_leg'), gap=_val('wps_gap');
+    const gap=_val('wps_gap');
+    const fg =_val('wps_face_gap')||0;
 
     if(backing==='none') {
       const nb = crit?.no_backing || WPS_DEFAULT_CRITERIA.fillet.no_backing;
-      const maxRG=nb.root_gap_max??1.5, allowRG=nb.root_gap_allow??4;
+      const rgMin=nb.root_gap_min??0, rgMax=nb.root_gap_max??1.5;
+      const gMin=nb.groove_min??0,    gMax=nb.groove_max??90;
       info('뒷댐재','없음 (No Backing)','','');
-      if(gap<=maxRG)       pass('루트 간격',gap,`≤ ${maxRG}`,'mm');
-      else if(gap<=allowRG) warn('루트 간격',gap,`≤ ${maxRG}`,'mm',`각장 증가: ${leg}+${gap}=${+(leg+gap).toFixed(1)}mm`);
-      else                  fail('루트 간격',gap,`≤ ${allowRG}`,'mm','용접 불가');
-      const pct=(nb.leg_pct??70)/100, minLeg=Math.max(3,Math.ceil(pct*Math.min(t1,t2)));
-      if(leg>=minLeg) pass('각장 Leg Size',leg,`≥ ${minLeg}`,'mm',`T×${nb.leg_pct??70}%`);
-      else            fail('각장 Leg Size',leg,`≥ ${minLeg}`,'mm');
+      if(gap>=rgMin&&gap<=rgMax) pass('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
+      else                       fail('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
+      if(fg>0 && t1>0) {
+        const angle=calcGrooveAngle(t1,gap,fg);
+        if(angle!==null) {
+          if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+          else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+        }
+      }
     } else {
       const rule = _matchBackingCase('fillet', gap);
       if(!rule) { warn('뒷댐재',backing,'','','루트갭에 맞는 Rule 없음'); _renderWpsCalcResult(results); return; }
-      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'} — ${rule.label}`,'',rule.note||'');
-      if(gap>=rule.root_gap_min&&gap<=rule.root_gap_max) pass('루트 간격',gap,`${rule.root_gap_min}~${rule.root_gap_max}`,'mm');
-      else                                                fail('루트 간격',gap,`${rule.root_gap_min}~${rule.root_gap_max}`,'mm');
-      const pct=(rule.leg_pct??70)/100;
-      const effectiveLeg = rule.leg_add ? leg-gap : leg;
-      const minLeg=Math.max(3,Math.ceil(pct*Math.min(t1,t2)));
-      const legLabel = rule.leg_add ? `각장 (leg-gap=${effectiveLeg.toFixed(1)}mm)` : '각장 Leg Size';
-      if(effectiveLeg>=minLeg) pass(legLabel,leg,`≥ ${minLeg}(+갭)`,'mm',rule.leg_add?`순각장: ${leg}-${gap}=${effectiveLeg.toFixed(1)}mm`:'');
-      else                     fail(legLabel,leg,`≥ ${minLeg}(+갭)`,'mm');
+      const rgMin=rule.rg_min??0, rgMax=rule.rg_max??99;
+      const gMin=rule.groove_min??0, gMax=rule.groove_max??90;
+      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'} — ${rule.label}`,'','');
+      if(gap>=rgMin&&gap<=rgMax) pass('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
+      else                       fail('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
+      if(fg>0 && t1>0) {
+        const angle=calcGrooveAngle(t1,gap,fg);
+        if(angle!==null) {
+          if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+          else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+        }
+      }
     }
     const ph=_getPreheat(tMax,process,crit?.preheat); info(`예열 온도 (${process},t=${tMax}mm)`,ph.temp,'°C 이상',ph.note);
   }
@@ -5269,13 +5264,11 @@ async function _renderWpsCritForm() {
   const cb = crit?.butt||{}, cf = crit?.fillet||{};
   const nb_b = cb.no_backing||{}, nb_f = cf.no_backing||{};
   const set = (id,v) => { const e=document.getElementById(id); if(e&&v!==undefined&&v!==null) e.value=v; };
-  // Butt - no backing
   set('wc_b_nb_rgmin', nb_b.root_gap_min); set('wc_b_nb_rgmax', nb_b.root_gap_max);
   set('wc_b_nb_gmin',  nb_b.groove_min);   set('wc_b_nb_gmax',  nb_b.groove_max);
   set('wc_b_hilo',     cb.hi_lo_abs_max);
-  // Fillet - no backing
-  set('wc_f_nb_rgmax', nb_f.root_gap_max); set('wc_f_nb_rgallow', nb_f.root_gap_allow);
-  set('wc_f_nb_leg',   nb_f.leg_pct);
+  set('wc_f_nb_rgmin', nb_f.root_gap_min); set('wc_f_nb_rgmax', nb_f.root_gap_max);
+  set('wc_f_nb_gmin',  nb_f.groove_min);   set('wc_f_nb_gmax',  nb_f.groove_max);
 }
 
 // Backing Case Table 렌더링
@@ -5287,21 +5280,13 @@ function _renderBackingCaseTables() {
 function _renderCaseTable(joint, tbody) {
   if(!tbody) return;
   const cases = _getCrit(joint)?.backing_cases || WPS_DEFAULT_CRITERIA[joint].backing_cases;
-  const isFillet = joint==='fillet';
   tbody.innerHTML = cases.map((c,i) => `
     <tr id="cr-${joint}-${i}">
       <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" value="${c.label||'Case '+(i+1)}" style="width:70px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" value="${c.rg_min??''}" placeholder="0" style="width:55px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" value="${c.rg_max??''}" placeholder="e.g.6" style="width:55px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rgmin_${i}" value="${c.root_gap_min??''}" placeholder="0" style="width:55px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rgmax_${i}" value="${c.root_gap_max??''}" placeholder="e.g.6" style="width:55px;font-size:11px"></td>
-      ${!isFillet?`
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" value="${c.groove_min??''}" placeholder="40" style="width:50px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" value="${c.groove_max??''}" placeholder="75" style="width:50px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_fgmin_${i}" value="${c.face_gap_min??''}" placeholder="역산" style="width:50px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_fgmax_${i}" value="${c.face_gap_max??''}" placeholder="역산" style="width:50px;font-size:11px"></td>`:`
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_leg_${i}" value="${c.leg_pct??70}" placeholder="70" style="width:55px;font-size:11px"></td>`}
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_note_${i}" value="${c.note||''}" style="width:120px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" value="${c.rg_min??''}" placeholder="0" style="width:65px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" value="${c.rg_max??''}" placeholder="" style="width:65px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" value="${c.groove_min??''}" placeholder="e.g. 45" style="width:65px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" value="${c.groove_max??''}" placeholder="e.g. 75" style="width:65px;font-size:11px"></td>
       <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCaseRow('${joint}',${i})">✕</button></td>
     </tr>`).join('');
 }
@@ -5310,21 +5295,13 @@ function addCaseRow(joint) {
   const tbody = document.getElementById(`case-table-${joint}`);
   if(!tbody) return;
   const i = tbody.querySelectorAll('tr').length;
-  const isFillet = joint==='fillet';
   const tr = document.createElement('tr'); tr.id=`cr-${joint}-${i}`;
   tr.innerHTML = `
     <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" placeholder="Case ${i+1}" style="width:70px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" placeholder="0" style="width:55px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" placeholder="" style="width:55px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rgmin_${i}" placeholder="0" style="width:55px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rgmax_${i}" placeholder="" style="width:55px;font-size:11px"></td>
-    ${!isFillet?`
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" placeholder="40" style="width:50px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" placeholder="75" style="width:50px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_fgmin_${i}" placeholder="역산" style="width:50px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_fgmax_${i}" placeholder="역산" style="width:50px;font-size:11px"></td>`:`
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_leg_${i}" placeholder="70" style="width:55px;font-size:11px"></td>`}
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_note_${i}" style="width:120px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" placeholder="0" style="width:65px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" placeholder="" style="width:65px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" placeholder="" style="width:65px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" placeholder="" style="width:65px;font-size:11px"></td>
     <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCaseRow('${joint}',${i})">✕</button></td>`;
   tbody.appendChild(tr);
 }
@@ -5332,15 +5309,12 @@ function addCaseRow(joint) {
 function delCaseRow(joint, i) { document.getElementById(`cr-${joint}-${i}`)?.remove(); }
 
 function _collectCases(joint) {
-  const isFillet = joint==='fillet';
   const rows = document.querySelectorAll(`#case-table-${joint} tr`);
   return [...rows].map(r => {
     const idx = r.id.replace(`cr-${joint}-`,'');
-    const g = (id) => { const v=parseFloat(document.getElementById(`cr_${joint}_${id}_${idx}`)?.value); return isNaN(v)?undefined:v; };
-    const s = (id) => document.getElementById(`cr_${joint}_${id}_${idx}`)?.value||'';
-    return isFillet
-      ? { label:s('label'), rg_min:g('rg_min'), rg_max:g('rg_max'), root_gap_min:g('rgmin'), root_gap_max:g('rgmax'), leg_pct:g('leg'), note:s('note') }
-      : { label:s('label'), rg_min:g('rg_min'), rg_max:g('rg_max'), root_gap_min:g('rgmin'), root_gap_max:g('rgmax'), groove_min:g('gmin'), groove_max:g('gmax'), face_gap_min:g('fgmin'), face_gap_max:g('fgmax'), note:s('note') };
+    const g = id => { const v=parseFloat(document.getElementById(`cr_${joint}_${id}_${idx}`)?.value); return isNaN(v)?undefined:v; };
+    const s = id => document.getElementById(`cr_${joint}_${id}_${idx}`)?.value||'';
+    return { label:s('label'), rg_min:g('rg_min'), rg_max:g('rg_max'), groove_min:g('gmin'), groove_max:g('gmax') };
   }).filter(c => c.rg_max!==undefined);
 }
 
@@ -5354,7 +5328,7 @@ async function saveWpsCrit() {
       preheat:WPS_DEFAULT_CRITERIA.butt.preheat,
     },
     fillet: {
-      no_backing:{ root_gap_max:g('wc_f_nb_rgmax'), root_gap_allow:g('wc_f_nb_rgallow'), leg_pct:g('wc_f_nb_leg') },
+      no_backing:{ root_gap_min:g('wc_f_nb_rgmin'), root_gap_max:g('wc_f_nb_rgmax'), groove_min:g('wc_f_nb_gmin'), groove_max:g('wc_f_nb_gmax') },
       backing_cases: _collectCases('fillet'),
       preheat:WPS_DEFAULT_CRITERIA.fillet.preheat,
     },
