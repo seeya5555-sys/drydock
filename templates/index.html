@@ -480,7 +480,6 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap" id="wps-joint-btns">
             <button class="btn-sec wps-joint-btn active" data-joint="butt" onclick="setWpsJoint('butt')">Butt Joint</button>
             <button class="btn-sec wps-joint-btn" data-joint="fillet" onclick="setWpsJoint('fillet')">Fillet Joint</button>
-            <button class="btn-sec wps-joint-btn" data-joint="tee" onclick="setWpsJoint('tee')">T-Joint</button>
           </div>
         </div>
 
@@ -511,105 +510,68 @@
           📌 조선소 WPS 기준값을 입력하세요. 저장하면 이 선박 프로젝트에 영구 적용됩니다. 빈 칸은 AWS D1.1 기본값을 사용합니다.
         </div>
 
-        <!-- Butt Joint -->
-        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Butt Joint</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
-          <div class="form-group">
-            <label class="form-lbl">개선각 최솟값 (°)</label>
-            <input class="form-ctrl" id="wc_b_gmin" type="number" placeholder="기본값: 55">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">개선각 최댓값 (°)</label>
-            <input class="form-ctrl" id="wc_b_gmax" type="number" placeholder="기본값: 75">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">루트갭 최솟값 (mm)</label>
-            <input class="form-ctrl" id="wc_b_rgmin" type="number" placeholder="기본값: 0">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">루트갭 최댓값 t≤25mm (mm)</label>
-            <input class="form-ctrl" id="wc_b_rgmax1" type="number" placeholder="기본값: 4">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">루트갭 최댓값 t>25mm (mm)</label>
-            <input class="form-ctrl" id="wc_b_rgmax2" type="number" placeholder="기본값: 6">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">Hi-Lo 최댓값 (mm)</label>
-            <input class="form-ctrl" id="wc_b_hilo" type="number" placeholder="기본값: 3">
-          </div>
+        <!-- ───── BUTT JOINT ───── -->
+        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 없음 (No Backing)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:8px">
+          <div class="form-group"><label class="form-lbl">루트갭 최솟값 (mm)</label><input class="form-ctrl" id="wc_b_nb_rgmin" type="number" placeholder="기본값: 0"></div>
+          <div class="form-group"><label class="form-lbl">루트갭 최댓값 (mm)</label><input class="form-ctrl" id="wc_b_nb_rgmax" type="number" placeholder="기본값: 4 (t≤25mm)"></div>
+          <div class="form-group"><label class="form-lbl">Hi-Lo 최댓값 (mm)</label><input class="form-ctrl" id="wc_b_hilo" type="number" placeholder="기본값: 3"></div>
+          <div class="form-group"><label class="form-lbl">개선각 최솟값 (°)</label><input class="form-ctrl" id="wc_b_nb_gmin" type="number" placeholder="기본값: 55"></div>
+          <div class="form-group"><label class="form-lbl">개선각 최댓값 (°)</label><input class="form-ctrl" id="wc_b_nb_gmax" type="number" placeholder="기본값: 75"></div>
         </div>
 
-        <!-- Fillet Joint -->
-        <div style="font-size:12px;font-weight:700;color:#10b981;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
-          <div class="form-group">
-            <label class="form-lbl">루트갭 최댓값 (mm)</label>
-            <input class="form-ctrl" id="wc_f_rg" type="number" placeholder="기본값: 1.5">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">루트갭 조건부 허용 최대 (mm)</label>
-            <input class="form-ctrl" id="wc_f_rga" type="number" placeholder="기본값: 4">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">최소 각장 계수 (%)</label>
-            <input class="form-ctrl" id="wc_f_leg" type="number" placeholder="기본값: 70">
-          </div>
-        </div>
-
-        <!-- T-Joint -->
-        <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">T-Joint</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
-          <div class="form-group">
-            <label class="form-lbl">개선각 최솟값 (°)</label>
-            <input class="form-ctrl" id="wc_t_gmin" type="number" placeholder="기본값: 55">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">개선각 최댓값 (°)</label>
-            <input class="form-ctrl" id="wc_t_gmax" type="number" placeholder="기본값: 75">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">루트갭 최댓값 (mm)</label>
-            <input class="form-ctrl" id="wc_t_rg" type="number" placeholder="기본값: 3">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">직각도 오차 최댓값 (mm)</label>
-            <input class="form-ctrl" id="wc_t_perp" type="number" placeholder="기본값: 2">
-          </div>
-          <div class="form-group">
-            <label class="form-lbl">최소 각장 계수 (%)</label>
-            <input class="form-ctrl" id="wc_t_leg" type="number" placeholder="기본값: 70">
-          </div>
-        </div>
-
-        <button class="btn-pri" style="width:100%;font-size:13px" onclick="saveWpsCrit()">💾 WPS 기준 저장</button>
-        <div style="font-size:11px;color:var(--txt-m);margin-top:8px;text-align:center">
-          저장된 기준은 계산기에 즉시 반영됩니다. 빈 칸 항목은 AWS D1.1 기본값을 유지합니다.
-        </div>
-
-        <!-- Ceramic Backing Rules -->
-        <div style="margin-top:20px;border-top:2px solid var(--border);padding-top:16px">
-          <div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔷 Ceramic Backing — 루트간격별 개선각 Rule</div>
-          <div style="font-size:11px;color:var(--txt-m);margin-bottom:10px">
-            루트간격 범위별로 적용할 개선각 기준을 입력하세요. 계산기에서 Ceramic Backing 선택 시 루트간격에 맞는 Rule이 자동 적용됩니다.
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:12px" id="wps-ceramic-table">
-            <thead>
-              <tr style="background:var(--bg-panel)">
-                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">루트갭 최대 (mm)<br><span style="font-size:10px;font-weight:400">이 값 이하일 때 적용</span></th>
-                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">기준 개선각 (°)</th>
-                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">허용 + (°)</th>
-                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">허용 - (°)</th>
-                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">비고</th>
-                <th style="padding:6px 8px;width:32px;border:1px solid var(--border)"></th>
-              </tr>
-            </thead>
-            <tbody id="ceramic-rules-body"></tbody>
+        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 있을 때 Case 별 기준</div>
+        <div style="font-size:11px;color:var(--txt-m);margin-bottom:8px">루트갭 범위에 따라 적용 Case가 결정됩니다. 개선 끝단 갭 범위를 비워두면 개선각 범위에서 자동 역산합니다.</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">
+            <thead><tr style="background:var(--bg-panel)">
+              <th style="padding:5px 6px;border:1px solid var(--border)">Case명</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>min (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>max (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>min (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>max (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">개선각<br>min (°)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">개선각<br>max (°)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">끝단갭<br>min (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">끝단갭<br>max (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">비고</th>
+              <th style="width:28px;border:1px solid var(--border)"></th>
+            </tr></thead>
+            <tbody id="case-table-butt"></tbody>
           </table>
-          <button class="btn-sec" style="margin-top:8px;font-size:11px" onclick="addCeramicRule()">＋ Rule 추가</button>
         </div>
+        <button class="btn-sec" style="margin-top:6px;font-size:11px" onclick="addCaseRow('butt')">＋ Case 추가</button>
+
+        <!-- ───── FILLET JOINT ───── -->
+        <div style="font-size:12px;font-weight:700;color:#10b981;margin:18px 0 8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 없음 (No Backing)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:8px">
+          <div class="form-group"><label class="form-lbl">루트갭 최댓값 (mm)</label><input class="form-ctrl" id="wc_f_nb_rgmax" type="number" placeholder="기본값: 1.5"></div>
+          <div class="form-group"><label class="form-lbl">루트갭 조건부 허용 최대 (mm)</label><input class="form-ctrl" id="wc_f_nb_rgallow" type="number" placeholder="기본값: 4"></div>
+          <div class="form-group"><label class="form-lbl">최소 각장 계수 (%)</label><input class="form-ctrl" id="wc_f_nb_leg" type="number" placeholder="기본값: 70"></div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 있을 때 Case 별 기준</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:550px">
+            <thead><tr style="background:var(--bg-panel)">
+              <th style="padding:5px 6px;border:1px solid var(--border)">Case명</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>min (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>max (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>min (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>max (mm)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">각장 계수 (%)</th>
+              <th style="padding:5px 6px;border:1px solid var(--border)">비고</th>
+              <th style="width:28px;border:1px solid var(--border)"></th>
+            </tr></thead>
+            <tbody id="case-table-fillet"></tbody>
+          </table>
+        </div>
+        <button class="btn-sec" style="margin-top:6px;font-size:11px" onclick="addCaseRow('fillet')">＋ Case 추가</button>
+
+        <button class="btn-pri" style="width:100%;font-size:13px;margin-top:20px" onclick="saveWpsCrit()">💾 WPS 기준 저장</button>
+        <div style="font-size:11px;color:var(--txt-m);margin-top:8px;text-align:center">저장된 기준은 계산기에 즉시 반영됩니다.</div>
       </div>
-      <!-- 푸터 -->
+            <!-- 푸터 -->
       <div class="modal-footer" style="gap:8px">
         <label id="wps-upload-lbl" class="btn-sec" style="cursor:pointer;font-size:12px;display:none">
           📎 WPS 파일 업로드
