@@ -5289,61 +5289,95 @@ function _valT2() {
 function _autoGroove() {
   const el = document.getElementById('wps-groove-preview');
   if(!el) return;
-  const t  = _val('wps_t1');
-  const rg = _wpsJoint==='fillet' ? _val('wps_gap') : _val('wps_root_gap');
-  const fg = _val('wps_face_gap');
+  const t       = _val('wps_t1');
+  const rg      = _wpsJoint==='fillet' ? _val('wps_gap') : _val('wps_root_gap');
+  const fg      = _val('wps_face_gap');
   const backing = document.getElementById('wps_backing')?.value || 'none';
 
   if(!t) { el.innerHTML='T₁을 먼저 입력하세요.'; el.style.cssText='background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;grid-column:1/-1;border-radius:6px;padding:8px 12px;font-size:12px;'; return; }
 
-  // 기준 결정
-  let gMin, gMax, rgMin, rgMax, fgMin, fgMax, caseLabel='';
   if(backing === 'none') {
     const nb = _getCrit('butt')?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
-    gMin=nb.groove_min??55; gMax=nb.groove_max??75;
-    rgMin=nb.root_gap_min??0; rgMax= t<=25 ? (nb.root_gap_max??4) : (nb.root_gap_max_thick??6);
-    fgMin=fgMax=null;
-    caseLabel='No Backing';
+    const gMin=nb.groove_min??55, gMax=nb.groove_max??75;
+    const rgMin=nb.root_gap_min??0, rgMax=nb.root_gap_max??4;
+    const fgMin=t>0?calcFaceGap(t,rg,gMin):null, fgMax=t>0?calcFaceGap(t,rg,gMax):null;
+    _renderGroovePreview(el,'No Backing',t,rg,fg,rgMin,rgMax,gMin,gMax,fgMin,fgMax,'#475569','#f8fafc',null);
+    return;
+  }
+
+  // Backing 있음 — 겹침 구간 처리
+  const matched = (_getCrit('butt')?.backing_cases||WPS_DEFAULT_CRITERIA.butt.backing_cases)
+    .filter(c => rg>=(c.rg_min??0) && rg<=(c.rg_max??99));
+
+  if(!matched.length) {
+    el.innerHTML='⚠ 루트갭에 맞는 Backing Rule이 없습니다. WPS 기준 탭 확인.';
+    el.style.cssText='background:#fef9c3;border-color:#fde047;color:#854d0e;grid-column:1/-1;border-radius:6px;padding:8px 12px;font-size:12px;';
+    return;
+  }
+
+  const backingLabel = backing==='ceramic'?'Ceramic':'Steel/Flux';
+
+  if(matched.length === 1) {
+    const c = matched[0];
+    const fgMin=t>0?calcFaceGap(t,rg,c.groove_min??40):null;
+    const fgMax=t>0?calcFaceGap(t,rg,c.groove_max??75):null;
+    _renderGroovePreview(el,`${backingLabel} — ${c.label}`,t,rg,fg,
+      c.rg_min??0,c.rg_max??99,c.groove_min??40,c.groove_max??75,fgMin,fgMax,'#0284c7','#eff6ff',null);
   } else {
-    const rule = _matchBackingCase('butt', rg);
-    if(!rule) { el.innerHTML='⚠ 루트갭에 맞는 Backing Rule이 없습니다. WPS 기준 탭 확인.'; return; }
-    gMin=rule.groove_min??40; gMax=rule.groove_max??75;
-    rgMin=rule.rg_min??0; rgMax=rule.rg_max??99;
-    // 끝단갭 역산: 개선각 범위 기반
-    fgMin = t>0 ? calcFaceGap(t, rg, gMin) : null;
-    fgMax = t>0 ? calcFaceGap(t, rg, gMax) : null;
-    const mergeNote = rule._merged ? ` <span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:3px">케이스 겹침 → Union 적용</span>` : '';
-    caseLabel=`${backing==='ceramic'?'Ceramic':'Steel/Flux'} Backing — ${rule.label}${mergeNote}`;
+    // 겹침 구간 — 권장 케이스 계산
+    const recCase = _getRecommendedCase(matched, rg);
+    el.style.cssText='grid-column:1/-1;';
+    el.innerHTML = matched.map(c => {
+      const isRec = (c === recCase);
+      const fgMin = t>0?calcFaceGap(t,rg,c.groove_min??40):null;
+      const fgMax = t>0?calcFaceGap(t,rg,c.groove_max??75):null;
+      const calcAngle = fg>0?calcGrooveAngle(t,rg,fg):null;
+      const angleOk  = calcAngle!==null ? calcAngle>=(c.groove_min??40)&&calcAngle<=(c.groove_max??75) : null;
+      const color = isRec?'#166534':'#0369a1';
+      const bg    = isRec?'#f0fdf4':'#f8fafc';
+      const border= isRec?'#86efac':'#bfdbfe';
+      return `<div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:8px 10px;margin-bottom:5px;font-size:12px;color:${color}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <b>${backingLabel} — ${c.label}</b>
+          ${isRec?'<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">⭐ 권장</span>':'<span style="font-size:9px;color:#94a3b8">기준값 ${c.rg_nom??((c.rg_min??0)+(c.rg_max??99))/2}mm 기준</span>'}
+        </div>
+        루트갭: <b>${rg}mm</b> (허용 ${c.rg_min??0}~${c.rg_max}mm)
+        &nbsp;|&nbsp; 개선각: <b>${c.groove_min??40}~${c.groove_max??75}°</b>
+        ${fgMin&&fgMax?`&nbsp;|&nbsp; 끝단갭: <b>${fgMin}~${fgMax}mm</b>`:''}
+        ${calcAngle!==null?`<br><span style="font-size:10px;opacity:.75">계산각: ${calcAngle}° → ${angleOk?'✅':'❌'}</span>`:''}
+      </div>`;
+    }).join('');
   }
+}
 
-  // 루트갭 체크
+// 권장 케이스 선택: rg_nom에 가장 가까운 케이스, 동률이면 개선각 작은 케이스
+function _getRecommendedCase(matched, rg) {
+  const withDist = matched.map(c => {
+    const nom = c.rg_nom ?? ((c.rg_min??0)+(c.rg_max??99))/2;
+    return { c, dist: Math.abs(rg-nom) };
+  });
+  const minDist = Math.min(...withDist.map(x=>x.dist));
+  const candidates = withDist.filter(x=>x.dist===minDist);
+  candidates.sort((a,b)=>(a.c.groove_max??99)-(b.c.groove_max??99));
+  return candidates[0].c;
+}
+
+function _renderGroovePreview(el,label,t,rg,fg,rgMin,rgMax,gMin,gMax,fgMin,fgMax,color,bg,recBadge) {
   const rgOk = rg>=rgMin && rg<=rgMax;
-  // 개선각 + 끝단갭 체크
-  let angleOk=null, calcAngle=null;
+  let calcAngle=null, angleOk=null;
   if(fg>0) {
-    if(fg<rg) { el.innerHTML='⚠ 끝단 갭이 루트 간격보다 작습니다.'; el.style.background='#fef9c3'; el.style.borderColor='#fde047'; el.style.color='#854d0e'; return; }
-    calcAngle = calcGrooveAngle(t, rg, fg);
-    angleOk = calcAngle>=gMin && calcAngle<=gMax;
+    if(fg<rg) { el.innerHTML='⚠ 끝단 갭이 루트 간격보다 작습니다.'; el.style.cssText='background:#fef9c3;border-color:#fde047;color:#854d0e;grid-column:1/-1;border-radius:6px;padding:8px 12px;font-size:12px;'; return; }
+    calcAngle = calcGrooveAngle(t,rg,fg);
+    angleOk   = calcAngle>=gMin && calcAngle<=gMax;
   }
-
-  const ok = rgOk && (angleOk===null ? true : angleOk);
-  const bg = ok?'#f0fdf4':'#fef2f2', bc=ok?'#86efac':'#fca5a5', co=ok?'#166534':'#991b1b';
-  el.style.cssText=`background:${bg};border:1px solid ${bc};border-radius:6px;padding:10px 12px;font-size:12px;color:${co};grid-column:1/-1;`;
-
-  const rgBadge = rgOk
-    ? `<span style="color:#166534">✅ ${rg}mm</span>`
-    : `<span style="color:#991b1b">❌ ${rg}mm (허용 ${rgMin}~${rgMax}mm)</span>`;
-  const gBadge = calcAngle===null ? `<span style="opacity:.7">끝단갭 입력 시 자동 계산</span>`
-    : angleOk ? `<span style="color:#166534">✅ ${calcAngle}°</span>`
-    : `<span style="color:#991b1b">❌ ${calcAngle}° (허용 ${gMin}~${gMax}°)</span>`;
-  const fgRequired = fgMin&&fgMax
-    ? `<br><span style="font-size:11px;opacity:.8">→ ${gMin}~${gMax}° 만족하려면 끝단갭 <b>${fgMin}~${fgMax}mm</b> 필요 (현재 T=${t}, RG=${rg}mm 기준)</span>`
-    : '';
-  const formula = calcAngle!==null
-    ? `<br><span style="font-size:10px;opacity:.65">공식: 2×atan((${fg}−${rg}) / (2×${t})) = ${calcAngle}°</span>`
-    : '';
-  el.innerHTML = `<b>${caseLabel}</b><br>
-    루트갭: ${rgBadge} &nbsp;|&nbsp; 개선각: ${gBadge}${fgRequired}${formula}`;
+  const ok = rgOk && (angleOk===null?true:angleOk);
+  const realBg = ok?'#f0fdf4':'#fef2f2', bc=ok?'#86efac':'#fca5a5', co=ok?'#166534':'#991b1b';
+  el.style.cssText=`background:${realBg};border:1px solid ${bc};border-radius:6px;padding:10px 12px;font-size:12px;color:${co};grid-column:1/-1;`;
+  const rgBadge = rgOk?`<span style="color:#166534">✅ ${rg}mm</span>`:`<span style="color:#991b1b">❌ ${rg}mm (허용 ${rgMin}~${rgMax}mm)</span>`;
+  const gBadge  = calcAngle===null?`<span style="opacity:.7">끝단갭 입력 시 계산</span>`:angleOk?`<span style="color:#166534">✅ ${calcAngle}°</span>`:`<span style="color:#991b1b">❌ ${calcAngle}° (허용 ${gMin}~${gMax}°)</span>`;
+  const fgLine  = fgMin&&fgMax?`<br><span style="font-size:11px;opacity:.8">→ 끝단갭 허용범위: <b>${fgMin}~${fgMax}mm</b> (T=${t}, RG=${rg}mm 기준)</span>`:'';
+  const fmLine  = calcAngle!==null?`<br><span style="font-size:10px;opacity:.65">2×atan((${fg}−${rg})/(2×${t})) = ${calcAngle}°</span>`:'';
+  el.innerHTML = `<b>${label}</b><br>루트갭: ${rgBadge} &nbsp;|&nbsp; 개선각: ${gBadge}${fgLine}${fmLine}`;
 }
 
 function _val(id){ return parseFloat(document.getElementById(id)?.value)||0; }
@@ -5374,15 +5408,29 @@ function runWpsCalc() {
       fgMin=null; fgMax=null;
       info('뒷댐재','없음 (No Backing)','','');
     } else {
-      const rule = _matchBackingCase('butt', rg);
-      if(!rule) { warn('뒷댐재',backing,'','','루트갭에 맞는 Rule 없음 — WPS 기준 탭 확인'); _renderWpsCalcResult(results); return; }
-      rgMin=rule.rg_min??0; rgMax=rule.rg_max??99;
-      gMin=rule.groove_min??40; gMax=rule.groove_max??75;
-      // 끝단갭 범위: 현재 루트갭 기준으로 역산 (더 정확)
-      fgMin = t1>0 ? calcFaceGap(t1, rg, gMin) : null;
-      fgMax = t1>0 ? calcFaceGap(t1, rg, gMax) : null;
-      const mergeNote = rule._merged ? ` (케이스 겹침 → Union 적용: ${rule.label})` : ` — ${rule.label}`;
-      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'}${mergeNote}`,'','');
+      const backingLabel = backing==='ceramic'?'Ceramic':'Steel/Flux';
+      const allCases = crit?.backing_cases || WPS_DEFAULT_CRITERIA.butt.backing_cases;
+      const matched  = allCases.filter(c => rg>=(c.rg_min??0) && rg<=(c.rg_max??99));
+
+      if(!matched.length) { warn('뒷댐재',backingLabel,'','','루트갭에 맞는 Rule 없음 — WPS 기준 탭 확인'); _renderWpsCalcResult(results); return; }
+
+      if(matched.length === 1) {
+        const c = matched[0];
+        rgMin=c.rg_min??0; rgMax=c.rg_max??99;
+        gMin=c.groove_min??40; gMax=c.groove_max??75;
+        fgMin=t1>0?calcFaceGap(t1,rg,gMin):null;
+        fgMax=t1>0?calcFaceGap(t1,rg,gMax):null;
+        info('뒷댐재',`${backingLabel} — ${c.label}`,'','');
+      } else {
+        // 겹침 구간 — 권장 케이스로 판정
+        const rec = _getRecommendedCase(matched, rg);
+        rgMin=rec.rg_min??0; rgMax=rec.rg_max??99;
+        gMin=rec.groove_min??40; gMax=rec.groove_max??75;
+        fgMin=t1>0?calcFaceGap(t1,rg,gMin):null;
+        fgMax=t1>0?calcFaceGap(t1,rg,gMax):null;
+        const otherLabels = matched.filter(c=>c!==rec).map(c=>c.label).join(', ');
+        info('뒷댐재',`${backingLabel} — ⭐ ${rec.label} (권장)`,'' ,`겹침 구간 — ${otherLabels}도 유효하나 기준값 기준 권장 적용`);
+      }
     }
 
     // 루트 간격
