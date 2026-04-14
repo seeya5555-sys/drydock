@@ -4487,7 +4487,7 @@ function calcFitupRef(t) {
   }
 
   const fgCalc = (rg, angleDeg) =>
-    t > 0 ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
+    t > 0 ? calcFaceGap(t, rg, angleDeg, joint) : '—';
 
   const matched  = cases.filter(c => rg >= (c.rg_min??0) && rg <= (c.rg_max??99));
   const nbMatch  = rg >= (nb.root_gap_min??0) && rg <= (nb.root_gap_max??4);
@@ -5181,14 +5181,19 @@ function _matchBackingCase(joint, rg) {
 }
 
 // 개선각 계산 공식: 2 × atan((끝단갭 - 루트갭) / (2 × T))
-function calcGrooveAngle(t, rg, fg) {
+// Butt: fg = rg + 2×T×tan(angle/2)  — 양쪽 개선
+// Fillet: fg = rg + T×tan(angle)    — 한쪽만 개선 (T-joint)
+function calcGrooveAngle(t, rg, fg, joint='butt') {
   if(t<=0 || fg<rg) return null;
+  if(joint==='fillet')
+    return +(Math.atan2(fg-rg, t) * 180/Math.PI).toFixed(1);
   return +(Math.atan2((fg-rg)/2, t) * 2 * 180/Math.PI).toFixed(1);
 }
 
-// 개선각으로 끝단갭 역산: fg = rg + 2 × T × tan(angle/2 × π/180)
-function calcFaceGap(t, rg, angleDeg) {
+function calcFaceGap(t, rg, angleDeg, joint='butt') {
   if(t<=0) return null;
+  if(joint==='fillet')
+    return +(rg + t*Math.tan(angleDeg*Math.PI/180)).toFixed(1);
   return +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1);
 }
 
@@ -5543,7 +5548,7 @@ function runWpsCalc() {
       if(gap>=rgMin&&gap<=rgMax) pass('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       else                       fail('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       if(fg>0 && t1>0) {
-        const angle=calcGrooveAngle(t1,gap,fg);
+        const angle=calcGrooveAngle(t1,gap,fg,'fillet');
         if(angle!==null) {
           if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
           else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
@@ -5559,7 +5564,7 @@ function runWpsCalc() {
       if(gap>=rgMin&&gap<=rgMax) pass('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       else                       fail('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       if(fg>0 && t1>0) {
-        const angle=calcGrooveAngle(t1,gap,fg);
+        const angle=calcGrooveAngle(t1,gap,fg,'fillet');
         if(angle!==null) {
           if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
           else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
