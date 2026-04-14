@@ -4381,128 +4381,132 @@ async function openFitupRef(itemId, t) {
   if(!_wpsCriteria) {
     _wpsCriteria = await apiFetch(`${API}/vessels/${VID}/wps_criteria`).catch(()=>null);
   }
-  const crit = _wpsCriteria || WPS_DEFAULT_CRITERIA;
-  const bc   = crit?.butt;
-  const nb   = bc?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
+  const crit  = _wpsCriteria || WPS_DEFAULT_CRITERIA;
+  const bc    = crit?.butt;
+  const nb    = bc?.no_backing    || WPS_DEFAULT_CRITERIA.butt.no_backing;
   const cases = bc?.backing_cases || WPS_DEFAULT_CRITERIA.butt.backing_cases;
-
-  // 끝단갭 역산
-  const fgCalc = (rg, angleDeg) =>
-    t > 0 ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
-  const fgStr = (rgMin, rgMax, gMin, gMax) =>
-    `${fgCalc(rgMin,gMin)} ~ ${fgCalc(rgMax,gMax)}`;
-
-  // ── 헤더 행 ─────────────────────────────────────────────────
-  const TH = `<div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;
-    background:#f1f5f9;border-bottom:2px solid #cbd5e1">
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;border-right:1px solid #cbd5e1">구분</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">루트갭 (mm)</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase">끝단갭 (mm)</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase">개선각 (°)</div>
-  </div>`;
-
-  // 일반 행
-  const row = (label, rgMin, rgMax, gMin, gMax, labelColor, bg='') => {
-    const rStr = `${rgMin} ~ ${rgMax}`;
-    const fStr = fgStr(rgMin, rgMax, gMin, gMax);
-    const gStr2 = `${gMin} ~ ${gMax}`;
-    return `<div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1px solid #e2e8f0;${bg?'background:'+bg:''}">
-      <div style="padding:7px 10px;font-size:11px;font-weight:700;color:${labelColor};background:${bg||'var(--bg-panel)'};border-right:1px solid #e2e8f0">${label}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--txt-h)">${rStr}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#059669">${fStr}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${gStr2}°</div>
-    </div>`;
-  };
-
-  // ── No Backing ───────────────────────────────────────────────
-  const nbBlock = `
-    <div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
-      No Backing
-    </div>
-    ${row('No Backing', nb.root_gap_min??0, nb.root_gap_max??4, nb.groove_min??55, nb.groove_max??75, '#475569')}`;
-
-  // ── Backing 있을 때 ───────────────────────────────────────────
-  let backingBlock = '';
-
-  if(cases.length === 0) {
-    backingBlock = `<div style="padding:12px 10px;font-size:12px;color:var(--txt-m)">Backing Case 기준 없음 — WPS 기준 탭에서 입력</div>`;
-  } else if(cases.length === 1) {
-    const c = cases[0];
-    backingBlock = `
-      <div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0;border-top:2px solid #e2e8f0">
-        Backing 있음
-      </div>
-      ${row(c.label??'Case 1', c.rg_min??0, c.rg_max??10, c.groove_min??40, c.groove_max??75, '#0284c7')}`;
-  } else {
-    // 2개 이상: 겹침 구간 분석
-    const c1 = cases[0], c2 = cases[1];
-    const c1min=c1.rg_min??0, c1max=c1.rg_max??99;
-    const c2min=c2.rg_min??0, c2max=c2.rg_max??99;
-    const overMin = Math.max(c1min, c2min);
-    const overMax = Math.min(c1max, c2max);
-    const hasOverlap = overMin < overMax;
-
-    backingBlock += `<div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0;border-top:2px solid #e2e8f0;display:flex;align-items:center;gap:8px">
-      Backing 있음
-      <span style="font-size:9px;font-weight:400;color:#64748b;text-transform:none;letter-spacing:0">
-        원본 WPS 범위 →
-        <span style="background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px;margin-right:3px">${c1.label??'Case 1'}: ${c1min}~${c1max}mm</span>
-        <span style="background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px">${c2.label??'Case 2'}: ${c2min}~${c2max}mm</span>
-      </span>
-    </div>`;
-
-    if(!hasOverlap) {
-      // 겹침 없음 — 각 케이스 전체 범위 그대로
-      cases.forEach((c,i) => {
-        backingBlock += row(c.label??`Case ${i+1}`, c.rg_min??0, c.rg_max??99,
-          c.groove_min??40, c.groove_max??75, i===0?'#0284c7':'#0369a1');
-      });
-    } else {
-      // ── Case 1 단독 구간 (overMin 미만) ───────────────────
-      if(c1min < overMin) {
-        backingBlock += row(
-          `${c1.label??'Case 1'}<br><span style="font-size:9px;font-weight:400;color:#64748b">단독 적용</span>`,
-          c1min, overMin, c1.groove_min??40, c1.groove_max??75, '#0284c7');
-      }
-
-      // ── 겹침 구간 — 단일 합산 행 ─────────────────────────
-      const overGMin = Math.min(c1.groove_min??40, c2.groove_min??25);
-      const overGMax = Math.max(c1.groove_max??75, c2.groove_max??40);
-      backingBlock += `
-        <div style="border-top:2px dashed #fbbf24;border-bottom:2px dashed #fbbf24">
-          ${row(
-            `⚡ 겹침 구간<br><span style="font-size:9px;font-weight:400;color:#92400e">Case 1 + Case 2</span>`,
-            overMin, overMax, overGMin, overGMax, '#d97706', '#fffbeb')}
-        </div>`;
-
-      // ── Case 2 단독 구간 (overMax 초과) ───────────────────
-      if(c2max > overMax) {
-        backingBlock += row(
-          `${c2.label??'Case 2'}<br><span style="font-size:9px;font-weight:400;color:#64748b">단독 적용</span>`,
-          overMax, c2max, c2.groove_min??25, c2.groove_max??40, '#0369a1');
-      }
-
-      // 3개 이상 케이스가 있을 경우 나머지 추가
-      cases.slice(2).forEach((c,i) => {
-        backingBlock += row(c.label??`Case ${i+3}`, c.rg_min??0, c.rg_max??99,
-          c.groove_min??20, c.groove_max??40, '#1e40af');
-      });
-    }
-  }
 
   const el = document.getElementById('m-fitup-ref');
   if(!el) return;
   document.getElementById('fitup-ref-t').textContent = `T = ${t} mm`;
+
   document.getElementById('fitup-ref-body').innerHTML = `
-    ${TH}
-    ${nbBlock}
-    ${backingBlock}
-    <div style="padding:7px 10px;font-size:10px;color:var(--txt-m);background:#f8fafc;border-top:1px solid #e2e8f0;line-height:1.7">
-      끝단갭 = 루트갭 + 2×T×tan(개선각/2) 역산 · T=${t}mm<br>
-      ⚡ 겹침 구간: 실측 개선각 범위에 해당하는 Case를 선택 후 그 WPS 파라미터 전체 준수
+    <div style="padding:16px 18px">
+
+      <!-- 루트간격 입력 -->
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
+          루트 간격 Root Gap (mm)
+        </label>
+        <input id="fref-rg" type="number" step="0.5" min="0" placeholder="측정값 입력"
+          class="form-ctrl" style="font-size:15px;font-weight:700;text-align:center;width:100%"
+          oninput="calcFitupRef(${t})">
+      </div>
+
+      <!-- 결과 표시 -->
+      <div id="fref-result" style="min-height:80px">
+        <div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">
+          루트 간격을 입력하면 허용 끝단갭 범위가 표시됩니다
+        </div>
+      </div>
+
+      <!-- 케이스 범위 요약 (참고) -->
+      <details style="margin-top:14px">
+        <summary style="font-size:11px;color:#64748b;cursor:pointer;padding:4px 0">
+          📋 WPS 케이스 범위 전체 보기
+        </summary>
+        <div style="margin-top:8px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:11px">
+          <div style="display:grid;grid-template-columns:90px 1fr 1fr;background:#f1f5f9;border-bottom:1px solid #e2e8f0">
+            <div style="padding:4px 8px;font-weight:700;color:#475569">구분</div>
+            <div style="padding:4px 8px;font-weight:700;color:#475569">루트갭 범위</div>
+            <div style="padding:4px 8px;font-weight:700;color:#7c3aed">개선각 허용</div>
+          </div>
+          <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
+            <div style="padding:5px 8px;color:#475569;font-weight:600">No Backing</div>
+            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${nb.root_gap_min??0} ~ ${nb.root_gap_max??4} mm</div>
+            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${nb.groove_min??55} ~ ${nb.groove_max??75}°</div>
+          </div>
+          ${cases.map((c,i)=>`
+          <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
+            <div style="padding:5px 8px;color:${i===0?'#0284c7':'#0369a1'};font-weight:600">${c.label??`Case ${i+1}`}</div>
+            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${c.rg_min??0} ~ ${c.rg_max??10} mm</div>
+            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${c.groove_min??40} ~ ${c.groove_max??75}°</div>
+          </div>`).join('')}
+        </div>
+      </details>
+
     </div>`;
+
+  // 전역에 현재 기준 저장 (calcFitupRef에서 사용)
+  window._fitupNb    = nb;
+  window._fitupCases = cases;
+
   openM('m-fitup-ref');
 }
+
+function calcFitupRef(t) {
+  const rg     = parseFloat(document.getElementById('fref-rg')?.value);
+  const el     = document.getElementById('fref-result');
+  const nb     = window._fitupNb;
+  const cases  = window._fitupCases || [];
+  if(!el) return;
+
+  if(isNaN(rg) || rg < 0) {
+    el.innerHTML = `<div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">루트 간격을 입력하면 허용 끝단갭 범위가 표시됩니다</div>`;
+    return;
+  }
+
+  const fgCalc = (rg, angleDeg) =>
+    t > 0 ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
+
+  // 해당 루트갭에 매칭되는 케이스 찾기
+  const matched = cases.filter(c => rg >= (c.rg_min??0) && rg <= (c.rg_max??99));
+  const nbMatch = rg >= (nb.root_gap_min??0) && rg <= (nb.root_gap_max??4);
+
+  let html = '';
+
+  const card = (label, gMin, gMax, fgMin, fgMax, color, bg) => `
+    <div style="background:${bg};border:1.5px solid ${color}20;border-radius:8px;padding:12px 14px;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${label}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:white;border-radius:6px;padding:8px 10px;border:1px solid ${color}30">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">허용 개선각</div>
+          <div style="font-size:16px;font-weight:700;color:#7c3aed;font-family:'IBM Plex Mono',monospace">${gMin} ~ ${gMax}°</div>
+        </div>
+        <div style="background:white;border-radius:6px;padding:8px 10px;border:1px solid ${color}30">
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">필요 끝단갭</div>
+          <div style="font-size:16px;font-weight:700;color:#059669;font-family:'IBM Plex Mono',monospace">${fgMin} ~ ${fgMax} mm</div>
+        </div>
+      </div>
+    </div>`;
+
+  if(!nbMatch && matched.length === 0) {
+    html = `<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:14px;text-align:center;color:#991b1b;font-size:13px;font-weight:600">
+      ❌ 루트갭 ${rg}mm — 등록된 WPS 범위를 벗어납니다
+    </div>`;
+  } else {
+    if(nbMatch) {
+      html += card('No Backing', nb.groove_min??55, nb.groove_max??75,
+        fgCalc(rg, nb.groove_min??55), fgCalc(rg, nb.groove_max??75), '#475569', '#f8fafc');
+    }
+    if(matched.length === 1) {
+      const c = matched[0];
+      html += card(c.label??'Case', c.groove_min??40, c.groove_max??75,
+        fgCalc(rg, c.groove_min??40), fgCalc(rg, c.groove_max??75),
+        '#0284c7', '#eff6ff');
+    } else if(matched.length >= 2) {
+      // 겹침: 합산 개선각
+      const gMin = Math.min(...matched.map(c=>c.groove_min??40));
+      const gMax = Math.max(...matched.map(c=>c.groove_max??75));
+      const labels = matched.map(c=>c.label??'Case').join(' + ');
+      html += card(`⚡ ${labels} (겹침 구간)`, gMin, gMax,
+        fgCalc(rg, gMin), fgCalc(rg, gMax), '#d97706', '#fffbeb');
+    }
+  }
+
+  el.innerHTML = html;
+}
+
 
 // 탱크 모달 → Steel Repair 탭 해당 행으로 바로가기
 function goToSteelItem(itemId) {
