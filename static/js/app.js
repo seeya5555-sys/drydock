@@ -4378,80 +4378,129 @@ function _renderTankModalBody() {
 
 // ── Fit-up Reference Card (Tank Modal) ─────────────────────────
 async function openFitupRef(itemId, t) {
-  // DB에서 최신 WPS 기준 로드 (미로드 시)
   if(!_wpsCriteria) {
     _wpsCriteria = await apiFetch(`${API}/vessels/${VID}/wps_criteria`).catch(()=>null);
   }
   const crit = _wpsCriteria || WPS_DEFAULT_CRITERIA;
-  const bc = crit?.butt;
-  const nb = bc?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
+  const bc   = crit?.butt;
+  const nb   = bc?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
   const cases = bc?.backing_cases || WPS_DEFAULT_CRITERIA.butt.backing_cases;
 
-  // 끝단갭 역산: fg = rg_bound + 2×T×tan(groove/2)
-  const fg = (rg, angleDeg) => t > 0
-    ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
+  // 끝단갭 역산
+  const fgCalc = (rg, angleDeg) =>
+    t > 0 ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
+  const fgStr = (rgMin, rgMax, gMin, gMax) =>
+    `${fgCalc(rgMin,gMin)} ~ ${fgCalc(rgMax,gMax)}`;
 
-  // No Backing
-  const nb_rg  = `${nb.root_gap_min??0} ~ ${nb.root_gap_max??4}`;
-  const nb_fgMin = fg(nb.root_gap_min??0, nb.groove_min??55);
-  const nb_fgMax = fg(nb.root_gap_max??4, nb.groove_max??75);
-  const nb_fg  = `${nb_fgMin} ~ ${nb_fgMax}`;
+  // ── 헤더 행 ─────────────────────────────────────────────────
+  const TH = `<div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;
+    background:#f1f5f9;border-bottom:2px solid #cbd5e1">
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;border-right:1px solid #cbd5e1">구분</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">루트갭 (mm)</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase">끝단갭 (mm)</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase">개선각 (°)</div>
+  </div>`;
 
-  // Backing Cases
-  const caseCards = cases.map((c,i) => {
-    const rgStr  = `${c.rg_min??0} ~ ${c.rg_max??10}`;
-    const fgMin  = fg(c.rg_min??0, c.groove_min??40);
-    const fgMax  = fg(c.rg_max??10, c.groove_max??75);
-    const fgStr  = `${fgMin} ~ ${fgMax}`;
-    const gStr   = `${c.groove_min??40} ~ ${c.groove_max??75}`;
-    return { label: c.label||`Case ${i+1}`, rgStr, fgStr, gStr,
-             rg_min:c.rg_min??0, rg_max:c.rg_max??99,
-             groove_min:c.groove_min??40, groove_max:c.groove_max??75 };
-  });
+  // 일반 행
+  const row = (label, rgMin, rgMax, gMin, gMax, labelColor, bg='') => {
+    const rStr = `${rgMin} ~ ${rgMax}`;
+    const fStr = fgStr(rgMin, rgMax, gMin, gMax);
+    const gStr2 = `${gMin} ~ ${gMax}`;
+    return `<div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1px solid #e2e8f0;${bg?'background:'+bg:''}">
+      <div style="padding:7px 10px;font-size:11px;font-weight:700;color:${labelColor};background:${bg||'var(--bg-panel)'};border-right:1px solid #e2e8f0">${label}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--txt-h)">${rStr}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#059669">${fStr}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${gStr2}°</div>
+    </div>`;
+  };
 
-  // Union 겹침 구간
-  let unionCard = null;
-  if(cases.length >= 2) {
-    const [c1,c2] = [cases[0],cases[1]];
-    const overMin = Math.max(c1.rg_min??0, c2.rg_min??0);
-    const overMax = Math.min(c1.rg_max??99, c2.rg_max??99);
-    if(overMin < overMax) {
-      const gMin = Math.min(c1.groove_min??40, c2.groove_min??40);
-      const gMax = Math.max(c1.groove_max??75, c2.groove_max??75);
-      const fgMin = fg(overMin, gMin);
-      const fgMax = fg(overMax, gMax);
-      unionCard = { rgStr:`${overMin} ~ ${overMax}`, fgStr:`${fgMin} ~ ${fgMax}`,
-                    gStr:`${gMin} ~ ${gMax}` };
+  // ── No Backing ───────────────────────────────────────────────
+  const nbBlock = `
+    <div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      No Backing
+    </div>
+    ${row('No Backing', nb.root_gap_min??0, nb.root_gap_max??4, nb.groove_min??55, nb.groove_max??75, '#475569')}`;
+
+  // ── Backing 있을 때 ───────────────────────────────────────────
+  let backingBlock = '';
+
+  if(cases.length === 0) {
+    backingBlock = `<div style="padding:12px 10px;font-size:12px;color:var(--txt-m)">Backing Case 기준 없음 — WPS 기준 탭에서 입력</div>`;
+  } else if(cases.length === 1) {
+    const c = cases[0];
+    backingBlock = `
+      <div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0;border-top:2px solid #e2e8f0">
+        Backing 있음
+      </div>
+      ${row(c.label??'Case 1', c.rg_min??0, c.rg_max??10, c.groove_min??40, c.groove_max??75, '#0284c7')}`;
+  } else {
+    // 2개 이상: 겹침 구간 분석
+    const c1 = cases[0], c2 = cases[1];
+    const c1min=c1.rg_min??0, c1max=c1.rg_max??99;
+    const c2min=c2.rg_min??0, c2max=c2.rg_max??99;
+    const overMin = Math.max(c1min, c2min);
+    const overMax = Math.min(c1max, c2max);
+    const hasOverlap = overMin < overMax;
+
+    backingBlock += `<div style="font-size:10px;font-weight:700;color:#475569;padding:6px 10px 3px;text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid #e2e8f0;border-top:2px solid #e2e8f0;display:flex;align-items:center;gap:8px">
+      Backing 있음
+      <span style="font-size:9px;font-weight:400;color:#64748b;text-transform:none;letter-spacing:0">
+        원본 WPS 범위 →
+        <span style="background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px;margin-right:3px">${c1.label??'Case 1'}: ${c1min}~${c1max}mm</span>
+        <span style="background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px">${c2.label??'Case 2'}: ${c2min}~${c2max}mm</span>
+      </span>
+    </div>`;
+
+    if(!hasOverlap) {
+      // 겹침 없음 — 각 케이스 전체 범위 그대로
+      cases.forEach((c,i) => {
+        backingBlock += row(c.label??`Case ${i+1}`, c.rg_min??0, c.rg_max??99,
+          c.groove_min??40, c.groove_max??75, i===0?'#0284c7':'#0369a1');
+      });
+    } else {
+      // ── Case 1 단독 구간 (overMin 미만) ───────────────────
+      if(c1min < overMin) {
+        backingBlock += row(
+          `${c1.label??'Case 1'}<br><span style="font-size:9px;font-weight:400;color:#64748b">단독 적용</span>`,
+          c1min, overMin, c1.groove_min??40, c1.groove_max??75, '#0284c7');
+      }
+
+      // ── 겹침 구간 — 단일 합산 행 ─────────────────────────
+      const overGMin = Math.min(c1.groove_min??40, c2.groove_min??25);
+      const overGMax = Math.max(c1.groove_max??75, c2.groove_max??40);
+      backingBlock += `
+        <div style="border-top:2px dashed #fbbf24;border-bottom:2px dashed #fbbf24">
+          ${row(
+            `⚡ 겹침 구간<br><span style="font-size:9px;font-weight:400;color:#92400e">Case 1 + Case 2</span>`,
+            overMin, overMax, overGMin, overGMax, '#d97706', '#fffbeb')}
+        </div>`;
+
+      // ── Case 2 단독 구간 (overMax 초과) ───────────────────
+      if(c2max > overMax) {
+        backingBlock += row(
+          `${c2.label??'Case 2'}<br><span style="font-size:9px;font-weight:400;color:#64748b">단독 적용</span>`,
+          overMax, c2max, c2.groove_min??25, c2.groove_max??40, '#0369a1');
+      }
+
+      // 3개 이상 케이스가 있을 경우 나머지 추가
+      cases.slice(2).forEach((c,i) => {
+        backingBlock += row(c.label??`Case ${i+3}`, c.rg_min??0, c.rg_max??99,
+          c.groove_min??20, c.groove_max??40, '#1e40af');
+      });
     }
   }
 
-  // 팝업 렌더링
   const el = document.getElementById('m-fitup-ref');
   if(!el) return;
   document.getElementById('fitup-ref-t').textContent = `T = ${t} mm`;
-
-  const row = (label, rg, fg, g, color='var(--blue)') => `
-    <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
-      <div style="padding:7px 10px;font-size:11px;font-weight:700;color:${color};background:var(--bg-panel);border-right:1px solid var(--border)">${label}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--txt-h)">${rg}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#059669">${fg}</div>
-      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${g}</div>
-    </div>`;
-
   document.getElementById('fitup-ref-body').innerHTML = `
-    <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;background:var(--bg-panel);border-bottom:2px solid var(--border)">
-      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--txt-m);text-transform:uppercase;border-right:1px solid var(--border)">구분</div>
-      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--txt-m);text-transform:uppercase">루트갭 (mm)</div>
-      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase">끝단갭 (mm)</div>
-      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase">개선각 (°)</div>
-    </div>
-    ${row('No Backing', nb_rg, nb_fg, `${nb.groove_min??55} ~ ${nb.groove_max??75}`, '#64748b')}
-    ${caseCards.map((c,i)=>row(c.label, c.rgStr, c.fgStr, c.gStr, i===0?'#0284c7':'#0369a1')).join('')}
-    ${unionCard ? row('Union ⚡', unionCard.rgStr, unionCard.fgStr, unionCard.gStr, '#d97706') : ''}
-    <div style="padding:6px 10px;font-size:10px;color:var(--txt-m);background:var(--bg-panel)">
-      끝단갭 = 루트갭 + 2×T×tan(개선각/2) 기준 역산 · T=${t}mm 적용
+    ${TH}
+    ${nbBlock}
+    ${backingBlock}
+    <div style="padding:7px 10px;font-size:10px;color:var(--txt-m);background:#f8fafc;border-top:1px solid #e2e8f0;line-height:1.7">
+      끝단갭 = 루트갭 + 2×T×tan(개선각/2) 역산 · T=${t}mm<br>
+      ⚡ 겹침 구간: 실측 개선각 범위에 해당하는 Case를 선택 후 그 WPS 파라미터 전체 준수
     </div>`;
-
   openM('m-fitup-ref');
 }
 
