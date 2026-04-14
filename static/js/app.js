@@ -4879,9 +4879,36 @@ async function _initPlanDocBadges() {
 
 // ══ WPS FIT-UP INSPECTOR ════════════════════════════════════════
 
-let _wpsJoint = 'butt';
+let _wpsJoint    = 'butt';
+let _wpsCriteria = null;   // 조선소 WPS 기준 (DB 로드)
 
-// 용접방법 옵션 (부가설명 포함)
+// ── 기본 WPS 기준값 (미입력 시 fallback) ──────────────────────
+const WPS_DEFAULT_CRITERIA = {
+  butt: {
+    groove_min: 55, groove_max: 75,
+    root_gap_min: 0, root_gap_max_thin: 4, root_gap_max_thick: 6,
+    hi_lo_max_pct: 15, hi_lo_abs_max: 3,
+    preheat: [{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
+  },
+  fillet: {
+    root_gap_max: 1.5, root_gap_allow: 4,
+    leg_pct: 70,
+    preheat: [{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
+  },
+  tee: {
+    groove_min: 55, groove_max: 75,
+    root_gap_max: 3,
+    perp_max: 2,
+    leg_pct: 70,
+    preheat: [{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
+  },
+};
+
+function _getCrit(joint) {
+  return (_wpsCriteria && _wpsCriteria[joint]) ? _wpsCriteria[joint] : WPS_DEFAULT_CRITERIA[joint];
+}
+
+// 용접방법 옵션
 const WPS_PROCESS_OPTS = [
   {val:'SMAW', label:'SMAW — 피복 아크 용접 (일반 봉용접)'},
   {val:'FCAW', label:'FCAW — 플럭스 코어드 아크 용접 (반자동)'},
@@ -4890,461 +4917,376 @@ const WPS_PROCESS_OPTS = [
   {val:'GTAW', label:'GTAW — TIG 용접 (불활성 가스 텅스텐)'},
 ];
 
-function _renderWpsInputs() {
-  const j = _wpsJoint;
-  const procOpts = WPS_PROCESS_OPTS.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
-
-  // T2 토글 헬퍼
-  const t2Toggle = `
-    <div class="form-group">
-      <label class="form-lbl" style="display:flex;align-items:center;gap:6px">
-        부재 두께 T₂ (mm)
-        <label style="font-size:10px;display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:400;color:var(--txt-m)">
-          <input type="checkbox" id="wps_t2_diff" onchange="toggleWpsT2(this.checked)" style="width:12px;height:12px">
-          주재와 다름
-        </label>
-      </label>
-      <input class="form-ctrl" id="wps_t2" type="number" step="0.1" min="0" placeholder="주재와 동일" disabled
-             style="color:var(--txt-m);background:var(--bg-panel)">
-    </div>`;
-
-  // 개선각 자동계산 영역
-  const grooveAuto = `
-    <div class="form-group" style="grid-column:1/-1">
-      <label class="form-lbl">개선각 Groove Angle (자동계산)</label>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;font-size:12px;color:#1e40af">
-        ℹ 개선각은 루트 간격 및 루트 페이스를 입력하면 아래에서 자동 계산됩니다. 직접 입력이 필요한 경우:
-        <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;font-size:11px">
-          <input type="checkbox" id="wps_groove_manual" onchange="toggleWpsGrooveManual(this.checked)" style="width:12px;height:12px">
-          개선각 직접 입력
-        </label>
-        <div id="wps_groove_manual_area" style="display:none;margin-top:8px">
-          <input class="form-ctrl" id="wps_groove" type="number" step="0.5" min="0" max="90" placeholder="편측 각도 (°)"
-                 style="width:160px">
-          <span style="font-size:10px;color:#3b82f6;margin-left:6px">편측 기준 — V-groove 기준 30°</span>
-        </div>
-      </div>
-    </div>`;
-
-  let html = '';
-
-  if(j === 'butt') {
-    html = `
-      <div class="form-group">
-        <label class="form-lbl">모재 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
-        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="주재 두께"
-               oninput="onWpsT1Change()">
-      </div>
-      ${t2Toggle}
-      <div class="form-group">
-        <label class="form-lbl">루트 간격 Root Gap (mm)</label>
-        <input class="form-ctrl" id="wps_root_gap" type="number" step="0.1" min="0" placeholder="0"
-               oninput="calcWpsGrooveAuto()">
-      </div>
-      <div class="form-group">
-        <label class="form-lbl">루트 페이스 Root Face (mm)</label>
-        <input class="form-ctrl" id="wps_root_face" type="number" step="0.1" min="0" placeholder="0"
-               oninput="calcWpsGrooveAuto()">
-      </div>
-      ${grooveAuto}
-      <div class="form-group">
-        <label class="form-lbl">선형 오차 Hi-Lo (mm)</label>
-        <input class="form-ctrl" id="wps_misalign" type="number" step="0.1" min="0" placeholder="0">
-      </div>
-      <div class="form-group" style="grid-column:1/-1">
-        <label class="form-lbl">용접 방법</label>
-        <select class="form-ctrl" id="wps_process">${procOpts}</select>
-      </div>
-      <div id="wps_groove_auto_result" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:8px 12px;font-size:12px;color:#166534"></div>`;
-  } else if(j === 'fillet') {
-    html = `
-      <div class="form-group">
-        <label class="form-lbl">모재 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
-        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="주재 두께"
-               oninput="onWpsT1Change()">
-      </div>
-      ${t2Toggle}
-      <div class="form-group">
-        <label class="form-lbl">각장 Leg Size (mm)</label>
-        <input class="form-ctrl" id="wps_leg" type="number" step="0.1" min="0" placeholder="목표 각장">
-      </div>
-      <div class="form-group">
-        <label class="form-lbl">루트 간격 Root Gap (mm)</label>
-        <input class="form-ctrl" id="wps_gap" type="number" step="0.1" min="0" placeholder="0">
-      </div>
-      <div class="form-group" style="grid-column:1/-1">
-        <label class="form-lbl">용접 방법</label>
-        <select class="form-ctrl" id="wps_process">${procOpts}</select>
-      </div>`;
-  } else if(j === 'tee') {
-    html = `
-      <div class="form-group">
-        <label class="form-lbl">웨브 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
-        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="웨브"
-               oninput="onWpsT1Change()">
-      </div>
-      ${t2Toggle.replace('부재 두께 T₂','플랜지 두께 T₂')}
-      <div class="form-group">
-        <label class="form-lbl">루트 간격 (mm)</label>
-        <input class="form-ctrl" id="wps_root_gap" type="number" step="0.1" min="0" placeholder="0">
-      </div>
-      <div class="form-group">
-        <label class="form-lbl">직각도 오차 (mm / 100mm)</label>
-        <input class="form-ctrl" id="wps_misalign" type="number" step="0.1" min="0" placeholder="0">
-      </div>
-      ${grooveAuto}
-      <div class="form-group">
-        <label class="form-lbl">각장 Leg Size (mm) <span style="font-weight:400;color:var(--txt-m)">(Fillet 시)</span></label>
-        <input class="form-ctrl" id="wps_leg" type="number" step="0.1" min="0" placeholder="0">
-      </div>
-      <div class="form-group" style="grid-column:1/-1">
-        <label class="form-lbl">용접 방법</label>
-        <select class="form-ctrl" id="wps_process">${procOpts}</select>
-      </div>
-      <div id="wps_groove_auto_result" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:8px 12px;font-size:12px;color:#166534"></div>`;
-  }
-
-  document.getElementById('wps-inputs').innerHTML = html;
-}
-
-// T₁ 변경 시 T₂ 동기화
-function onWpsT1Change() {
-  const t2el = document.getElementById('wps_t2');
-  const diff = document.getElementById('wps_t2_diff');
-  if(t2el && diff && !diff.checked) {
-    t2el.placeholder = document.getElementById('wps_t1')?.value || '주재와 동일';
-  }
-  calcWpsGrooveAuto();
-}
-
-// T₂ 활성화 토글
-function toggleWpsT2(enabled) {
-  const t2el = document.getElementById('wps_t2');
-  if(!t2el) return;
-  t2el.disabled = !enabled;
-  t2el.style.color = enabled ? '' : 'var(--txt-m)';
-  t2el.style.background = enabled ? '' : 'var(--bg-panel)';
-  if(!enabled) t2el.value = '';
-  t2el.placeholder = enabled ? '부재 두께 입력' : '주재와 동일';
-}
-
-// 개선각 직접입력 토글
-function toggleWpsGrooveManual(enabled) {
-  const area = document.getElementById('wps_groove_manual_area');
-  if(area) area.style.display = enabled ? '' : 'none';
-}
-
-// 개선각 자동계산 (루트 간격 + 루트 페이스 → 권장 개선각)
-// 산식: 총 개선각 = 2 × atan((T/2 - root_face) / (침투 깊이)) 를 단순화
-// 실무 기준: root gap 0~2mm → 60°, 2~4mm → 55°, 4mm+ → 50° (V-groove)
-function calcWpsGrooveAuto() {
-  const resultEl = document.getElementById('wps_groove_auto_result');
-  if(!resultEl) return;
-  const t1 = parseFloat(document.getElementById('wps_t1')?.value) || 0;
-  const rg = parseFloat(document.getElementById('wps_root_gap')?.value) || 0;
-  const rf = parseFloat(document.getElementById('wps_root_face')?.value) || 0;
-  if(!t1) { resultEl.style.display = 'none'; return; }
-
-  // 권장 개선각 (편측) 결정
-  let recHalf, reason;
-  if(rg <= 1)       { recHalf = 30; reason = 'Root Gap ≤ 1mm → 표준 V-groove 60° (편측 30°)'; }
-  else if(rg <= 2)  { recHalf = 30; reason = 'Root Gap 1~2mm → 60° 유지 (편측 30°)'; }
-  else if(rg <= 4)  { recHalf = 27.5; reason = 'Root Gap 2~4mm → 개선각 완화 55° (편측 27.5°)'; }
-  else              { recHalf = 25; reason = 'Root Gap >4mm → 최소 개선각 50° (편측 25°) — 루트 간격 재확인 권장'; }
-
-  const total = recHalf * 2;
-  // 루트 페이스 검토
-  const rfNote = rf > 3 ? ' ⚠ 루트 페이스 >3mm → 뒷면 용접 또는 백킹 필요' : rf === 0 ? ' (루트 페이스 0mm — 완전 개선)' : '';
-
-  resultEl.style.display = '';
-  resultEl.innerHTML = `
-    <b>📐 권장 개선각:</b> 편측 <b>${recHalf}°</b> → 총 <b>${total}°</b>
-    &nbsp;|&nbsp; ${reason}${rfNote}<br>
-    <span style="font-size:11px;color:#166534;opacity:.8">
-      * 루트 간격 ${rg}mm / 루트 페이스 ${rf}mm / 모재 두께 ${t1}mm 기준
-    </span>`;
-
-  // 직접입력 체크된 경우 자동계산 결과로 채워주지 않음
-  const manual = document.getElementById('wps_groove_manual');
-  if(manual && !manual.checked) {
-    const ginput = document.getElementById('wps_groove');
-    if(ginput) ginput.value = recHalf;
-  }
-}
-// 기준값 (AWS D1.1 / ISO 5817 Level B 기반)
-const WPS_CRITERIA = {
-  butt: {
-    root_gap:   {min:0, max_thin:4, max_thick:6, note:'t≤25mm → max 4mm, t>25mm → max 6mm'},
-    root_face:  {min:0, max:3,      note:'0~3mm'},
-    groove_v:   {min:55, max:75,    note:'V-groove 총 개선각 60°±15°'},
-    groove_u:   {min:40, max:60,    note:'U-groove 총 개선각 20°/R6'},
-    hi_lo:      {max_pct:0.15,      note:'두꺼운 쪽 두께의 15% 또는 3mm 중 작은 값'},
-  },
-  fillet: {
-    root_gap:   {max:1.5,           note:'1.5mm 초과 시 각장 증가 필요'},
-    root_gap_increase: 1.5,
-    leg_tol:    {minus:-0, plus:3,  note:'+3/-0mm'},
-  },
-  tee: {
-    root_gap:   {max:3,             note:'full pen. ≤3mm'},
-    groove_v:   {min:55, max:75,    note:'V-groove 총 개선각 60°±15°'},
-    perp_tol:   {max:2,             note:'T-bar 직각도 ≤2mm (100mm 기준)'},
-    leg_tol:    {minus:0, plus:3,   note:'+3/-0mm'},
-  },
-};
-
-const WPS_PREHEAT = [
-  {t_max:20,  process:['SMAW','FCAW','GMAW'], temp:5,  note:'최소 5°C (결로 방지)'},
-  {t_max:20,  process:['SAW'],                 temp:10, note:'SAW 최소 10°C'},
-  {t_max:40,  process:['SMAW','FCAW','GMAW'], temp:50, note:'예열 50°C 이상'},
-  {t_max:60,  process:['SMAW','FCAW','GMAW'], temp:100,note:'예열 100°C 이상'},
-  {t_max:999, process:['SMAW','FCAW','GMAW'], temp:150,note:'예열 150°C 이상'},
-];
-
 function openWpsModal() {
   if(!VID) return;
   _wpsJoint = 'butt';
   openM('m-wps');
   switchWpsTab('files');
   _loadWpsFiles();
+  // WPS 기준 로드 (백그라운드)
+  apiFetch(`${API}/vessels/${VID}/wps_criteria`).then(d => {
+    _wpsCriteria = d;
+  }).catch(()=>{});
 }
 
 function switchWpsTab(tab) {
-  document.getElementById('wps-panel-calc').style.display  = tab==='calc'  ? '' : 'none';
-  document.getElementById('wps-panel-files').style.display = tab==='files' ? '' : 'none';
-  document.getElementById('wps-tab-calc').style.borderBottom  = tab==='calc'  ? '2px solid var(--blue)' : '2px solid transparent';
-  document.getElementById('wps-tab-files').style.borderBottom = tab==='files' ? '2px solid var(--blue)' : '2px solid transparent';
-  document.getElementById('wps-tab-calc').style.fontWeight  = tab==='calc'  ? '700' : '400';
-  document.getElementById('wps-tab-files').style.fontWeight = tab==='files' ? '700' : '400';
-  if(tab === 'calc') {
-    _renderWpsInputs();
-    _renderWpsRefTable();
-    const res = document.getElementById('wps-result');
-    if(res) res.style.display = 'none';
-    const ul = document.getElementById('wps-upload-lbl');
-    if(ul) ul.style.display = 'none';  // 업로드 버튼은 파일 탭에만
-  }
-  if(tab === 'files') {
-    const ul = document.getElementById('wps-upload-lbl');
-    if(ul) ul.style.display = isViewer() ? 'none' : '';
-    _loadWpsFiles();
-  }
+  ['files','calc','crit'].forEach(t => {
+    const panel = document.getElementById('wps-panel-'+t);
+    const btn   = document.getElementById('wps-tab-'+t);
+    if(panel) panel.style.display = t===tab ? '' : 'none';
+    if(btn) {
+      btn.style.borderBottom = t===tab ? '2px solid var(--blue)' : '2px solid transparent';
+      btn.style.fontWeight   = t===tab ? '700' : '400';
+    }
+  });
+  if(tab==='calc')  { _renderWpsInputs(); _renderWpsCalcResult(null); }
+  if(tab==='files') { _loadWpsFiles(); document.getElementById('wps-upload-lbl').style.display = isViewer()?'none':''; }
+  if(tab==='crit')  { _renderWpsCritForm(); }
 }
 
 function setWpsJoint(joint) {
   _wpsJoint = joint;
   document.querySelectorAll('.wps-joint-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.joint === joint);
-    b.style.background = b.dataset.joint === joint ? 'var(--blue)' : '';
-    b.style.color      = b.dataset.joint === joint ? 'var(--white)' : '';
+    b.style.background = b.dataset.joint===joint ? 'var(--blue)' : '';
+    b.style.color      = b.dataset.joint===joint ? 'var(--white)' : '';
   });
   _renderWpsInputs();
-  document.getElementById('wps-result').style.display = 'none';
+  _renderWpsCalcResult(null);
 }
 
-function _renderWpsRefTable() {
-  const c = WPS_CRITERIA[_wpsJoint]||{};
-  const rows = Object.entries(c).map(([k,v]) =>
-    `<tr><td style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue);white-space:nowrap">${k}</td>
-     <td style="padding:5px 8px;font-size:11px;color:var(--txt-m)">${v.note||''}</td></tr>`
-  ).join('');
-  document.getElementById('wps-ref-table').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;border:1px solid var(--border)">
-      <thead><tr style="background:var(--bg-panel)">
-        <th style="padding:5px 8px;font-size:11px;text-align:left">항목</th>
-        <th style="padding:5px 8px;font-size:11px;text-align:left">기준 (AWS D1.1 / ISO 5817)</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+// ── 개선각 자동계산 공식 ─────────────────────────────────────
+// V-groove 기하학: tan(편측각) = (면부갭/2 - 루트갭/2) / 모재두께
+// 총 개선각 = 2 × atan((GFG - RG) / (2 × T)) × (180/π)
+function calcGrooveAngle(t, rootGap, faceGap) {
+  if(t <= 0 || faceGap < rootGap) return null;
+  const halfAngleRad = Math.atan2((faceGap - rootGap) / 2, t);
+  return +(halfAngleRad * 2 * 180 / Math.PI).toFixed(1);
+}
+
+// ── 입력 렌더링 ──────────────────────────────────────────────
+function _renderWpsInputs() {
+  const j = _wpsJoint;
+  const procOpts = WPS_PROCESS_OPTS.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const numInput = (id, label, ph='0', oninput='') =>
+    `<div class="form-group">
+       <label class="form-lbl">${label}</label>
+       <input class="form-ctrl" id="${id}" type="number" step="0.1" min="0" placeholder="${ph}"
+              ${oninput?`oninput="${oninput}"`:''}>
+     </div>`;
+
+  const t2Field = `<div class="form-group">
+    <label class="form-lbl">
+      부재 두께 T₂ (mm)
+      <label style="font-size:10px;font-weight:400;color:var(--txt-m);margin-left:8px;cursor:pointer">
+        <input type="checkbox" id="wps_t2_diff" onchange="toggleWpsT2(this.checked)"
+               style="width:11px;height:11px;vertical-align:middle">
+        주재와 다름
+      </label>
+    </label>
+    <input class="form-ctrl" id="wps_t2" type="number" step="0.1" min="0" disabled
+           placeholder="주재와 동일" style="color:var(--txt-m);background:var(--bg-panel)"
+           oninput="_autoGroove()">
+  </div>`;
+
+  const grooveBlock = `<div class="form-group" style="grid-column:1/-1">
+    <label class="form-lbl">개선각 (자동계산)</label>
+    <div id="wps-groove-preview" style="background:#eff6ff;border:1px solid #bfdbfe;
+         border-radius:6px;padding:8px 12px;font-size:12px;color:#1e3a8a;min-height:36px">
+      T₁, 루트 간격, 개선 끝단 갭을 입력하면 자동 계산됩니다.
+    </div>
+  </div>`;
+
+  let html = '';
+  if(j==='butt') {
+    html = numInput('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()') + t2Field
+      + numInput('wps_root_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
+      + numInput('wps_face_gap','개선 끝단 갭 (mm)','상부 열린 거리','_autoGroove()')
+      + grooveBlock
+      + numInput('wps_misalign','선형 오차 Hi-Lo (mm)','0')
+      + `<div class="form-group" style="grid-column:1/-1">
+           <label class="form-lbl">용접 방법</label>
+           <select class="form-ctrl" id="wps_process">${procOpts}</select>
+         </div>`;
+  } else if(j==='fillet') {
+    html = numInput('wps_t1','모재 두께 T₁ (mm) *','주재 두께','toggleWpsT2(false)')
+      + t2Field
+      + numInput('wps_leg','각장 Leg Size (mm)','목표 각장')
+      + numInput('wps_gap','루트 간격 Root Gap (mm)','0')
+      + `<div class="form-group" style="grid-column:1/-1">
+           <label class="form-lbl">용접 방법</label>
+           <select class="form-ctrl" id="wps_process">${procOpts}</select>
+         </div>`;
+  } else if(j==='tee') {
+    html = numInput('wps_t1','웨브 두께 T₁ (mm) *','웨브','_autoGroove()')
+      + t2Field.replace('부재 두께 T₂','플랜지 두께 T₂')
+      + numInput('wps_root_gap','루트 간격 (mm)','0','_autoGroove()')
+      + numInput('wps_face_gap','개선 끝단 갭 (mm)','상부 열린 거리','_autoGroove()')
+      + grooveBlock
+      + numInput('wps_misalign','직각도 오차 (mm / 100mm)','0')
+      + numInput('wps_leg','각장 Leg Size (mm)','Fillet 시')
+      + `<div class="form-group" style="grid-column:1/-1">
+           <label class="form-lbl">용접 방법</label>
+           <select class="form-ctrl" id="wps_process">${procOpts}</select>
+         </div>`;
+  }
+  document.getElementById('wps-inputs').innerHTML = html;
+}
+
+function toggleWpsT2(enabled) {
+  const el = document.getElementById('wps_t2');
+  if(!el) return;
+  el.disabled = !enabled;
+  el.style.color = enabled ? '' : 'var(--txt-m)';
+  el.style.background = enabled ? '' : 'var(--bg-panel)';
+  el.placeholder = enabled ? '부재 두께 입력' : '주재와 동일';
+  if(!enabled) el.value = '';
+  _autoGroove();
+}
+
+function _valT2() {
+  const diff = document.getElementById('wps_t2_diff');
+  return (diff && diff.checked) ? (_val('wps_t2')||_val('wps_t1')) : _val('wps_t1');
+}
+
+// 개선각 자동계산 + 미리보기 업데이트
+function _autoGroove() {
+  const t  = _val('wps_t1');
+  const rg = _val('wps_root_gap');
+  const fg = _val('wps_face_gap');
+  const el = document.getElementById('wps-groove-preview');
+  if(!el) return;
+  if(!t) { el.innerHTML = 'T₁을 먼저 입력하세요.'; return; }
+  if(!fg) { el.innerHTML = '개선 끝단 갭을 입력하면 각도가 계산됩니다.'; return; }
+  if(fg < rg) { el.innerHTML = '⚠ 개선 끝단 갭이 루트 간격보다 작습니다. 값을 확인하세요.'; return; }
+
+  const angle = calcGrooveAngle(t, rg, fg);
+  const crit  = _getCrit(_wpsJoint);
+  const min   = crit?.groove_min ?? 55;
+  const max   = crit?.groove_max ?? 75;
+  const ok    = angle >= min && angle <= max;
+  const color = ok ? '#166534' : '#991b1b';
+  const bg    = ok ? '#f0fdf4' : '#fef2f2';
+  const border= ok ? '#86efac' : '#fca5a5';
+  el.style.background = bg;
+  el.style.borderColor = border;
+  el.style.color = color;
+  el.innerHTML = `<b>계산된 개선각: ${angle}°</b> (총 포함각) &nbsp;|&nbsp;
+    허용 기준: ${min}~${max}° &nbsp;|&nbsp;
+    <b>${ok ? '✅ 적합' : '❌ 부적합'}</b>
+    <br><span style="font-size:10px;opacity:.8">
+      계산식: 2 × atan((${fg}-${rg}) / (2×${t})) = ${angle}°
+    </span>`;
 }
 
 function _val(id) { return parseFloat(document.getElementById(id)?.value)||0; }
 function _sel(id) { return document.getElementById(id)?.value||''; }
-// T₂: 체크박스 미선택 시 T₁ 값 반환
-function _valT2() {
-  const diff = document.getElementById('wps_t2_diff');
-  if(diff && diff.checked) return _val('wps_t2') || _val('wps_t1');
-  return _val('wps_t1');
-}
-// 개선각: 직접입력 체크된 경우만 입력값, 아니면 자동계산값
-function _valGroove() {
-  const manual = document.getElementById('wps_groove_manual');
-  if(manual && manual.checked) return _val('wps_groove');
-  // 자동계산: root gap 기반
-  const rg = _val('wps_root_gap');
-  if(rg <= 2) return 30;
-  if(rg <= 4) return 27.5;
-  return 25;
-}
 
+// ── 판정 실행 ─────────────────────────────────────────────────
 function runWpsCalc() {
   const joint = _wpsJoint;
+  const crit  = _getCrit(joint);
   const results = [];
+  const pass = (l,m,lim,u='mm',d='') => results.push({pass:true, label:l,measured:m,limit:lim,unit:u,detail:d});
+  const fail = (l,m,lim,u='mm',d='') => results.push({pass:false,label:l,measured:m,limit:lim,unit:u,detail:d});
+  const warn = (l,m,lim,u='mm',d='') => results.push({pass:'warn',label:l,measured:m,limit:lim,unit:u,detail:d});
+  const info = (l,v,u='',d='')       => results.push({pass:'info',label:l,measured:v,limit:'',unit:u,detail:d});
 
-  const pass  = (label, measured, limit, unit='mm', detail='') =>
-    results.push({pass:true,  label, measured, limit, unit, detail});
-  const fail  = (label, measured, limit, unit='mm', detail='') =>
-    results.push({pass:false, label, measured, limit, unit, detail});
-  const warn  = (label, measured, limit, unit='mm', detail='') =>
-    results.push({pass:'warn', label, measured, limit, unit, detail});
-  const info  = (label, value, unit='', detail='') =>
-    results.push({pass:'info', label, measured:value, limit:'', unit, detail});
+  const process = _sel('wps_process').split(' ')[0];
 
-  if(joint === 'butt') {
-    const t1 = _val('wps_t1'), t2 = _valT2();
-    const tMax = Math.max(t1, t2);
-    const groove = _valGroove();
-    const rootGap = _val('wps_root_gap');
-    const rootFace = _val('wps_root_face');
+  if(joint==='butt') {
+    const t1 = _val('wps_t1'), t2 = _valT2(), tMax = Math.max(t1,t2);
+    const rg = _val('wps_root_gap'), fg = _val('wps_face_gap');
     const hiLo = _val('wps_misalign');
-    const process = _sel('wps_process').split(' ')[0]; // "SMAW — ..." → "SMAW"
 
-    // 총 개선각 = 입력값 × 2 (편측 기준)
-    const totalGroove = groove * 2;
-    const grooveLimit = WPS_CRITERIA.butt.groove_v;
-    if(totalGroove >= grooveLimit.min && totalGroove <= grooveLimit.max)
-      pass('개선각 (총)', totalGroove.toFixed(1), `${grooveLimit.min}~${grooveLimit.max}`, '°', '편측 입력값×2');
-    else
-      fail('개선각 (총)', totalGroove.toFixed(1), `${grooveLimit.min}~${grooveLimit.max}`, '°', `편측: ${groove}° → 총: ${totalGroove}°`);
+    // 개선각 자동계산
+    if(t1>0 && fg>=rg) {
+      const angle = calcGrooveAngle(t1, rg, fg);
+      const gMin = crit.groove_min??55, gMax = crit.groove_max??75;
+      if(angle>=gMin && angle<=gMax) pass('개선각 (총)', angle, `${gMin}~${gMax}`, '°', `T=${t1}, 루트갭=${rg}, 끝단갭=${fg}mm 기준`);
+      else                           fail('개선각 (총)', angle, `${gMin}~${gMax}`, '°', `계산식: 2×atan((${fg}-${rg})/(2×${t1}))`);
+    }
 
     // Root Gap
-    const maxGap = tMax <= 25 ? 4 : 6;
-    if(rootGap <= maxGap) pass('루트 간격 Root Gap', rootGap, `0 ~ ${maxGap}`, 'mm');
-    else                  fail('루트 간격 Root Gap', rootGap, `0 ~ ${maxGap}`, 'mm', `t=${tMax}mm 기준`);
-
-    // Root Face
-    if(rootFace >= 0 && rootFace <= 3) pass('루트 페이스 Root Face', rootFace, '0 ~ 3', 'mm');
-    else                               fail('루트 페이스 Root Face', rootFace, '0 ~ 3', 'mm');
+    const maxRG = tMax <= 25 ? (crit.root_gap_max_thin??4) : (crit.root_gap_max_thick??6);
+    const minRG = crit.root_gap_min??0;
+    if(rg>=minRG && rg<=maxRG) pass('루트 간격 Root Gap', rg, `${minRG}~${maxRG}`, 'mm', `t=${tMax}mm 기준`);
+    else                        fail('루트 간격 Root Gap', rg, `${minRG}~${maxRG}`, 'mm');
 
     // Hi-Lo
-    const hiLoLimit = Math.min(tMax * 0.15, 3);
-    if(hiLo <= hiLoLimit) pass('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoLimit.toFixed(1)}`, 'mm', `t×15%=≤3mm`);
-    else                  fail('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoLimit.toFixed(1)}`, 'mm');
+    const hiLoMax = Math.min(tMax*(crit.hi_lo_max_pct??15)/100, crit.hi_lo_abs_max??3);
+    if(hiLo<=hiLoMax) pass('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoMax.toFixed(1)}`, 'mm');
+    else              fail('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoMax.toFixed(1)}`, 'mm');
 
-    // 두께 차이 알림
-    if(t1 !== t2) {
+    // 두께 차이
+    if(t1!==t2 && document.getElementById('wps_t2_diff')?.checked) {
       const diff = Math.abs(t1-t2);
-      info(`두께 차이 (T₁=${t1} / T₂=${t2})`, diff.toFixed(1), 'mm', diff>3?'⚠ 두께 차 >3mm — 테이퍼 처리 필요':'테이퍼 불필요');
+      info(`두께 차이 (T₁=${t1} / T₂=${t2})`, diff.toFixed(1), 'mm', diff>3?'⚠ >3mm — 테이퍼 처리 필요':'테이퍼 불필요');
     }
 
-    const ph = _getPreheat(tMax, process);
+    const ph = _getPreheat(tMax, process, crit.preheat);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
 
-  } else if(joint === 'fillet') {
-    const t1 = _val('wps_t1'), t2 = _valT2();
-    const leg = _val('wps_leg');
-    const gap = _val('wps_gap');
-    const tMax = Math.max(t1, t2);
-    const process = _sel('wps_process').split(' ')[0];
+  } else if(joint==='fillet') {
+    const t1 = _val('wps_t1'), t2 = _valT2(), tMax = Math.max(t1,t2);
+    const leg = _val('wps_leg'), gap = _val('wps_gap');
+    const maxRG = crit.root_gap_max??1.5, allowRG = crit.root_gap_allow??4;
 
-    // Root Gap
-    if(gap <= 1.5) {
-      pass('루트 간격 Root Gap', gap, '≤ 1.5', 'mm');
-    } else if(gap <= 4.0) {
-      const adjLeg = leg + gap;
-      warn('루트 간격 Root Gap', gap, '≤ 1.5', 'mm',
-        `⚠ 허용 초과 → 각장 증가: ${leg} + ${gap} = ${adjLeg.toFixed(1)}mm`);
-    } else {
-      fail('루트 간격 Root Gap', gap, '≤ 1.5(~4)', 'mm', '4mm 초과 시 용접 불가');
-    }
+    if(gap<=maxRG)      pass('루트 간격 Root Gap', gap, `≤ ${maxRG}`, 'mm');
+    else if(gap<=allowRG) warn('루트 간격 Root Gap', gap, `≤ ${maxRG}`, 'mm', `각장 증가 필요: ${leg}+${gap}=${+(leg+gap).toFixed(1)}mm`);
+    else                fail('루트 간격 Root Gap', gap, `≤ ${allowRG}`, 'mm', '용접 불가');
 
-    // 최소 각장
-    const minLeg = Math.max(3, Math.ceil(0.7 * Math.min(t1, t2)));
-    if(leg >= minLeg) pass('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm', `min(T₁,T₂)=${Math.min(t1,t2)}mm 기준`);
-    else              fail('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
+    const pct = (crit.leg_pct??70)/100;
+    const minLeg = Math.max(3, Math.ceil(pct*Math.min(t1,t2)));
+    if(leg>=minLeg) pass('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm', `min(T)×${crit.leg_pct??70}%`);
+    else            fail('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
 
-    const ph = _getPreheat(tMax, process);
+    const ph = _getPreheat(tMax, process, crit.preheat);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
 
-  } else if(joint === 'tee') {
-    const tw = _val('wps_t1'), tf = _valT2();
-    const groove = _valGroove();
-    const rootGap = _val('wps_root_gap');
-    const perp = _val('wps_misalign');
-    const leg = _val('wps_leg');
-    const process = _sel('wps_process').split(' ')[0];
-    const tMax = Math.max(tw, tf);
+  } else if(joint==='tee') {
+    const tw = _val('wps_t1'), tf = _valT2(), tMax = Math.max(tw,tf);
+    const rg = _val('wps_root_gap'), fg = _val('wps_face_gap');
+    const perp = _val('wps_misalign'), leg = _val('wps_leg');
 
-    if(groove > 0) {
-      const totalGroove = groove * 2;
-      if(totalGroove >= 55 && totalGroove <= 75)
-        pass('개선각 (총)', totalGroove.toFixed(1), '55~75', '°');
-      else
-        fail('개선각 (총)', totalGroove.toFixed(1), '55~75', '°');
+    if(tw>0 && fg>0 && fg>=rg) {
+      const angle = calcGrooveAngle(tw, rg, fg);
+      const gMin = crit.groove_min??55, gMax = crit.groove_max??75;
+      if(angle>=gMin && angle<=gMax) pass('개선각 (총)', angle, `${gMin}~${gMax}`, '°');
+      else                           fail('개선각 (총)', angle, `${gMin}~${gMax}`, '°');
     }
 
-    if(rootGap <= 3) pass('루트 간격 Root Gap', rootGap, '≤ 3', 'mm');
-    else             fail('루트 간격 Root Gap', rootGap, '≤ 3', 'mm');
+    const maxRG = crit.root_gap_max??3;
+    if(rg<=maxRG) pass('루트 간격', rg, `≤ ${maxRG}`, 'mm');
+    else          fail('루트 간격', rg, `≤ ${maxRG}`, 'mm');
 
-    if(perp <= 2) pass('직각도 오차', perp, '≤ 2', 'mm', '100mm 기준');
-    else          fail('직각도 오차', perp, '≤ 2', 'mm');
+    const perpMax = crit.perp_max??2;
+    if(perp<=perpMax) pass('직각도 오차', perp, `≤ ${perpMax}`, 'mm', '100mm 기준');
+    else              fail('직각도 오차', perp, `≤ ${perpMax}`, 'mm');
 
-    if(leg > 0) {
-      const minLeg = Math.max(3, Math.ceil(0.7 * Math.min(tw, tf)));
-      if(leg >= minLeg) pass('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
-      else              fail('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
+    if(leg>0) {
+      const pct = (crit.leg_pct??70)/100;
+      const minLeg = Math.max(3, Math.ceil(pct*Math.min(tw,tf)));
+      if(leg>=minLeg) pass('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
+      else            fail('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
     }
 
-    const ph = _getPreheat(tMax, process);
+    const ph = _getPreheat(tMax, process, crit.preheat);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
   }
 
-  _renderWpsResult(results);
+  _renderWpsCalcResult(results);
 }
 
-function _getPreheat(tMax, process) {
-  for(const r of WPS_PREHEAT) {
-    if(tMax <= r.t_max && r.process.includes(process))
-      return {temp:r.temp, note:r.note};
-  }
+function _getPreheat(tMax, process, phArr) {
+  const arr = phArr || WPS_DEFAULT_CRITERIA.butt.preheat;
+  for(const r of arr) { if(tMax<=r.t_max) return {temp:r.temp, note:`예열 ${r.temp}°C 이상`}; }
   return {temp:150, note:'예열 150°C 이상 (고두께)'};
 }
 
-function _renderWpsResult(results) {
-  const allPass = results.every(r=>r.pass===true||r.pass==='info');
+function _renderWpsCalcResult(results) {
+  const el = document.getElementById('wps-result');
+  if(!el) return;
+  if(!results) { el.style.display='none'; return; }
   const hasFail = results.some(r=>r.pass===false);
   const hasWarn = results.some(r=>r.pass==='warn');
-
-  const overallBg    = hasFail ? '#fee2e2' : hasWarn ? '#fef9c3' : '#dcfce7';
-  const overallColor = hasFail ? '#991b1b' : hasWarn ? '#854d0e' : '#166534';
-  const overallIcon  = hasFail ? '❌' : hasWarn ? '⚠️' : '✅';
-  const overallText  = hasFail ? 'FAIL — 재작업 필요' : hasWarn ? 'MARGINAL — 조건부 허용' : 'PASS — 용접 진행 가능';
+  const [oBg,oCol,oIcon,oText] = hasFail
+    ? ['#fee2e2','#991b1b','❌','FAIL — 재작업 필요']
+    : hasWarn ? ['#fef9c3','#854d0e','⚠️','MARGINAL — 조건부 허용']
+    : ['#dcfce7','#166534','✅','PASS — 용접 진행 가능'];
 
   const rows = results.map(r => {
     const ic = r.pass===true?'✅':r.pass===false?'❌':r.pass==='warn'?'⚠️':'ℹ️';
-    const bg = r.pass===false?'#fff1f2':r.pass==='warn'?'#fefce8':r.pass==='info'?'':'';
+    const bg = r.pass===false?'#fff1f2':r.pass==='warn'?'#fefce8':'';
     return `<tr style="background:${bg}">
       <td style="padding:5px 8px;font-size:11px">${ic}</td>
-      <td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--txt-h)">${r.label}</td>
-      <td style="padding:5px 8px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--blue);font-weight:700">${r.measured}${r.unit?'<span style="font-size:10px;color:var(--txt-m)"> '+r.unit+'</span>':''}</td>
+      <td style="padding:5px 8px;font-size:12px;font-weight:600">${r.label}</td>
+      <td style="padding:5px 8px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--blue);font-weight:700">${r.measured}${r.unit?' <span style="font-size:10px;color:var(--txt-m)">'+r.unit+'</span>':''}</td>
       <td style="padding:5px 8px;font-size:11px;color:var(--txt-m)">${r.limit}${r.unit&&r.limit?' '+r.unit:''}</td>
       <td style="padding:5px 8px;font-size:11px;color:var(--txt-s)">${r.detail||''}</td>
     </tr>`;
   }).join('');
 
-  const el = document.getElementById('wps-result');
-  el.style.display = '';
-  el.innerHTML = `
-    <div style="background:${overallBg};border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
-      <span style="font-size:22px">${overallIcon}</span>
-      <span style="font-size:15px;font-weight:700;color:${overallColor}">${overallText}</span>
-    </div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid var(--border)">
-      <thead><tr style="background:var(--bg-panel)">
-        <th style="width:32px;padding:5px 8px"></th>
-        <th style="padding:5px 8px;font-size:11px;text-align:left">검사 항목</th>
-        <th style="padding:5px 8px;font-size:11px;text-align:left">측정값</th>
-        <th style="padding:5px 8px;font-size:11px;text-align:left">허용 기준</th>
-        <th style="padding:5px 8px;font-size:11px;text-align:left">비고</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="font-size:10px;color:var(--txt-m);margin-top:8px">
-      * 기준: AWS D1.1:2020 / ISO 5817 Level B (선급 사양 별도 확인 필요)
-    </div>`;
+  el.style.display='';
+  el.innerHTML=`<div style="background:${oBg};border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:22px">${oIcon}</span>
+    <span style="font-size:15px;font-weight:700;color:${oCol}">${oText}</span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;border:1px solid var(--border)">
+    <thead><tr style="background:var(--bg-panel)">
+      <th style="width:28px;padding:5px 8px"></th>
+      <th style="padding:5px 8px;font-size:11px;text-align:left">검사 항목</th>
+      <th style="padding:5px 8px;font-size:11px;text-align:left">측정값</th>
+      <th style="padding:5px 8px;font-size:11px;text-align:left">허용 기준</th>
+      <th style="padding:5px 8px;font-size:11px;text-align:left">비고</th>
+    </tr></thead><tbody>${rows}</tbody>
+  </table>
+  <div style="font-size:10px;color:var(--txt-m);margin-top:8px">
+    * 기준: ${_wpsCriteria ? '조선소 WPS 기준 (저장된 값)' : 'AWS D1.1:2020 / ISO 5817 Level B (기본값 — WPS 기준 탭에서 입력 가능)'}
+  </div>`;
 }
 
-// WPS 파일 관리
+// ── WPS 기준 입력 폼 ──────────────────────────────────────────
+async function _renderWpsCritForm() {
+  // 저장된 기준값 로드해서 폼에 채움
+  let crit = _wpsCriteria;
+  if(!crit) {
+    crit = await apiFetch(`${API}/vessels/${VID}/wps_criteria`).catch(()=>null);
+    _wpsCriteria = crit;
+  }
+  if(!crit) return;  // 저장된 값 없으면 placeholder만 표시
+  const cb = crit.butt||{}, cf = crit.fillet||{}, ct = crit.tee||{};
+  const set = (id, val) => { const el=document.getElementById(id); if(el&&val!==undefined) el.value=val; };
+  set('wc_b_gmin',  cb.groove_min);       set('wc_b_gmax',  cb.groove_max);
+  set('wc_b_rgmin', cb.root_gap_min);     set('wc_b_rgmax1',cb.root_gap_max_thin);
+  set('wc_b_rgmax2',cb.root_gap_max_thick);set('wc_b_hilo',  cb.hi_lo_abs_max);
+  set('wc_f_rg',    cf.root_gap_max);     set('wc_f_rga',   cf.root_gap_allow);
+  set('wc_f_leg',   cf.leg_pct);
+  set('wc_t_gmin',  ct.groove_min);       set('wc_t_gmax',  ct.groove_max);
+  set('wc_t_rg',    ct.root_gap_max);     set('wc_t_perp',  ct.perp_max);
+  set('wc_t_leg',   ct.leg_pct);
+}
+
+async function saveWpsCrit() {
+  const g = id => { const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?undefined:v; };
+  const criteria = {
+    butt: {
+      groove_min:        g('wc_b_gmin'),
+      groove_max:        g('wc_b_gmax'),
+      root_gap_min:      g('wc_b_rgmin'),
+      root_gap_max_thin: g('wc_b_rgmax1'),
+      root_gap_max_thick:g('wc_b_rgmax2'),
+      hi_lo_abs_max:     g('wc_b_hilo'),
+      hi_lo_max_pct:     15,
+      preheat: WPS_DEFAULT_CRITERIA.butt.preheat,
+    },
+    fillet: {
+      root_gap_max:   g('wc_f_rg'),
+      root_gap_allow: g('wc_f_rga'),
+      leg_pct:        g('wc_f_leg'),
+      preheat: WPS_DEFAULT_CRITERIA.fillet.preheat,
+    },
+    tee: {
+      groove_min:   g('wc_t_gmin'),
+      groove_max:   g('wc_t_gmax'),
+      root_gap_max: g('wc_t_rg'),
+      perp_max:     g('wc_t_perp'),
+      leg_pct:      g('wc_t_leg'),
+      preheat: WPS_DEFAULT_CRITERIA.tee.preheat,
+    },
+  };
+  // undefined 값 제거
+  JSON.parse(JSON.stringify(criteria, (k,v) => v===undefined?undefined:v));
+
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/vessels/${VID}/wps_criteria`, 'PUT', criteria);
+    _wpsCriteria = criteria;
+    setSS('synced');
+    toast('WPS 기준이 저장됐습니다');
+  } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
+}
+
+// ── WPS 파일 관리 ─────────────────────────────────────────────
 async function _loadWpsFiles() {
   const list = document.getElementById('wps-file-list');
   if(!list) return;
@@ -5354,64 +5296,38 @@ async function _loadWpsFiles() {
   const badge = document.getElementById('wps-file-badge');
   if(badge) badge.textContent = cnt > 0 ? ` (${cnt})` : '';
   const btn = document.getElementById('btn-wps-tank');
-  if(btn) {
-    btn.style.background = cnt > 0 ? 'var(--blue)' : '';
-    btn.style.color      = cnt > 0 ? 'var(--white)' : '';
-    btn.textContent = cnt > 0 ? `🔥 WPS (${cnt})` : '🔥 WPS';
-  }
-  if(!(files||[]).length) {
-    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--txt-m)">
-      <div style="font-size:32px;margin-bottom:8px">📂</div>
-      <div>업로드된 WPS 파일이 없습니다.</div>
-    </div>`;
-    return;
-  }
-  list.innerHTML = (files||[]).map(f => {
-    const ext  = (f.filename||'').split('.').pop().toLowerCase();
-    const icon = f.mimetype?.startsWith('image/')    ? '🖼️'
-               : f.mimetype==='application/pdf'       ? '📄'
-               : ['xlsx','xls'].includes(ext)          ? '📊'
-               : ['docx','doc'].includes(ext)          ? '📝' : '📁';
-    const size = f.filesize ? (f.filesize>=1024*1024
-      ? (f.filesize/1024/1024).toFixed(1)+' MB'
-      : (f.filesize/1024).toFixed(0)+' KB') : '';
-    const canPreview = f.mimetype?.startsWith('image/') || f.mimetype==='application/pdf';
+  if(btn) { btn.style.background=cnt>0?'var(--blue)':''; btn.style.color=cnt>0?'var(--white)':''; btn.textContent=cnt>0?`🔥 WPS (${cnt})`:'🔥 WPS'; }
+  if(!(files||[]).length) { list.innerHTML=`<div style="text-align:center;padding:40px;color:var(--txt-m)"><div style="font-size:32px;margin-bottom:8px">📂</div><div>업로드된 WPS 파일이 없습니다.</div></div>`; return; }
+  list.innerHTML=(files||[]).map(f=>{
+    const ext=(f.filename||'').split('.').pop().toLowerCase();
+    const icon=f.mimetype?.startsWith('image/')? '🖼️':f.mimetype==='application/pdf'?'📄':['xlsx','xls'].includes(ext)?'📊':['docx','doc'].includes(ext)?'📝':'📁';
+    const size=f.filesize?(f.filesize>=1024*1024?(f.filesize/1024/1024).toFixed(1)+' MB':(f.filesize/1024).toFixed(0)+' KB'):'';
+    const canPrev=f.mimetype?.startsWith('image/')||f.mimetype==='application/pdf';
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
-      <span style="font-size:24px;flex-shrink:0">${icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div>
-        <div style="font-size:11px;color:var(--txt-m)">${size}</div>
-      </div>
+      <span style="font-size:24px">${icon}</span>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div><div style="font-size:11px;color:var(--txt-m)">${size}</div></div>
       <div style="display:flex;gap:5px">
-        ${canPreview?`<button class="btn-sec" style="font-size:11px;padding:3px 8px" onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>`:''}
+        ${canPrev?`<button class="btn-sec" style="font-size:11px;padding:3px 8px" onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>`:''}
         <a class="btn-sec" style="font-size:11px;padding:3px 8px;text-decoration:none" href="/api/attachments/${f.id}">⬇</a>
         ${!isViewer()?`<button class="btn-sec" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="deleteWpsFile(${f.id})">✕</button>`:''}
-      </div>
-    </div>`;
+      </div></div>`;
   }).join('');
 }
 
 async function uploadWpsFile(input) {
-  if(!VID || !input.files.length) return;
-  const fd = new FormData();
-  for(const f of input.files) fd.append('files', f);
+  if(!VID||!input.files.length) return;
+  const fd=new FormData(); for(const f of input.files) fd.append('files',f);
   setSS('saving');
-  try {
-    await fetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`, {method:'POST', body:fd});
-    await _loadWpsFiles();
-    setSS('synced'); toast(`${input.files.length}개 WPS 파일 업로드 완료`);
-  } catch(e) { setSS('error'); toast('업로드 실패: '+e.message, true); }
+  try { await fetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`,{method:'POST',body:fd}); await _loadWpsFiles(); setSS('synced'); toast(`${input.files.length}개 WPS 파일 업로드 완료`); }
+  catch(e){setSS('error');toast('업로드 실패: '+e.message,true);}
   input.value='';
 }
 
 async function deleteWpsFile(aid) {
   if(!confirm('파일을 삭제하시겠습니까?')) return;
   setSS('saving');
-  try {
-    await apiFetch(`${API}/attachments/${aid}`, 'DELETE');
-    await _loadWpsFiles();
-    setSS('synced'); toast('삭제됐습니다');
-  } catch(e) { setSS('error'); toast('삭제 실패: '+e.message, true); }
+  try { await apiFetch(`${API}/attachments/${aid}`,'DELETE'); await _loadWpsFiles(); setSS('synced'); toast('삭제됐습니다'); }
+  catch(e){setSS('error');toast('삭제 실패: '+e.message,true);}
 }
 
 // ══ PIPE PLAN ═════════════════════════════════════════════════
