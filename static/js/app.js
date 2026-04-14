@@ -4377,7 +4377,11 @@ function _renderTankModalBody() {
 }
 
 // ── Fit-up Reference Card (Tank Modal) ─────────────────────────
-function openFitupRef(itemId, t) {
+async function openFitupRef(itemId, t) {
+  // DB에서 최신 WPS 기준 로드 (미로드 시)
+  if(!_wpsCriteria) {
+    _wpsCriteria = await apiFetch(`${API}/vessels/${VID}/wps_criteria`).catch(()=>null);
+  }
   const crit = _wpsCriteria || WPS_DEFAULT_CRITERIA;
   const bc = crit?.butt;
   const nb = bc?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
