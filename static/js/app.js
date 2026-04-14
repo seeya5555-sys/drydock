@@ -4889,6 +4889,11 @@ const WPS_DEFAULT_CRITERIA = {
     root_gap_min: 0, root_gap_max_thin: 4, root_gap_max_thick: 6,
     hi_lo_max_pct: 15, hi_lo_abs_max: 3,
     preheat: [{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
+    ceramic_rules: [
+      {rg_max:3,  groove_nom:60, tol_plus:10, tol_minus:5, note:'루트갭 0~3mm'},
+      {rg_max:8,  groove_nom:45, tol_plus:10, tol_minus:5, note:'루트갭 ~6(+2)mm'},
+      {rg_max:16, groove_nom:38, tol_plus:10, tol_minus:5, note:'루트갭 ~10(+6)mm'},
+    ],
   },
   fillet: {
     root_gap_max: 1.5, root_gap_allow: 4,
@@ -4941,7 +4946,12 @@ function switchWpsTab(tab) {
   });
   if(tab==='calc')  { _renderWpsInputs(); _renderWpsCalcResult(null); }
   if(tab==='files') { _loadWpsFiles(); document.getElementById('wps-upload-lbl').style.display = isViewer()?'none':''; }
-  if(tab==='crit')  { _renderWpsCritForm(); }
+  if(tab==='crit')  {
+    _renderWpsCritForm().then(()=>{
+      const rules = _wpsCriteria?.butt?.ceramic_rules || WPS_DEFAULT_CRITERIA.butt.ceramic_rules;
+      _renderCeramicRules(rules);
+    });
+  }
 }
 
 function setWpsJoint(joint) {
@@ -4996,9 +5006,20 @@ function _renderWpsInputs() {
     </div>
   </div>`;
 
+  // Backing 선택 드롭다운
+  const backingOpts = `
+    <option value="none">없음 (No Backing)</option>
+    <option value="ceramic">Chill Plate / Ceramic Backing</option>
+    <option value="steel">Steel Backing Bar</option>
+    <option value="flux">Flux / Tape Backing</option>`;
+
   let html = '';
   if(j==='butt') {
     html = numInput('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()') + t2Field
+      + `<div class="form-group">
+           <label class="form-lbl">뒷댐재 (Backing)</label>
+           <select class="form-ctrl" id="wps_backing" onchange="_autoGroove()">${backingOpts}</select>
+         </div>`
       + numInput('wps_root_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
       + numInput('wps_face_gap','개선 끝단 갭 (mm)','상부 열린 거리','_autoGroove()')
       + grooveBlock
@@ -5019,6 +5040,10 @@ function _renderWpsInputs() {
   } else if(j==='tee') {
     html = numInput('wps_t1','웨브 두께 T₁ (mm) *','웨브','_autoGroove()')
       + t2Field.replace('부재 두께 T₂','플랜지 두께 T₂')
+      + `<div class="form-group">
+           <label class="form-lbl">뒷댐재 (Backing)</label>
+           <select class="form-ctrl" id="wps_backing" onchange="_autoGroove()">${backingOpts}</select>
+         </div>`
       + numInput('wps_root_gap','루트 간격 (mm)','0','_autoGroove()')
       + numInput('wps_face_gap','개선 끝단 갭 (mm)','상부 열린 거리','_autoGroove()')
       + grooveBlock
@@ -5048,33 +5073,71 @@ function _valT2() {
   return (diff && diff.checked) ? (_val('wps_t2')||_val('wps_t1')) : _val('wps_t1');
 }
 
-// 개선각 자동계산 + 미리보기 업데이트
+// Ceramic backing rule lookup: 루트간격 → 해당 rule {groove, tol_plus, tol_minus}
+function _lookupCeramicRule(rg) {
+  const rules = (_wpsCriteria?.butt?.ceramic_rules) || WPS_DEFAULT_CRITERIA.butt.ceramic_rules;
+  if(!rules || !rules.length) return null;
+  // 루트간격이 해당 rule의 rg_nom ± tolerance 내에 있는 것 찾기
+  // rg_max 기준으로 오름차순 정렬, 처음 rg <= rg_max인 규칙 반환
+  const sorted = [...rules].sort((a,b)=>(a.rg_max||99)-(b.rg_max||99));
+  for(const r of sorted) { if(rg <= (r.rg_max??99)) return r; }
+  return sorted[sorted.length-1];
+}
+
+// 개선각 자동계산 + 미리보기 (backing 고려)
 function _autoGroove() {
-  const t  = _val('wps_t1');
-  const rg = _val('wps_root_gap');
-  const fg = _val('wps_face_gap');
-  const el = document.getElementById('wps-groove-preview');
+  const t       = _val('wps_t1');
+  const rg      = _val('wps_root_gap');
+  const fg      = _val('wps_face_gap');
+  const backing = document.getElementById('wps_backing')?.value || 'none';
+  const el      = document.getElementById('wps-groove-preview');
   if(!el) return;
-  if(!t) { el.innerHTML = 'T₁을 먼저 입력하세요.'; return; }
-  if(!fg) { el.innerHTML = '개선 끝단 갭을 입력하면 각도가 계산됩니다.'; return; }
-  if(fg < rg) { el.innerHTML = '⚠ 개선 끝단 갭이 루트 간격보다 작습니다. 값을 확인하세요.'; return; }
+
+  // ── Ceramic Backing: rule table lookup ───────────────────
+  if(backing === 'ceramic') {
+    if(!t) { el.innerHTML='T₁을 먼저 입력하세요.'; el.style.background='#eff6ff'; el.style.borderColor='#bfdbfe'; el.style.color='#1e3a8a'; return; }
+    const rule = _lookupCeramicRule(rg);
+    if(!rule) { el.innerHTML='⚙ WPS 기준 탭에서 Ceramic Backing Rule을 먼저 설정하세요.'; return; }
+    const nomAngle = rule.groove_nom;
+    const gMin = nomAngle - (rule.tol_minus||5);
+    const gMax = nomAngle + (rule.tol_plus||10);
+
+    let angleInfo = '';
+    if(fg > 0 && fg >= rg) {
+      const calc = calcGrooveAngle(t, rg, fg);
+      const ok = calc >= gMin && calc <= gMax;
+      angleInfo = ` &nbsp;|&nbsp; 계산각: <b>${calc}°</b> &nbsp;→ <b style="color:${ok?'#166534':'#991b1b'}">${ok?'✅ 적합':'❌ 부적합'}</b>`;
+    }
+    el.style.background='#fdf4ff'; el.style.borderColor='#d8b4fe'; el.style.color='#581c87';
+    el.innerHTML = `<b>🔷 Ceramic Backing</b> &nbsp;|&nbsp;
+      루트간격 <b>${rg}mm</b> 적용 Rule: 개선각 <b>${nomAngle}° (+${rule.tol_plus||10}°, -${rule.tol_minus||5}°)</b>
+      → 허용범위 <b>${gMin}~${gMax}°</b>${angleInfo}
+      <br><span style="font-size:10px;opacity:.8">
+        ${rule.note||''} &nbsp;|&nbsp; 루트간격 기준: ≤${rule.rg_max}mm 시 적용
+      </span>`;
+    return;
+  }
+
+  // ── No Backing / Steel / Flux: 기하학 계산 ───────────────
+  if(!t) { el.innerHTML = 'T₁을 먼저 입력하세요.'; el.style.background='#eff6ff'; el.style.borderColor='#bfdbfe'; el.style.color='#1e3a8a'; return; }
+  if(!fg) { el.innerHTML = '개선 끝단 갭을 입력하면 각도가 계산됩니다.'; el.style.background='#eff6ff'; el.style.borderColor='#bfdbfe'; el.style.color='#1e3a8a'; return; }
+  if(fg < rg) { el.innerHTML = '⚠ 개선 끝단 갭이 루트 간격보다 작습니다.'; el.style.background='#fef9c3'; el.style.borderColor='#fde047'; el.style.color='#854d0e'; return; }
 
   const angle = calcGrooveAngle(t, rg, fg);
   const crit  = _getCrit(_wpsJoint);
-  const min   = crit?.groove_min ?? 55;
-  const max   = crit?.groove_max ?? 75;
-  const ok    = angle >= min && angle <= max;
-  const color = ok ? '#166534' : '#991b1b';
-  const bg    = ok ? '#f0fdf4' : '#fef2f2';
-  const border= ok ? '#86efac' : '#fca5a5';
-  el.style.background = bg;
-  el.style.borderColor = border;
-  el.style.color = color;
-  el.innerHTML = `<b>계산된 개선각: ${angle}°</b> (총 포함각) &nbsp;|&nbsp;
-    허용 기준: ${min}~${max}° &nbsp;|&nbsp;
-    <b>${ok ? '✅ 적합' : '❌ 부적합'}</b>
+  // Steel backing은 좀 더 넓은 범위 허용 (+5°)
+  const bonus = backing === 'steel' ? 5 : 0;
+  const gMin  = (crit?.groove_min ?? 55) - bonus;
+  const gMax  = (crit?.groove_max ?? 75) + bonus;
+  const ok    = angle >= gMin && angle <= gMax;
+  el.style.background  = ok ? '#f0fdf4' : '#fef2f2';
+  el.style.borderColor = ok ? '#86efac' : '#fca5a5';
+  el.style.color       = ok ? '#166534' : '#991b1b';
+  const backingLabel = backing==='steel' ? ' [Steel Backing +5° 허용]' : backing==='flux' ? ' [Flux Backing]' : '';
+  el.innerHTML = `<b>계산된 개선각: ${angle}°</b>${backingLabel} &nbsp;|&nbsp;
+    허용범위: ${gMin}~${gMax}° &nbsp;|&nbsp; <b>${ok?'✅ 적합':'❌ 부적합'}</b>
     <br><span style="font-size:10px;opacity:.8">
-      계산식: 2 × atan((${fg}-${rg}) / (2×${t})) = ${angle}°
+      2 × atan((${fg}-${rg}) / (2×${t})) = ${angle}°
     </span>`;
 }
 
@@ -5096,33 +5159,51 @@ function runWpsCalc() {
   if(joint==='butt') {
     const t1 = _val('wps_t1'), t2 = _valT2(), tMax = Math.max(t1,t2);
     const rg = _val('wps_root_gap'), fg = _val('wps_face_gap');
-    const hiLo = _val('wps_misalign');
+    const hiLo   = _val('wps_misalign');
+    const backing = document.getElementById('wps_backing')?.value || 'none';
 
-    // 개선각 자동계산
-    if(t1>0 && fg>=rg) {
-      const angle = calcGrooveAngle(t1, rg, fg);
-      const gMin = crit.groove_min??55, gMax = crit.groove_max??75;
-      if(angle>=gMin && angle<=gMax) pass('개선각 (총)', angle, `${gMin}~${gMax}`, '°', `T=${t1}, 루트갭=${rg}, 끝단갭=${fg}mm 기준`);
-      else                           fail('개선각 (총)', angle, `${gMin}~${gMax}`, '°', `계산식: 2×atan((${fg}-${rg})/(2×${t1}))`);
+    // 개선각 판정 (Backing에 따라 분기)
+    if(t1 > 0) {
+      if(backing === 'ceramic') {
+        const rule = _lookupCeramicRule(rg);
+        if(rule) {
+          const nomA = rule.groove_nom;
+          const gMin = nomA-(rule.tol_minus||5), gMax = nomA+(rule.tol_plus||10);
+          info('뒷댐재', 'Ceramic Backing', '', `루트갭 ≤${rule.rg_max}mm → 기준 ${nomA}° (+${rule.tol_plus||10}°/-${rule.tol_minus||5}°)`);
+          if(fg>=rg && fg>0) {
+            const calc = calcGrooveAngle(t1,rg,fg);
+            if(calc>=gMin&&calc<=gMax) pass('개선각 (총)', calc, `${gMin}~${gMax}`, '°', `Ceramic Rule 기준각 ${nomA}°`);
+            else                       fail('개선각 (총)', calc, `${gMin}~${gMax}`, '°', `계산: 2×atan((${fg}-${rg})/(2×${t1}))`);
+          }
+        } else { warn('뒷댐재', 'Ceramic Backing', '', '', 'WPS 기준 탭에서 Ceramic Rule 설정 필요'); }
+      } else {
+        if(backing!=='none') info('뒷댐재', backing==='steel'?'Steel Backing Bar':'Flux/Tape Backing','','');
+        const bonus = backing==='steel' ? 5 : 0;
+        const gMin = (crit.groove_min??55)-bonus, gMax = (crit.groove_max??75)+bonus;
+        if(fg>=rg && fg>0) {
+          const calc = calcGrooveAngle(t1,rg,fg);
+          if(calc>=gMin&&calc<=gMax) pass('개선각 (총)', calc, `${gMin}~${gMax}`, '°', backing==='steel'?'Steel Backing +5° 허용':'');
+          else                       fail('개선각 (총)', calc, `${gMin}~${gMax}`, '°');
+        }
+      }
     }
 
-    // Root Gap
-    const maxRG = tMax <= 25 ? (crit.root_gap_max_thin??4) : (crit.root_gap_max_thick??6);
+    // Root Gap (ceramic은 rule의 rg_max까지 허용)
+    const maxRG = tMax<=25?(crit.root_gap_max_thin??4):(crit.root_gap_max_thick??6);
     const minRG = crit.root_gap_min??0;
-    if(rg>=minRG && rg<=maxRG) pass('루트 간격 Root Gap', rg, `${minRG}~${maxRG}`, 'mm', `t=${tMax}mm 기준`);
-    else                        fail('루트 간격 Root Gap', rg, `${minRG}~${maxRG}`, 'mm');
+    const effMax = backing==='ceramic' ? Math.max(maxRG,(_lookupCeramicRule(rg)?.rg_max??maxRG)) : maxRG;
+    if(rg>=minRG&&rg<=effMax) pass('루트 간격 Root Gap', rg, `${minRG}~${effMax}`, 'mm');
+    else                       fail('루트 간격 Root Gap', rg, `${minRG}~${effMax}`, 'mm');
 
     // Hi-Lo
     const hiLoMax = Math.min(tMax*(crit.hi_lo_max_pct??15)/100, crit.hi_lo_abs_max??3);
     if(hiLo<=hiLoMax) pass('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoMax.toFixed(1)}`, 'mm');
     else              fail('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoMax.toFixed(1)}`, 'mm');
 
-    // 두께 차이
-    if(t1!==t2 && document.getElementById('wps_t2_diff')?.checked) {
+    if(document.getElementById('wps_t2_diff')?.checked && t1!==t2) {
       const diff = Math.abs(t1-t2);
-      info(`두께 차이 (T₁=${t1} / T₂=${t2})`, diff.toFixed(1), 'mm', diff>3?'⚠ >3mm — 테이퍼 처리 필요':'테이퍼 불필요');
+      info(`두께 차이 (T₁=${t1}/T₂=${t2})`, diff.toFixed(1), 'mm', diff>3?'⚠ 테이퍼 처리 필요':'OK');
     }
-
     const ph = _getPreheat(tMax, process, crit.preheat);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
 
@@ -5244,6 +5325,57 @@ async function _renderWpsCritForm() {
   set('wc_t_gmin',  ct.groove_min);       set('wc_t_gmax',  ct.groove_max);
   set('wc_t_rg',    ct.root_gap_max);     set('wc_t_perp',  ct.perp_max);
   set('wc_t_leg',   ct.leg_pct);
+  // Ceramic rules 렌더링
+  _renderCeramicRules((crit?.butt?.ceramic_rules) || WPS_DEFAULT_CRITERIA.butt.ceramic_rules);
+}
+
+function _renderCeramicRules(rules) {
+  const tbody = document.getElementById('ceramic-rules-body');
+  if(!tbody) return;
+  tbody.innerHTML = (rules||[]).map((r,i) => `
+    <tr id="cr-row-${i}">
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_rgmax_${i}" value="${r.rg_max??''}" style="width:80px;font-size:11px" placeholder="e.g. 3"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_nom_${i}"   value="${r.groove_nom??''}" style="width:70px;font-size:11px" placeholder="e.g. 60"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_plus_${i}"  value="${r.tol_plus??10}" style="width:60px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_minus_${i}" value="${r.tol_minus??5}" style="width:60px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_note_${i}" value="${r.note||''}" style="width:140px;font-size:11px" placeholder="비고"></td>
+      <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCeramicRule(${i})">✕</button></td>
+    </tr>`).join('');
+}
+
+function addCeramicRule() {
+  const rows = document.querySelectorAll('#ceramic-rules-body tr').length;
+  const tbody = document.getElementById('ceramic-rules-body');
+  if(!tbody) return;
+  const i = rows;
+  const tr = document.createElement('tr'); tr.id = `cr-row-${i}`;
+  tr.innerHTML = `
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_rgmax_${i}" style="width:80px;font-size:11px" placeholder="e.g. 6"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_nom_${i}"   style="width:70px;font-size:11px" placeholder="e.g. 45"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_plus_${i}"  value="10" style="width:60px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_minus_${i}" value="5"  style="width:60px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_note_${i}" style="width:140px;font-size:11px" placeholder="비고"></td>
+    <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCeramicRule(${i})">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function delCeramicRule(i) {
+  document.getElementById(`cr-row-${i}`)?.remove();
+}
+
+function _collectCeramicRules() {
+  const rows = document.querySelectorAll('#ceramic-rules-body tr');
+  const rules = [];
+  rows.forEach(row => {
+    const idx = row.id.replace('cr-row-','');
+    const rg_max    = parseFloat(document.getElementById(`cr_rgmax_${idx}`)?.value);
+    const groove_nom= parseFloat(document.getElementById(`cr_nom_${idx}`)?.value);
+    const tol_plus  = parseFloat(document.getElementById(`cr_plus_${idx}`)?.value)||10;
+    const tol_minus = parseFloat(document.getElementById(`cr_minus_${idx}`)?.value)||5;
+    const note      = document.getElementById(`cr_note_${idx}`)?.value||'';
+    if(!isNaN(rg_max) && !isNaN(groove_nom)) rules.push({rg_max, groove_nom, tol_plus, tol_minus, note});
+  });
+  return rules.sort((a,b)=>a.rg_max-b.rg_max);
 }
 
 async function saveWpsCrit() {
@@ -5258,6 +5390,7 @@ async function saveWpsCrit() {
       hi_lo_abs_max:     g('wc_b_hilo'),
       hi_lo_max_pct:     15,
       preheat: WPS_DEFAULT_CRITERIA.butt.preheat,
+      ceramic_rules:     _collectCeramicRules(),
     },
     fillet: {
       root_gap_max:   g('wc_f_rg'),
