@@ -4881,37 +4881,196 @@ async function _initPlanDocBadges() {
 
 let _wpsJoint = 'butt';
 
-const WPS_INPUTS = {
-  butt: [
-    {id:'wps_t1',    label:'모재 두께 T₁ (mm)',       type:'number', hint:'주재'},
-    {id:'wps_t2',    label:'모재 두께 T₂ (mm)',       type:'number', hint:'부재 (다를 경우)'},
-    {id:'wps_groove',label:'개선각 Groove Angle (°)', type:'number', hint:'편측 기준 (V-groove: 30°)'},
-    {id:'wps_root_gap',label:'루트 간격 Root Gap (mm)',type:'number', hint:''},
-    {id:'wps_root_face',label:'루트 페이스 Root Face (mm)',type:'number', hint:''},
-    {id:'wps_misalign',label:'선형 오차 Hi-Lo (mm)',  type:'number', hint:'두 판 두께 차 오차'},
-    {id:'wps_process',label:'용접 방법',               type:'select', opts:['SMAW','FCAW','GMAW','SAW','GTAW']},
-    {id:'wps_position',label:'용접 자세',              type:'select', opts:['1G (Flat)','2G (Horiz.)','3G (Vert.)','4G (OH)','5G','6G']},
-  ],
-  fillet: [
-    {id:'wps_t1',    label:'모재 두께 T₁ (mm)',       type:'number', hint:''},
-    {id:'wps_t2',    label:'모재 두께 T₂ (mm)',       type:'number', hint:''},
-    {id:'wps_leg',   label:'각장 Leg Size (mm)',       type:'number', hint:'목표 각장'},
-    {id:'wps_gap',   label:'루트 간격 Root Gap (mm)',  type:'number', hint:''},
-    {id:'wps_process',label:'용접 방법',               type:'select', opts:['SMAW','FCAW','GMAW','SAW','GTAW']},
-    {id:'wps_position',label:'용접 자세',              type:'select', opts:['1F','2F','3F','4F']},
-  ],
-  tee: [
-    {id:'wps_t1',    label:'웨브 두께 (mm)',           type:'number', hint:''},
-    {id:'wps_t2',    label:'플랜지 두께 (mm)',          type:'number', hint:''},
-    {id:'wps_groove',label:'개선각 (°)',               type:'number', hint:'Full penetration 시'},
-    {id:'wps_root_gap',label:'루트 간격 (mm)',          type:'number', hint:''},
-    {id:'wps_misalign',label:'T-bar 직각도 오차 (mm)', type:'number', hint:''},
-    {id:'wps_leg',   label:'각장 Leg Size (mm)',        type:'number', hint:'Fillet 시'},
-    {id:'wps_process',label:'용접 방법',               type:'select', opts:['SMAW','FCAW','GMAW','SAW','GTAW']},
-    {id:'wps_position',label:'용접 자세',              type:'select', opts:['1F','2F','3F','4F','1G','2G']},
-  ],
-};
+// 용접방법 옵션 (부가설명 포함)
+const WPS_PROCESS_OPTS = [
+  {val:'SMAW', label:'SMAW — 피복 아크 용접 (일반 봉용접)'},
+  {val:'FCAW', label:'FCAW — 플럭스 코어드 아크 용접 (반자동)'},
+  {val:'GMAW', label:'GMAW — MIG/MAG 용접 (가스 금속 아크)'},
+  {val:'SAW',  label:'SAW  — 서브머지드 아크 용접 (자동, 수평)'},
+  {val:'GTAW', label:'GTAW — TIG 용접 (불활성 가스 텅스텐)'},
+];
 
+function _renderWpsInputs() {
+  const j = _wpsJoint;
+  const procOpts = WPS_PROCESS_OPTS.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+
+  // T2 토글 헬퍼
+  const t2Toggle = `
+    <div class="form-group">
+      <label class="form-lbl" style="display:flex;align-items:center;gap:6px">
+        부재 두께 T₂ (mm)
+        <label style="font-size:10px;display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:400;color:var(--txt-m)">
+          <input type="checkbox" id="wps_t2_diff" onchange="toggleWpsT2(this.checked)" style="width:12px;height:12px">
+          주재와 다름
+        </label>
+      </label>
+      <input class="form-ctrl" id="wps_t2" type="number" step="0.1" min="0" placeholder="주재와 동일" disabled
+             style="color:var(--txt-m);background:var(--bg-panel)">
+    </div>`;
+
+  // 개선각 자동계산 영역
+  const grooveAuto = `
+    <div class="form-group" style="grid-column:1/-1">
+      <label class="form-lbl">개선각 Groove Angle (자동계산)</label>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;font-size:12px;color:#1e40af">
+        ℹ 개선각은 루트 간격 및 루트 페이스를 입력하면 아래에서 자동 계산됩니다. 직접 입력이 필요한 경우:
+        <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;font-size:11px">
+          <input type="checkbox" id="wps_groove_manual" onchange="toggleWpsGrooveManual(this.checked)" style="width:12px;height:12px">
+          개선각 직접 입력
+        </label>
+        <div id="wps_groove_manual_area" style="display:none;margin-top:8px">
+          <input class="form-ctrl" id="wps_groove" type="number" step="0.5" min="0" max="90" placeholder="편측 각도 (°)"
+                 style="width:160px">
+          <span style="font-size:10px;color:#3b82f6;margin-left:6px">편측 기준 — V-groove 기준 30°</span>
+        </div>
+      </div>
+    </div>`;
+
+  let html = '';
+
+  if(j === 'butt') {
+    html = `
+      <div class="form-group">
+        <label class="form-lbl">모재 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
+        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="주재 두께"
+               oninput="onWpsT1Change()">
+      </div>
+      ${t2Toggle}
+      <div class="form-group">
+        <label class="form-lbl">루트 간격 Root Gap (mm)</label>
+        <input class="form-ctrl" id="wps_root_gap" type="number" step="0.1" min="0" placeholder="0"
+               oninput="calcWpsGrooveAuto()">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">루트 페이스 Root Face (mm)</label>
+        <input class="form-ctrl" id="wps_root_face" type="number" step="0.1" min="0" placeholder="0"
+               oninput="calcWpsGrooveAuto()">
+      </div>
+      ${grooveAuto}
+      <div class="form-group">
+        <label class="form-lbl">선형 오차 Hi-Lo (mm)</label>
+        <input class="form-ctrl" id="wps_misalign" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label class="form-lbl">용접 방법</label>
+        <select class="form-ctrl" id="wps_process">${procOpts}</select>
+      </div>
+      <div id="wps_groove_auto_result" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:8px 12px;font-size:12px;color:#166534"></div>`;
+  } else if(j === 'fillet') {
+    html = `
+      <div class="form-group">
+        <label class="form-lbl">모재 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
+        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="주재 두께"
+               oninput="onWpsT1Change()">
+      </div>
+      ${t2Toggle}
+      <div class="form-group">
+        <label class="form-lbl">각장 Leg Size (mm)</label>
+        <input class="form-ctrl" id="wps_leg" type="number" step="0.1" min="0" placeholder="목표 각장">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">루트 간격 Root Gap (mm)</label>
+        <input class="form-ctrl" id="wps_gap" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label class="form-lbl">용접 방법</label>
+        <select class="form-ctrl" id="wps_process">${procOpts}</select>
+      </div>`;
+  } else if(j === 'tee') {
+    html = `
+      <div class="form-group">
+        <label class="form-lbl">웨브 두께 T₁ (mm) <span style="color:var(--red)">*</span></label>
+        <input class="form-ctrl" id="wps_t1" type="number" step="0.1" min="0" placeholder="웨브"
+               oninput="onWpsT1Change()">
+      </div>
+      ${t2Toggle.replace('부재 두께 T₂','플랜지 두께 T₂')}
+      <div class="form-group">
+        <label class="form-lbl">루트 간격 (mm)</label>
+        <input class="form-ctrl" id="wps_root_gap" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">직각도 오차 (mm / 100mm)</label>
+        <input class="form-ctrl" id="wps_misalign" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      ${grooveAuto}
+      <div class="form-group">
+        <label class="form-lbl">각장 Leg Size (mm) <span style="font-weight:400;color:var(--txt-m)">(Fillet 시)</span></label>
+        <input class="form-ctrl" id="wps_leg" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label class="form-lbl">용접 방법</label>
+        <select class="form-ctrl" id="wps_process">${procOpts}</select>
+      </div>
+      <div id="wps_groove_auto_result" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:8px 12px;font-size:12px;color:#166534"></div>`;
+  }
+
+  document.getElementById('wps-inputs').innerHTML = html;
+}
+
+// T₁ 변경 시 T₂ 동기화
+function onWpsT1Change() {
+  const t2el = document.getElementById('wps_t2');
+  const diff = document.getElementById('wps_t2_diff');
+  if(t2el && diff && !diff.checked) {
+    t2el.placeholder = document.getElementById('wps_t1')?.value || '주재와 동일';
+  }
+  calcWpsGrooveAuto();
+}
+
+// T₂ 활성화 토글
+function toggleWpsT2(enabled) {
+  const t2el = document.getElementById('wps_t2');
+  if(!t2el) return;
+  t2el.disabled = !enabled;
+  t2el.style.color = enabled ? '' : 'var(--txt-m)';
+  t2el.style.background = enabled ? '' : 'var(--bg-panel)';
+  if(!enabled) t2el.value = '';
+  t2el.placeholder = enabled ? '부재 두께 입력' : '주재와 동일';
+}
+
+// 개선각 직접입력 토글
+function toggleWpsGrooveManual(enabled) {
+  const area = document.getElementById('wps_groove_manual_area');
+  if(area) area.style.display = enabled ? '' : 'none';
+}
+
+// 개선각 자동계산 (루트 간격 + 루트 페이스 → 권장 개선각)
+// 산식: 총 개선각 = 2 × atan((T/2 - root_face) / (침투 깊이)) 를 단순화
+// 실무 기준: root gap 0~2mm → 60°, 2~4mm → 55°, 4mm+ → 50° (V-groove)
+function calcWpsGrooveAuto() {
+  const resultEl = document.getElementById('wps_groove_auto_result');
+  if(!resultEl) return;
+  const t1 = parseFloat(document.getElementById('wps_t1')?.value) || 0;
+  const rg = parseFloat(document.getElementById('wps_root_gap')?.value) || 0;
+  const rf = parseFloat(document.getElementById('wps_root_face')?.value) || 0;
+  if(!t1) { resultEl.style.display = 'none'; return; }
+
+  // 권장 개선각 (편측) 결정
+  let recHalf, reason;
+  if(rg <= 1)       { recHalf = 30; reason = 'Root Gap ≤ 1mm → 표준 V-groove 60° (편측 30°)'; }
+  else if(rg <= 2)  { recHalf = 30; reason = 'Root Gap 1~2mm → 60° 유지 (편측 30°)'; }
+  else if(rg <= 4)  { recHalf = 27.5; reason = 'Root Gap 2~4mm → 개선각 완화 55° (편측 27.5°)'; }
+  else              { recHalf = 25; reason = 'Root Gap >4mm → 최소 개선각 50° (편측 25°) — 루트 간격 재확인 권장'; }
+
+  const total = recHalf * 2;
+  // 루트 페이스 검토
+  const rfNote = rf > 3 ? ' ⚠ 루트 페이스 >3mm → 뒷면 용접 또는 백킹 필요' : rf === 0 ? ' (루트 페이스 0mm — 완전 개선)' : '';
+
+  resultEl.style.display = '';
+  resultEl.innerHTML = `
+    <b>📐 권장 개선각:</b> 편측 <b>${recHalf}°</b> → 총 <b>${total}°</b>
+    &nbsp;|&nbsp; ${reason}${rfNote}<br>
+    <span style="font-size:11px;color:#166534;opacity:.8">
+      * 루트 간격 ${rg}mm / 루트 페이스 ${rf}mm / 모재 두께 ${t1}mm 기준
+    </span>`;
+
+  // 직접입력 체크된 경우 자동계산 결과로 채워주지 않음
+  const manual = document.getElementById('wps_groove_manual');
+  if(manual && !manual.checked) {
+    const ginput = document.getElementById('wps_groove');
+    if(ginput) ginput.value = recHalf;
+  }
+}
 // 기준값 (AWS D1.1 / ISO 5817 Level B 기반)
 const WPS_CRITERIA = {
   butt: {
@@ -4945,7 +5104,7 @@ const WPS_PREHEAT = [
 function openWpsModal() {
   if(!VID) return;
   _wpsJoint = 'butt';
-  switchWpsTab('calc');
+  switchWpsTab('files');
   _renderWpsInputs();
   _renderWpsRefTable();
   document.getElementById('wps-result').style.display = 'none';
@@ -5005,6 +5164,22 @@ function _renderWpsRefTable() {
 
 function _val(id) { return parseFloat(document.getElementById(id)?.value)||0; }
 function _sel(id) { return document.getElementById(id)?.value||''; }
+// T₂: 체크박스 미선택 시 T₁ 값 반환
+function _valT2() {
+  const diff = document.getElementById('wps_t2_diff');
+  if(diff && diff.checked) return _val('wps_t2') || _val('wps_t1');
+  return _val('wps_t1');
+}
+// 개선각: 직접입력 체크된 경우만 입력값, 아니면 자동계산값
+function _valGroove() {
+  const manual = document.getElementById('wps_groove_manual');
+  if(manual && manual.checked) return _val('wps_groove');
+  // 자동계산: root gap 기반
+  const rg = _val('wps_root_gap');
+  if(rg <= 2) return 30;
+  if(rg <= 4) return 27.5;
+  return 25;
+}
 
 function runWpsCalc() {
   const joint = _wpsJoint;
@@ -5020,13 +5195,13 @@ function runWpsCalc() {
     results.push({pass:'info', label, measured:value, limit:'', unit, detail});
 
   if(joint === 'butt') {
-    const t1 = _val('wps_t1'), t2 = _val('wps_t2')||_val('wps_t1');
+    const t1 = _val('wps_t1'), t2 = _valT2();
     const tMax = Math.max(t1, t2);
-    const groove = _val('wps_groove');
+    const groove = _valGroove();
     const rootGap = _val('wps_root_gap');
     const rootFace = _val('wps_root_face');
     const hiLo = _val('wps_misalign');
-    const process = _sel('wps_process');
+    const process = _sel('wps_process').split(' ')[0]; // "SMAW — ..." → "SMAW"
 
     // 총 개선각 = 입력값 × 2 (편측 기준)
     const totalGroove = groove * 2;
@@ -5034,7 +5209,7 @@ function runWpsCalc() {
     if(totalGroove >= grooveLimit.min && totalGroove <= grooveLimit.max)
       pass('개선각 (총)', totalGroove.toFixed(1), `${grooveLimit.min}~${grooveLimit.max}`, '°', '편측 입력값×2');
     else
-      fail('개선각 (총)', totalGroove.toFixed(1), `${grooveLimit.min}~${grooveLimit.max}`, '°', `입력 편측: ${groove}° → 총: ${totalGroove}°`);
+      fail('개선각 (총)', totalGroove.toFixed(1), `${grooveLimit.min}~${grooveLimit.max}`, '°', `편측: ${groove}° → 총: ${totalGroove}°`);
 
     // Root Gap
     const maxGap = tMax <= 25 ? 4 : 6;
@@ -5047,19 +5222,24 @@ function runWpsCalc() {
 
     // Hi-Lo
     const hiLoLimit = Math.min(tMax * 0.15, 3);
-    if(hiLo <= hiLoLimit) pass('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoLimit.toFixed(1)}`, 'mm', `t×15%=≤3mm 기준`);
+    if(hiLo <= hiLoLimit) pass('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoLimit.toFixed(1)}`, 'mm', `t×15%=≤3mm`);
     else                  fail('선형 오차 Hi-Lo', hiLo, `≤ ${hiLoLimit.toFixed(1)}`, 'mm');
 
-    // 예열 온도
+    // 두께 차이 알림
+    if(t1 !== t2) {
+      const diff = Math.abs(t1-t2);
+      info(`두께 차이 (T₁=${t1} / T₂=${t2})`, diff.toFixed(1), 'mm', diff>3?'⚠ 두께 차 >3mm — 테이퍼 처리 필요':'테이퍼 불필요');
+    }
+
     const ph = _getPreheat(tMax, process);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
 
   } else if(joint === 'fillet') {
-    const t1 = _val('wps_t1'), t2 = _val('wps_t2');
+    const t1 = _val('wps_t1'), t2 = _valT2();
     const leg = _val('wps_leg');
     const gap = _val('wps_gap');
     const tMax = Math.max(t1, t2);
-    const process = _sel('wps_process');
+    const process = _sel('wps_process').split(' ')[0];
 
     // Root Gap
     if(gap <= 1.5) {
@@ -5072,22 +5252,21 @@ function runWpsCalc() {
       fail('루트 간격 Root Gap', gap, '≤ 1.5(~4)', 'mm', '4mm 초과 시 용접 불가');
     }
 
-    // 최소 각장 (t 기준)
-    const minLeg = Math.min(t1, t2) >= 6 ? Math.ceil(0.7 * Math.min(t1,t2)) : Math.ceil(Math.min(t1,t2) * 0.7);
-    const reqLeg = Math.max(3, Math.min(minLeg, 10));
-    if(leg >= reqLeg) pass('각장 Leg Size', leg, `≥ ${reqLeg}`, 'mm', `min(t1,t2)=${Math.min(t1,t2)}mm 기준`);
-    else              fail('각장 Leg Size', leg, `≥ ${reqLeg}`, 'mm');
+    // 최소 각장
+    const minLeg = Math.max(3, Math.ceil(0.7 * Math.min(t1, t2)));
+    if(leg >= minLeg) pass('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm', `min(T₁,T₂)=${Math.min(t1,t2)}mm 기준`);
+    else              fail('각장 Leg Size', leg, `≥ ${minLeg}`, 'mm');
 
     const ph = _getPreheat(tMax, process);
     info(`예열 온도 (${process}, t=${tMax}mm)`, ph.temp, '°C 이상', ph.note);
 
   } else if(joint === 'tee') {
-    const tw = _val('wps_t1'), tf = _val('wps_t2');
-    const groove = _val('wps_groove');
+    const tw = _val('wps_t1'), tf = _valT2();
+    const groove = _valGroove();
     const rootGap = _val('wps_root_gap');
     const perp = _val('wps_misalign');
     const leg = _val('wps_leg');
-    const process = _sel('wps_process');
+    const process = _sel('wps_process').split(' ')[0];
     const tMax = Math.max(tw, tf);
 
     if(groove > 0) {
