@@ -4827,6 +4827,7 @@ function _renderPlanDocList(files) {
 }
 
 function _updatePlanDocBtn(docKey, count) {
+  if(docKey === 'wps') return;  // WPS 버튼은 별도 관리
   const cfg = PLAN_DOC_CFG[docKey];
   [cfg.btnTank, cfg.btnPipe].filter(Boolean).forEach(btnId => {
     const btn = document.getElementById(btnId);
@@ -4834,7 +4835,6 @@ function _updatePlanDocBtn(docKey, count) {
     btn.style.background = count > 0 ? 'var(--blue)' : '';
     btn.style.color      = count > 0 ? 'var(--white)' : '';
     btn.style.fontWeight = count > 0 ? '700' : '';
-    // 파일 수 뱃지
     const label = docKey === 'ga' ? '📐 GA' : '📋 Repair Plan';
     btn.textContent = count > 0 ? `${label} (${count})` : label;
   });
@@ -5104,12 +5104,8 @@ const WPS_PREHEAT = [
 function openWpsModal() {
   if(!VID) return;
   _wpsJoint = 'butt';
-  switchWpsTab('files');
-  _renderWpsInputs();
-  _renderWpsRefTable();
-  document.getElementById('wps-result').style.display = 'none';
-  document.getElementById('wps-upload-lbl').style.display = isViewer() ? 'none' : '';
   openM('m-wps');
+  switchWpsTab('files');
   _loadWpsFiles();
 }
 
@@ -5120,7 +5116,19 @@ function switchWpsTab(tab) {
   document.getElementById('wps-tab-files').style.borderBottom = tab==='files' ? '2px solid var(--blue)' : '2px solid transparent';
   document.getElementById('wps-tab-calc').style.fontWeight  = tab==='calc'  ? '700' : '400';
   document.getElementById('wps-tab-files').style.fontWeight = tab==='files' ? '700' : '400';
-  if(tab==='files') _loadWpsFiles();
+  if(tab === 'calc') {
+    _renderWpsInputs();
+    _renderWpsRefTable();
+    const res = document.getElementById('wps-result');
+    if(res) res.style.display = 'none';
+    const ul = document.getElementById('wps-upload-lbl');
+    if(ul) ul.style.display = 'none';  // 업로드 버튼은 파일 탭에만
+  }
+  if(tab === 'files') {
+    const ul = document.getElementById('wps-upload-lbl');
+    if(ul) ul.style.display = isViewer() ? 'none' : '';
+    _loadWpsFiles();
+  }
 }
 
 function setWpsJoint(joint) {
