@@ -3435,7 +3435,7 @@ const TRACKING_CFG = {
   pipe: {
     api: 'pipe_repair', key: 'pipe', tbody: 'pipe-body',
     cols: ['no','system_line','position_tank','frame_no','location_detail','description','pipe_od','schedule','material','length_m','bend_qty','flange_qty','valve_type','valve_size','valve_qty','remark','priority','status','start_date','completion_date'],
-    headers: ['No.','System/Line','Position/Tank','Frame No.','Location','Description','OD(mm)','Schedule','Material','Length(m)','Bend(pc)','Flange(pc)','Valve Type','V.Size(mm)','V.Qty','Remark','Priority','Status','Start Date','Completion'],
+    headers: ['No.','System/Line','Position/Tank','Frame No.','Location','Description','OD(mm)','Schedule','Material','Length(mm)','Bend(pc)','Flange(pc)','Valve Type','V.Size(mm)','V.Qty','Remark','Priority','Status','Start Date','Completion'],
     widths: ['44px','100px','100px','75px','110px','','70px','70px','110px','75px','70px','75px','90px','80px','65px','','80px','105px','95px','95px'],
     priCol: 'priority', statCol: 'status',
     newRow: ()=>({no:'',system_line:'',position_tank:'',frame_no:'',location_detail:'',description:'',pipe_od:'',schedule:'Sch40',material:'Carbon Steel',length_m:'',bend_qty:'',flange_qty:'',valve_type:'None',valve_size:'',valve_qty:'',remark:'',priority:'Normal',status:'Not Started',start_date:'',completion_date:''}),
@@ -5608,7 +5608,7 @@ function _pipeEditForm(item) {
     </div>
     <div class="form-row" style="margin-bottom:6px">
       <div class="form-group">
-        <label class="form-lbl">Length (m)</label>
+        <label class="form-lbl">Length (mm)</label>
         <input class="form-ctrl" id="pe-length_m" type="number" value="${item.length_m||''}" style="font-size:11px">
       </div>
       <div class="form-group">
@@ -5683,7 +5683,7 @@ function _renderPipeModalBody() {
       item.pipe_od   ? `OD ${item.pipe_od}mm` : '',
       item.schedule  || '',
       item.material  || '',
-      item.length_m  ? `L=${item.length_m}m` : '',
+      item.length_m  ? `L=${item.length_m}mm` : '',
       item.bend_qty  ? `Bend×${item.bend_qty}` : '',
       item.flange_qty? `Flange×${item.flange_qty}` : '',
     ].filter(Boolean);
