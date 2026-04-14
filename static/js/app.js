@@ -5337,7 +5337,7 @@ function _autoGroove() {
     const nb = _getCrit('butt')?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
     const gMin=nb.groove_min??55, gMax=nb.groove_max??75;
     const rgMin=nb.root_gap_min??0, rgMax=nb.root_gap_max??4;
-    const fgMin=t>0?calcFaceGap(t,rg,gMin):null, fgMax=t>0?calcFaceGap(t,rg,gMax):null;
+    const fgMin=t>0?calcFaceGap(t,rg,gMin,_wpsJoint):null, fgMax=t>0?calcFaceGap(t,rg,gMax,_wpsJoint):null;
     _renderGroovePreview(el,'No Backing',t,rg,fg,rgMin,rgMax,gMin,gMax,fgMin,fgMax,'#475569','#f8fafc',null);
     return;
   }
@@ -5356,8 +5356,8 @@ function _autoGroove() {
 
   if(matched.length === 1) {
     const c = matched[0];
-    const fgMin=t>0?calcFaceGap(t,rg,c.groove_min??40):null;
-    const fgMax=t>0?calcFaceGap(t,rg,c.groove_max??75):null;
+    const fgMin=t>0?calcFaceGap(t,rg,c.groove_min??40,_wpsJoint):null;
+    const fgMax=t>0?calcFaceGap(t,rg,c.groove_max??75,_wpsJoint):null;
     _renderGroovePreview(el,`${backingLabel} — ${c.label}`,t,rg,fg,
       c.rg_min??0,c.rg_max??99,c.groove_min??40,c.groove_max??75,fgMin,fgMax,'#0284c7','#eff6ff',null);
   } else {
@@ -5366,9 +5366,9 @@ function _autoGroove() {
     el.style.cssText='grid-column:1/-1;';
     el.innerHTML = matched.map(c => {
       const isRec = (c === recCase);
-      const fgMin = t>0?calcFaceGap(t,rg,c.groove_min??40):null;
-      const fgMax = t>0?calcFaceGap(t,rg,c.groove_max??75):null;
-      const calcAngle = fg>0?calcGrooveAngle(t,rg,fg):null;
+      const fgMin = t>0?calcFaceGap(t,rg,c.groove_min??40,_wpsJoint):null;
+      const fgMax = t>0?calcFaceGap(t,rg,c.groove_max??75,_wpsJoint):null;
+      const calcAngle = fg>0?calcGrooveAngle(t,rg,fg,_wpsJoint):null;
       const angleOk  = calcAngle!==null ? calcAngle>=(c.groove_min??40)&&calcAngle<=(c.groove_max??75) : null;
       const color = isRec?'#166534':'#0369a1';
       const bg    = isRec?'#f0fdf4':'#f8fafc';
@@ -5404,7 +5404,7 @@ function _renderGroovePreview(el,label,t,rg,fg,rgMin,rgMax,gMin,gMax,fgMin,fgMax
   let calcAngle=null, angleOk=null;
   if(fg>0) {
     if(fg<rg) { el.innerHTML='⚠ 끝단 갭이 루트 간격보다 작습니다.'; el.style.cssText='background:#fef9c3;border-color:#fde047;color:#854d0e;grid-column:1/-1;border-radius:6px;padding:8px 12px;font-size:12px;'; return; }
-    calcAngle = calcGrooveAngle(t,rg,fg);
+    calcAngle = calcGrooveAngle(t,rg,fg,_wpsJoint);
     angleOk   = calcAngle>=gMin && calcAngle<=gMax;
   }
   const ok = rgOk && (angleOk===null?true:angleOk);
@@ -5455,16 +5455,16 @@ function runWpsCalc() {
         const c = matched[0];
         rgMin=c.rg_min??0; rgMax=c.rg_max??99;
         gMin=c.groove_min??40; gMax=c.groove_max??75;
-        fgMin=t1>0?calcFaceGap(t1,rg,gMin):null;
-        fgMax=t1>0?calcFaceGap(t1,rg,gMax):null;
+        fgMin=t1>0?calcFaceGap(t1,rg,gMin,joint):null;
+        fgMax=t1>0?calcFaceGap(t1,rg,gMax,joint):null;
         info('뒷댐재',`${backingLabel} — ${c.label}`,'','');
       } else {
         // 겹침 구간 — 권장 케이스로 판정
         const rec = _getRecommendedCase(matched, rg);
         rgMin=rec.rg_min??0; rgMax=rec.rg_max??99;
         gMin=rec.groove_min??40; gMax=rec.groove_max??75;
-        fgMin=t1>0?calcFaceGap(t1,rg,gMin):null;
-        fgMax=t1>0?calcFaceGap(t1,rg,gMax):null;
+        fgMin=t1>0?calcFaceGap(t1,rg,gMin,joint):null;
+        fgMax=t1>0?calcFaceGap(t1,rg,gMax,joint):null;
         const otherLabels = matched.filter(c=>c!==rec).map(c=>c.label).join(', ');
         info('뒷댐재',`${backingLabel} — ⭐ ${rec.label} (권장)`,'' ,`겹침 구간 — ${otherLabels}도 유효하나 기준값 기준 권장 적용`);
       }
@@ -5476,7 +5476,7 @@ function runWpsCalc() {
 
     // 개선 끝단 갭 + 개선각 — 겹침 구간이면 전체 케이스 검토
     if(fg>0) {
-      const angle = calcGrooveAngle(t1,rg,fg);
+      const angle = calcGrooveAngle(t1,rg,fg,joint);
       const _matched = (backing!=='none')
         ? (crit?.backing_cases||WPS_DEFAULT_CRITERIA.butt.backing_cases).filter(c=>rg>=(c.rg_min??0)&&rg<=(c.rg_max??99))
         : null;
@@ -5499,8 +5499,8 @@ function runWpsCalc() {
       } else {
         // 겹침 구간 — 적용가능 케이스도 함께 검토
         const passingCase = _matched.find(c => {
-          const cfgMin = t1>0?calcFaceGap(t1,rg,c.groove_min??40):null;
-          const cfgMax = t1>0?calcFaceGap(t1,rg,c.groove_max??75):null;
+          const cfgMin = t1>0?calcFaceGap(t1,rg,c.groove_min??40,joint):null;
+          const cfgMax = t1>0?calcFaceGap(t1,rg,c.groove_max??75,joint):null;
           const fgOk   = cfgMin&&cfgMax ? fg>=cfgMin&&fg<=cfgMax : true;
           const angOk  = angle!==null ? angle>=(c.groove_min??40)&&angle<=(c.groove_max??75) : true;
           return fgOk && angOk;
@@ -5514,8 +5514,8 @@ function runWpsCalc() {
           if(angle!==null) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°',`2×atan((${fg}-${rg})/(2×${t1}))`);
         } else if(passingCase && passingCase !== rec) {
           // 권장 아닌 적용가능 케이스로 통과
-          const pfgMin = t1>0?calcFaceGap(t1,rg,passingCase.groove_min??40):null;
-          const pfgMax = t1>0?calcFaceGap(t1,rg,passingCase.groove_max??75):null;
+          const pfgMin = t1>0?calcFaceGap(t1,rg,passingCase.groove_min??40,joint):null;
+          const pfgMax = t1>0?calcFaceGap(t1,rg,passingCase.groove_max??75,joint):null;
           if(pfgMin&&pfgMax) warn('개선 끝단 갭 Face Gap',fg,`${pfgMin}~${pfgMax}`,'mm',
             `✅ 적용 가능 범위 (${passingCase.label} 기준) — 루트갭이 클수록 개선각을 줄여 과열입력·과용착 방지 원칙상 ${rec.label} (좁은 개선각) 권장`);
           if(angle!==null) warn('개선각 (총)',angle,`${passingCase.groove_min??40}~${passingCase.groove_max??75}`,'°',
