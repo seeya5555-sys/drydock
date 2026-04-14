@@ -5066,7 +5066,7 @@ async function savePipeItem() {
     description:desc, remark:'',
     priority:document.getElementById('m-pipe-add-pri')?.value||'Normal',
     status:'Not Started',
-    length_m:'',bend_qty:'',flange_qty:'',
+    bend_qty:'',flange_qty:'',
     valve_type:'None',valve_size:'',valve_qty:'',
     start_date:'',completion_date:'',
   };
