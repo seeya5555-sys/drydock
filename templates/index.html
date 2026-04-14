@@ -586,6 +586,28 @@
         <div style="font-size:11px;color:var(--txt-m);margin-top:8px;text-align:center">
           저장된 기준은 계산기에 즉시 반영됩니다. 빈 칸 항목은 AWS D1.1 기본값을 유지합니다.
         </div>
+
+        <!-- Ceramic Backing Rules -->
+        <div style="margin-top:20px;border-top:2px solid var(--border);padding-top:16px">
+          <div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔷 Ceramic Backing — 루트간격별 개선각 Rule</div>
+          <div style="font-size:11px;color:var(--txt-m);margin-bottom:10px">
+            루트간격 범위별로 적용할 개선각 기준을 입력하세요. 계산기에서 Ceramic Backing 선택 시 루트간격에 맞는 Rule이 자동 적용됩니다.
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px" id="wps-ceramic-table">
+            <thead>
+              <tr style="background:var(--bg-panel)">
+                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">루트갭 최대 (mm)<br><span style="font-size:10px;font-weight:400">이 값 이하일 때 적용</span></th>
+                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">기준 개선각 (°)</th>
+                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">허용 + (°)</th>
+                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">허용 - (°)</th>
+                <th style="padding:6px 8px;text-align:left;border:1px solid var(--border)">비고</th>
+                <th style="padding:6px 8px;width:32px;border:1px solid var(--border)"></th>
+              </tr>
+            </thead>
+            <tbody id="ceramic-rules-body"></tbody>
+          </table>
+          <button class="btn-sec" style="margin-top:8px;font-size:11px" onclick="addCeramicRule()">＋ Rule 추가</button>
+        </div>
       </div>
       <!-- 푸터 -->
       <div class="modal-footer" style="gap:8px">
