@@ -3158,22 +3158,22 @@ function toggleDiscDate(dateKey) {
 }
 
 function _discRow(d, items) {
-  const ri = items.indexOf(d);
+  const did = d._id;  // 인덱스 대신 항상 _id 사용 → 추가/삭제 후에도 정확
   const stCls=d.status==='Close'?'c-closed':'c-open';
   const stLbl=d.status==='Close'?'Closed':'Open';
   const priHtml=priorityBadge(d.priority);
-  return`<tr data-did="${d._id}" style="background:var(--bg-white)">
+  return`<tr data-did="${did}" style="background:var(--bg-white)">
     <td data-label="No."><span style="font-family:'IBM Plex Mono'",monospace;font-size:12px;color:var(--txt-m)">${d.no}</span></td>
-    <td data-label="Date"><span class="cell-edit" onclick="startEditD(this,${ri},'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
-    <td data-label="Session"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
-    <td data-label="Item"><span class="cell-edit" onclick="startEditD(this,${ri},'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
-    <td data-label="Description"><span class="cell-edit" onclick="startEditD(this,${ri},'description','text')" style="font-size:12px;color:var(--txt-s);display:block;min-width:220px;max-width:320px;white-space:pre-line;line-height:1.6;padding:4px 0">${d.description||'—'}</span></td>
-    <td data-label="Action"><div style="font-size:12px;min-width:260px;max-width:360px;cursor:pointer;padding:4px 0;line-height:1.6" onclick="openDiscModal(${ri})" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
+    <td data-label="Date"><span class="cell-edit" onclick="startEditDById('${did}',this,'date','text')" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--txt-h);font-weight:600">${d.date||'—'}</span></td>
+    <td data-label="Session"><span class="cell-edit" onclick="startEditSelectDById('${did}',this,'time_of_day',${JSON.stringify(SESSION_OPTS)})" style="font-size:12px;color:var(--txt-s)">${d.time_of_day||'—'}</span></td>
+    <td data-label="Item"><span class="cell-edit" onclick="startEditDById('${did}',this,'item','text')" style="font-size:13px;font-weight:600;color:var(--txt-h);display:block;max-width:200px">${d.item||'—'}</span></td>
+    <td data-label="Description"><span class="cell-edit" onclick="startEditDById('${did}',this,'description','text')" style="font-size:12px;color:var(--txt-s);display:block;min-width:220px;max-width:320px;white-space:pre-line;line-height:1.6;padding:4px 0">${d.description||'—'}</span></td>
+    <td data-label="Action"><div style="font-size:12px;min-width:260px;max-width:360px;cursor:pointer;padding:4px 0;line-height:1.6" onclick="openDiscModalById('${did}')" title="클릭하여 편집">${renderActionsCell(d.actions, d.action)}</div></td>
     <td data-label="Priority">${priHtml}</td>
-    <td data-label="Status"><span class="cell-edit" onclick="startEditSelectD(this,${ri},'status',['Open','Close'])">
+    <td data-label="Status"><span class="cell-edit" onclick="startEditSelectDById('${did}',this,'status',['Open','Close'])">
       <span class="c-badge ${stCls}">${stLbl}</span>
     </span></td>
-    <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModal(${ri})">Edit</button><button class="attach-btn" id="dattbtn-${d._id}" onclick="openGenAttach('disc',${d._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('disc:'+d._id)?'📎 +':'📎'}</button></td>
+    <td style="white-space:nowrap"><button class="edit-btn" onclick="openDiscModalById('${did}')">Edit</button><button class="attach-btn" id="dattbtn-${did}" onclick="openGenAttach('disc',${did})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('disc:'+did)?'background:var(--blue);color:var(--white)':''}">${(FLEET[VID].attachSet||new Set()).has('disc:'+did)?'📎 +':'📎'}</button></td>
   </tr>`;
 }
 
@@ -3230,6 +3230,27 @@ function addDiscRow(){
   });
   toast('새 로그가 추가됐습니다. 셀을 클릭해서 바로 입력하세요.');
 }
+function openDiscModalById(did) {
+  const items = FLEET[VID].discussions || [];
+  const idx = items.findIndex(d => String(d._id) === String(did));
+  if(idx === -1) { toast('항목을 찾을 수 없습니다', true); return; }
+  openDiscModal(idx);
+}
+
+function startEditDById(did, span, field, type) {
+  const items = FLEET[VID].discussions || [];
+  const idx = items.findIndex(d => String(d._id) === String(did));
+  if(idx === -1) return;
+  startEditD(span, idx, field, type);
+}
+
+function startEditSelectDById(did, span, field, opts) {
+  const items = FLEET[VID].discussions || [];
+  const idx = items.findIndex(d => String(d._id) === String(did));
+  if(idx === -1) return;
+  startEditSelectD(span, idx, field, opts);
+}
+
 function openDiscModal(idx){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
 
