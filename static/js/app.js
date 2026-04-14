@@ -4445,10 +4445,10 @@ async function openFitupRef(itemId, t) {
 }
 
 function calcFitupRef(t) {
-  const rg     = parseFloat(document.getElementById('fref-rg')?.value);
-  const el     = document.getElementById('fref-result');
-  const nb     = window._fitupNb;
-  const cases  = window._fitupCases || [];
+  const rg    = parseFloat(document.getElementById('fref-rg')?.value);
+  const el    = document.getElementById('fref-result');
+  const nb    = window._fitupNb;
+  const cases = window._fitupCases || [];
   if(!el) return;
 
   if(isNaN(rg) || rg < 0) {
@@ -4459,15 +4459,34 @@ function calcFitupRef(t) {
   const fgCalc = (rg, angleDeg) =>
     t > 0 ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
 
-  // 해당 루트갭에 매칭되는 케이스 찾기
-  const matched = cases.filter(c => rg >= (c.rg_min??0) && rg <= (c.rg_max??99));
-  const nbMatch = rg >= (nb.root_gap_min??0) && rg <= (nb.root_gap_max??4);
+  const matched  = cases.filter(c => rg >= (c.rg_min??0) && rg <= (c.rg_max??99));
+  const nbMatch  = rg >= (nb.root_gap_min??0) && rg <= (nb.root_gap_max??4);
 
-  let html = '';
+  // ── 권장 케이스 결정 (겹침 구간에서만) ────────────────────
+  // 기준: 기준값(Nominal = (rg_min+rg_max)/2)에 가장 가까운 케이스
+  // 거리 같으면 개선각 더 작은 케이스 (안전측)
+  let recIdx = -1;
+  if(matched.length >= 2) {
+    const dists = matched.map(c => {
+      const nom = ((c.rg_min??0) + (c.rg_max??99)) / 2;
+      return Math.abs(rg - nom);
+    });
+    const minDist = Math.min(...dists);
+    const candidates = matched
+      .map((c,i) => ({c, i, dist: dists[i]}))
+      .filter(x => x.dist === minDist);
+    // 거리 같으면 개선각 최대값이 더 작은 케이스 선택 (안전측)
+    candidates.sort((a,b) => (a.c.groove_max??99) - (b.c.groove_max??99));
+    recIdx = candidates[0].i;
+  }
 
-  const card = (label, gMin, gMax, fgMin, fgMax, color, bg) => `
-    <div style="background:${bg};border:1.5px solid ${color}20;border-radius:8px;padding:12px 14px;margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${label}</div>
+  // ── 카드 렌더러 ────────────────────────────────────────────
+  const card = (label, gMin, gMax, fgMin, fgMax, color, bg, badge='') => `
+    <div style="background:${bg};border:1.5px solid ${color}40;border-radius:8px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.5px">${label}</div>
+        ${badge}
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:white;border-radius:6px;padding:8px 10px;border:1px solid ${color}30">
           <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">허용 개선각</div>
@@ -4480,6 +4499,8 @@ function calcFitupRef(t) {
       </div>
     </div>`;
 
+  let html = '';
+
   if(!nbMatch && matched.length === 0) {
     html = `<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:14px;text-align:center;color:#991b1b;font-size:13px;font-weight:600">
       ❌ 루트갭 ${rg}mm — 등록된 WPS 범위를 벗어납니다
@@ -4489,18 +4510,38 @@ function calcFitupRef(t) {
       html += card('No Backing', nb.groove_min??55, nb.groove_max??75,
         fgCalc(rg, nb.groove_min??55), fgCalc(rg, nb.groove_max??75), '#475569', '#f8fafc');
     }
+
     if(matched.length === 1) {
-      const c = matched[0];
-      html += card(c.label??'Case', c.groove_min??40, c.groove_max??75,
-        fgCalc(rg, c.groove_min??40), fgCalc(rg, c.groove_max??75),
+      html += card(matched[0].label??'Case',
+        matched[0].groove_min??40, matched[0].groove_max??75,
+        fgCalc(rg, matched[0].groove_min??40), fgCalc(rg, matched[0].groove_max??75),
         '#0284c7', '#eff6ff');
+
     } else if(matched.length >= 2) {
-      // 겹침: 합산 개선각
-      const gMin = Math.min(...matched.map(c=>c.groove_min??40));
-      const gMax = Math.max(...matched.map(c=>c.groove_max??75));
-      const labels = matched.map(c=>c.label??'Case').join(' + ');
-      html += card(`⚡ ${labels} (겹침 구간)`, gMin, gMax,
-        fgCalc(rg, gMin), fgCalc(rg, gMax), '#d97706', '#fffbeb');
+      // 겹침 구간 헤더
+      html += `<div style="font-size:10px;font-weight:700;color:#92400e;background:#fef3c7;border-radius:6px 6px 0 0;padding:7px 12px;border:1.5px solid #fde68a;border-bottom:none;display:flex;align-items:center;gap:6px">
+        ⚡ 겹침 구간 — 케이스별 허용 범위
+        <span style="font-size:9px;font-weight:400;color:#b45309">권장 케이스: 기준 루트갭에 더 가깝고, 동률 시 개선각 작은 케이스(안전측)</span>
+      </div>
+      <div style="border:1.5px solid #fde68a;border-top:none;border-radius:0 0 8px 8px;padding:10px;background:#fffbeb;margin-bottom:8px">`;
+
+      matched.forEach((c, i) => {
+        const isRec = (i === recIdx);
+        const nom   = ((c.rg_min??0)+(c.rg_max??99))/2;
+        const dist  = Math.abs(rg - nom).toFixed(1);
+        const recBadge = isRec
+          ? `<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">⭐ 권장</span>`
+          : `<span style="font-size:9px;color:#94a3b8">기준값 ${nom}mm까지 ${dist}mm 차이</span>`;
+        const color = isRec ? '#166534' : '#0369a1';
+        const bg    = isRec ? '#f0fdf4' : '#f8fafc';
+        html += card(
+          c.label??`Case ${i+1}`,
+          c.groove_min??40, c.groove_max??75,
+          fgCalc(rg, c.groove_min??40), fgCalc(rg, c.groove_max??75),
+          color, bg, recBadge);
+      });
+
+      html += `</div>`;
     }
   }
 
