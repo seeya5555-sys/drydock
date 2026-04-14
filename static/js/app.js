@@ -4519,20 +4519,22 @@ function calcFitupRef(t) {
         '#0284c7', '#eff6ff');
 
     } else if(matched.length >= 2) {
+      const recCase = matched[recIdx];
       // 겹침 구간 헤더
-      html += `<div style="font-size:10px;font-weight:700;color:#92400e;background:#fef3c7;border-radius:6px 6px 0 0;padding:7px 12px;border:1.5px solid #fde68a;border-bottom:none;display:flex;align-items:center;gap:6px">
+      html += `<div style="font-size:10px;font-weight:700;color:#92400e;background:#fef3c7;border-radius:6px 6px 0 0;padding:7px 12px;border:1.5px solid #fde68a;border-bottom:none">
         ⚡ 겹침 구간 — 케이스별 허용 범위
-        <span style="font-size:9px;font-weight:400;color:#b45309">권장 케이스: 기준 루트갭에 더 가깝고, 동률 시 개선각 작은 케이스(안전측)</span>
+        <div style="font-size:9px;font-weight:400;color:#b45309;margin-top:3px">
+          루트갭이 클수록 개선각을 줄여 과열입력·과용착을 방지하는 원칙에 따라 권장 케이스가 결정됩니다.
+        </div>
       </div>
       <div style="border:1.5px solid #fde68a;border-top:none;border-radius:0 0 8px 8px;padding:10px;background:#fffbeb;margin-bottom:8px">`;
 
       matched.forEach((c, i) => {
         const isRec = (i === recIdx);
-        const nom   = c.rg_nom ?? ((c.rg_min??0)+(c.rg_max??99))/2;
-        const dist  = Math.abs(rg - nom).toFixed(1);
         const recBadge = isRec
           ? `<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">⭐ 권장</span>`
-          : `<span style="font-size:9px;color:#94a3b8">기준값 ${nom}mm까지 ${dist}mm 차이</span>`;
+          : `<span style="background:#e2e8f0;color:#475569;font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px">적용가능</span>
+             <span style="font-size:9px;color:#b45309;margin-left:4px">※ 과열입력·과용착 방지 원칙상 ${recCase?.label??'권장 케이스'} 권장</span>`;
         const color = isRec ? '#166534' : '#0369a1';
         const bg    = isRec ? '#f0fdf4' : '#f8fafc';
         html += card(
@@ -5480,9 +5482,9 @@ function runWpsCalc() {
           const pfgMin = t1>0?calcFaceGap(t1,rg,passingCase.groove_min??40):null;
           const pfgMax = t1>0?calcFaceGap(t1,rg,passingCase.groove_max??75):null;
           if(pfgMin&&pfgMax) warn('개선 끝단 갭 Face Gap',fg,`${pfgMin}~${pfgMax}`,'mm',
-            `권장(${rec.label}) 범위 외 — ${passingCase.label} 적용 시 허용. 해당 WPS 파라미터 전체 준수 필요`);
+            `✅ 적용 가능 범위 (${passingCase.label} 기준) — 루트갭이 클수록 개선각을 줄여 과열입력·과용착 방지 원칙상 ${rec.label} (좁은 개선각) 권장`);
           if(angle!==null) warn('개선각 (총)',angle,`${passingCase.groove_min??40}~${passingCase.groove_max??75}`,'°',
-            `권장(${rec.label}) 범위 외 — ${passingCase.label} 기준 적용 가능`);
+            `✅ 적용 가능 범위 (${passingCase.label} 기준) — 루트갭이 클수록 개선각을 줄여 과열입력·과용착 방지 원칙상 ${rec.label} (좁은 개선각) 권장`);
         } else {
           // 모든 케이스 실패
           if(fgMin&&fgMax) fail('개선 끝단 갭 Face Gap',fg,`${fgMin}~${fgMax}`,'mm');
@@ -5552,7 +5554,7 @@ function _renderWpsCalcResult(results) {
   if(!results){el.style.display='none';return;}
   const hasFail=results.some(r=>r.pass===false), hasWarn=results.some(r=>r.pass==='warn');
   const[oBg,oCol,oIcon,oText]=hasFail?['#fee2e2','#991b1b','❌','FAIL — 재작업 필요']:
-    hasWarn?['#fef9c3','#854d0e','⚠️','REVIEW — 권장 케이스 외 적용가능 케이스 범위 해당, 해당 WPS 파라미터 전체 준수 필요']:
+    hasWarn?['#fef9c3','#854d0e','⚠️','REVIEW — 적용 가능 범위이나 권장 케이스 검토 필요']:
     ['#dcfce7','#166534','✅','PASS — 용접 진행 가능'];
   const rows=results.map(r=>{
     const ic=r.pass===true?'✅':r.pass===false?'❌':r.pass==='warn'?'⚠️':'ℹ️';
