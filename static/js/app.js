@@ -5339,7 +5339,7 @@ function _autoGroove() {
       return `<div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:8px 10px;margin-bottom:5px;font-size:12px;color:${color}">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <b>${backingLabel} — ${c.label}</b>
-          ${isRec?'<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">⭐ 권장</span>':'<span style="font-size:9px;color:#94a3b8">기준값 ${c.rg_nom??((c.rg_min??0)+(c.rg_max??99))/2}mm 기준</span>'}
+          ${isRec?'<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">⭐ 권장</span>':'<span style="background:#e2e8f0;color:#475569;font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px">적용가능</span>'}
         </div>
         루트갭: <b>${rg}mm</b> (허용 ${c.rg_min??0}~${c.rg_max}mm)
         &nbsp;|&nbsp; 개선각: <b>${c.groove_min??40}~${c.groove_max??75}°</b>
