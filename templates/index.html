@@ -510,63 +510,58 @@
           📌 조선소 WPS 기준값을 입력하세요. 저장하면 이 선박 프로젝트에 영구 적용됩니다. 빈 칸은 AWS D1.1 기본값을 사용합니다.
         </div>
 
-        <!-- ───── BUTT JOINT ───── -->
-        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 없음 (No Backing)</div>
+        <!-- ── BUTT — 백킹 없음 ── -->
+        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 없음</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:8px">
           <div class="form-group"><label class="form-lbl">루트갭 최솟값 (mm)</label><input class="form-ctrl" id="wc_b_nb_rgmin" type="number" placeholder="기본값: 0"></div>
-          <div class="form-group"><label class="form-lbl">루트갭 최댓값 (mm)</label><input class="form-ctrl" id="wc_b_nb_rgmax" type="number" placeholder="기본값: 4 (t≤25mm)"></div>
+          <div class="form-group"><label class="form-lbl">루트갭 최댓값 (mm)</label><input class="form-ctrl" id="wc_b_nb_rgmax" type="number" placeholder="기본값: 4"></div>
           <div class="form-group"><label class="form-lbl">Hi-Lo 최댓값 (mm)</label><input class="form-ctrl" id="wc_b_hilo" type="number" placeholder="기본값: 3"></div>
           <div class="form-group"><label class="form-lbl">개선각 최솟값 (°)</label><input class="form-ctrl" id="wc_b_nb_gmin" type="number" placeholder="기본값: 55"></div>
           <div class="form-group"><label class="form-lbl">개선각 최댓값 (°)</label><input class="form-ctrl" id="wc_b_nb_gmax" type="number" placeholder="기본값: 75"></div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 있을 때 Case 별 기준</div>
-        <div style="font-size:11px;color:var(--txt-m);margin-bottom:8px">루트갭 범위에 따라 적용 Case가 결정됩니다. 개선 끝단 갭 범위를 비워두면 개선각 범위에서 자동 역산합니다.</div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">
+        <!-- ── BUTT — 백킹 있음 Cases ── -->
+        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 6px;text-transform:uppercase;letter-spacing:1px">Butt Joint — 백킹 있을 때</div>
+        <div style="overflow-x:auto;margin-bottom:6px">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:var(--bg-panel)">
-              <th style="padding:5px 6px;border:1px solid var(--border)">Case명</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>min (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>max (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>min (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>max (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">개선각<br>min (°)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">개선각<br>max (°)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">끝단갭<br>min (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">끝단갭<br>max (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">비고</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">Case명</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">루트갭 MIN (mm)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">루트갭 MAX (mm)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">개선각 MIN (°)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">개선각 MAX (°)</th>
               <th style="width:28px;border:1px solid var(--border)"></th>
             </tr></thead>
             <tbody id="case-table-butt"></tbody>
           </table>
         </div>
-        <button class="btn-sec" style="margin-top:6px;font-size:11px" onclick="addCaseRow('butt')">＋ Case 추가</button>
+        <button class="btn-sec" style="font-size:11px" onclick="addCaseRow('butt')">＋ Case 추가</button>
 
-        <!-- ───── FILLET JOINT ───── -->
-        <div style="font-size:12px;font-weight:700;color:#10b981;margin:18px 0 8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 없음 (No Backing)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:8px">
+        <!-- ── FILLET — 백킹 없음 ── -->
+        <div style="font-size:12px;font-weight:700;color:#10b981;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 없음</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:8px">
+          <div class="form-group"><label class="form-lbl">루트갭 최솟값 (mm)</label><input class="form-ctrl" id="wc_f_nb_rgmin" type="number" placeholder="기본값: 0"></div>
           <div class="form-group"><label class="form-lbl">루트갭 최댓값 (mm)</label><input class="form-ctrl" id="wc_f_nb_rgmax" type="number" placeholder="기본값: 1.5"></div>
-          <div class="form-group"><label class="form-lbl">루트갭 조건부 허용 최대 (mm)</label><input class="form-ctrl" id="wc_f_nb_rgallow" type="number" placeholder="기본값: 4"></div>
-          <div class="form-group"><label class="form-lbl">최소 각장 계수 (%)</label><input class="form-ctrl" id="wc_f_nb_leg" type="number" placeholder="기본값: 70"></div>
+          <div class="form-group"><label class="form-lbl">개선각 최솟값 (°)</label><input class="form-ctrl" id="wc_f_nb_gmin" type="number" placeholder="기본값: 0"></div>
+          <div class="form-group"><label class="form-lbl">개선각 최댓값 (°)</label><input class="form-ctrl" id="wc_f_nb_gmax" type="number" placeholder="기본값: 90"></div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 있을 때 Case 별 기준</div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:550px">
+        <!-- ── FILLET — 백킹 있음 Cases ── -->
+        <div style="font-size:12px;font-weight:700;color:#7c3aed;margin:14px 0 6px;text-transform:uppercase;letter-spacing:1px">Fillet Joint — 백킹 있을 때</div>
+        <div style="overflow-x:auto;margin-bottom:6px">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:var(--bg-panel)">
-              <th style="padding:5px 6px;border:1px solid var(--border)">Case명</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>min (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">적용 루트갭<br>max (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>min (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">허용 루트갭<br>max (mm)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">각장 계수 (%)</th>
-              <th style="padding:5px 6px;border:1px solid var(--border)">비고</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">Case명</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">루트갭 MIN (mm)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">루트갭 MAX (mm)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">개선각 MIN (°)</th>
+              <th style="padding:5px 8px;border:1px solid var(--border)">개선각 MAX (°)</th>
               <th style="width:28px;border:1px solid var(--border)"></th>
             </tr></thead>
             <tbody id="case-table-fillet"></tbody>
           </table>
         </div>
-        <button class="btn-sec" style="margin-top:6px;font-size:11px" onclick="addCaseRow('fillet')">＋ Case 추가</button>
+        <button class="btn-sec" style="font-size:11px" onclick="addCaseRow('fillet')">＋ Case 추가</button>
 
         <button class="btn-pri" style="width:100%;font-size:13px;margin-top:20px" onclick="saveWpsCrit()">💾 WPS 기준 저장</button>
         <div style="font-size:11px;color:var(--txt-m);margin-top:8px;text-align:center">저장된 기준은 계산기에 즉시 반영됩니다.</div>
