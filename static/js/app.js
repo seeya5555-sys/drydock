@@ -4979,7 +4979,11 @@ function switchWpsTab(tab) {
   });
   if(tab==='calc')  { _renderWpsInputs(); _renderWpsCalcResult(null); }
   if(tab==='files') { _loadWpsFiles(); document.getElementById('wps-upload-lbl').style.display=isViewer()?'none':''; }
-  if(tab==='crit')  { _renderWpsCritUI(); }
+  if(tab==='crit')  {
+    // 항상 DB에서 최신 데이터를 불러와 폼 채우기
+    _wpsCriteria = null;
+    _renderWpsCritForm().then(() => _renderBackingCaseTables());
+  }
 }
 
 function setWpsJoint(joint) {
