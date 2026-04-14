@@ -326,8 +326,10 @@
   <div id="vt-tankplan" class="page"><main>
     <div class="sec-hdr">
       <div class="sec-title">🛢 Tank Plan — Steel Repair Visualization</div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div id="tank-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
+        <button class="btn-sec" id="btn-ga-tank" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
+        <button class="btn-sec" id="btn-rp-tank" style="font-size:12px" onclick="openPlanDoc('tank_repair')">📋 Repair Plan</button>
         <button class="btn-sec" style="font-size:12px" onclick="openOrphanRecovery()">🔧 데이터 복구</button>
         <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
       </div>
@@ -345,8 +347,10 @@
   <div id="vt-pipeplan" class="page"><main>
     <div class="sec-hdr">
       <div class="sec-title">🔩 Pipe Plan — Pipe Repair Visualization</div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div id="pipe-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
+        <button class="btn-sec" id="btn-ga-pipe" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
+        <button class="btn-sec" id="btn-rp-pipe" style="font-size:12px" onclick="openPlanDoc('pipe_repair')">📋 Repair Plan</button>
         <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
       </div>
     </div>
@@ -443,6 +447,26 @@
         <button class="btn-pri" onclick="savePipeItem()">💾 Save</button>
         <button class="btn-sec" onclick="document.getElementById('m-pipe-addform').style.display='none';document.getElementById('m-pipe-addbtn').style.display=''">Cancel</button>
         <button class="btn-sec" onclick="closeM('m-pipe')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Plan Document Modal (GA / Repair Plan) ───────────── -->
+  <div class="modal-overlay" id="m-plan-doc" onclick="if(event.target===this)closeM('m-plan-doc')">
+    <div class="modal" style="width:680px;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title" id="m-plan-doc-title">문서</div>
+        <button class="modal-x" onclick="closeM('m-plan-doc')">✕</button>
+      </div>
+      <div id="m-plan-doc-body" style="overflow-y:auto;flex:1;padding:16px 20px"></div>
+      <!-- 업로드 푸터 (뷰어는 숨김) -->
+      <div class="modal-footer" id="m-plan-doc-footer" style="gap:8px;flex-wrap:wrap">
+        <label class="btn-sec" style="cursor:pointer;font-size:12px">
+          📎 파일 업로드
+          <input type="file" id="m-plan-doc-input" multiple style="display:none"
+                 onchange="uploadPlanDoc(this)">
+        </label>
+        <button class="btn-sec" onclick="closeM('m-plan-doc')">닫기</button>
       </div>
     </div>
   </div>
