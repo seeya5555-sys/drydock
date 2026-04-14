@@ -4993,7 +4993,10 @@ function switchWpsTab(tab) {
   if(tab==='crit')  {
     // 항상 DB에서 최신 데이터를 불러와 폼 채우기
     _wpsCriteria = null;
-    _renderWpsCritForm().then(() => _renderBackingCaseTables());
+    _renderWpsCritForm().then(() => {
+      _renderBackingCaseTables();
+      if(isViewer()) _lockWpsCritPanel();  // case 테이블 버튼까지 잠금
+    });
   }
 }
 
@@ -5306,12 +5309,37 @@ async function _renderWpsCritForm() {
   set('wc_b_nb_gmin',  nb_b.groove_min);   set('wc_b_nb_gmax',  nb_b.groove_max);
   set('wc_f_nb_rgmin', nb_f.root_gap_min); set('wc_f_nb_rgmax', nb_f.root_gap_max);
   set('wc_f_nb_gmin',  nb_f.groove_min);   set('wc_f_nb_gmax',  nb_f.groove_max);
+  // 뷰어 계정: 입력 전체 잠금
+  if(isViewer()) _lockWpsCritPanel();
+}
+
+function _lockWpsCritPanel() {
+  const panel = document.getElementById('wps-panel-crit');
+  if(!panel) return;
+  // 모든 input/select/textarea 비활성화
+  panel.querySelectorAll('input, select, textarea').forEach(el => {
+    el.disabled = true;
+    el.style.cursor = 'not-allowed';
+    el.style.opacity = '0.7';
+  });
+  // 모든 버튼 숨김 (저장, Case 추가/삭제 포함)
+  panel.querySelectorAll('button').forEach(el => { el.style.display = 'none'; });
+  // 읽기 전용 안내 배너 (이미 있으면 추가 안 함)
+  if(!panel.querySelector('#crit-viewer-notice')) {
+    const notice = document.createElement('div');
+    notice.id = 'crit-viewer-notice';
+    notice.style.cssText = 'background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 14px;font-size:12px;color:#713f12;margin-bottom:12px;display:flex;align-items:center;gap:8px';
+    notice.innerHTML = '🔒 읽기 전용 계정입니다. WPS 기준값은 열람만 가능합니다.';
+    panel.insertBefore(notice, panel.firstChild);
+  }
 }
 
 // Backing Case Table 렌더링
 function _renderBackingCaseTables() {
   _renderCaseTable('butt',   document.getElementById('case-table-butt'));
   _renderCaseTable('fillet', document.getElementById('case-table-fillet'));
+  // 케이스 테이블 렌더 후에도 뷰어 잠금 재적용
+  if(isViewer()) _lockWpsCritPanel();
 }
 
 function _renderCaseTable(joint, tbody) {
@@ -5356,6 +5384,7 @@ function _collectCases(joint) {
 }
 
 async function saveWpsCrit() {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
   const g = id => { const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?undefined:v; };
   const criteria = {
     butt: {
