@@ -4474,7 +4474,7 @@ function calcFitupRef(t) {
           <div style="font-size:16px;font-weight:700;color:#7c3aed;font-family:'IBM Plex Mono',monospace">${gMin} ~ ${gMax}°</div>
         </div>
         <div style="background:white;border-radius:6px;padding:8px 10px;border:1px solid ${color}30">
-          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">필요 끝단갭</div>
+          <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">허용 개선 끝단갭</div>
           <div style="font-size:16px;font-weight:700;color:#059669;font-family:'IBM Plex Mono',monospace">${fgMin} ~ ${fgMax} mm</div>
         </div>
       </div>
