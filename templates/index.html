@@ -465,6 +465,8 @@
                 onclick="switchWpsTab('files')">📎 WPS 파일 <span id="wps-file-badge"></span></button>
         <button id="wps-tab-calc" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid transparent;font-size:12px;padding:8px 18px"
                 onclick="switchWpsTab('calc')">📐 Fit-up 계산기</button>
+        <button id="wps-tab-crit" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid transparent;font-size:12px;padding:8px 18px"
+                onclick="switchWpsTab('crit')">⚙ WPS 기준 설정</button>
       </div>
       <!-- 파일 패널 -->
       <div id="wps-panel-files" style="overflow-y:auto;flex:1;padding:18px 22px">
@@ -502,6 +504,88 @@
           </summary>
           <div id="wps-ref-table" style="margin-top:8px"></div>
         </details>
+      </div>
+      <!-- WPS 기준 설정 패널 -->
+      <div id="wps-panel-crit" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
+        <div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:10px 14px;font-size:12px;color:#713f12;margin-bottom:16px">
+          📌 조선소 WPS 기준값을 입력하세요. 저장하면 이 선박 프로젝트에 영구 적용됩니다. 빈 칸은 AWS D1.1 기본값을 사용합니다.
+        </div>
+
+        <!-- Butt Joint -->
+        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Butt Joint</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
+          <div class="form-group">
+            <label class="form-lbl">개선각 최솟값 (°)</label>
+            <input class="form-ctrl" id="wc_b_gmin" type="number" placeholder="기본값: 55">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">개선각 최댓값 (°)</label>
+            <input class="form-ctrl" id="wc_b_gmax" type="number" placeholder="기본값: 75">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">루트갭 최솟값 (mm)</label>
+            <input class="form-ctrl" id="wc_b_rgmin" type="number" placeholder="기본값: 0">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">루트갭 최댓값 t≤25mm (mm)</label>
+            <input class="form-ctrl" id="wc_b_rgmax1" type="number" placeholder="기본값: 4">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">루트갭 최댓값 t>25mm (mm)</label>
+            <input class="form-ctrl" id="wc_b_rgmax2" type="number" placeholder="기본값: 6">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">Hi-Lo 최댓값 (mm)</label>
+            <input class="form-ctrl" id="wc_b_hilo" type="number" placeholder="기본값: 3">
+          </div>
+        </div>
+
+        <!-- Fillet Joint -->
+        <div style="font-size:12px;font-weight:700;color:#10b981;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Fillet Joint</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
+          <div class="form-group">
+            <label class="form-lbl">루트갭 최댓값 (mm)</label>
+            <input class="form-ctrl" id="wc_f_rg" type="number" placeholder="기본값: 1.5">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">루트갭 조건부 허용 최대 (mm)</label>
+            <input class="form-ctrl" id="wc_f_rga" type="number" placeholder="기본값: 4">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">최소 각장 계수 (%)</label>
+            <input class="form-ctrl" id="wc_f_leg" type="number" placeholder="기본값: 70">
+          </div>
+        </div>
+
+        <!-- T-Joint -->
+        <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">T-Joint</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 16px;margin-bottom:20px">
+          <div class="form-group">
+            <label class="form-lbl">개선각 최솟값 (°)</label>
+            <input class="form-ctrl" id="wc_t_gmin" type="number" placeholder="기본값: 55">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">개선각 최댓값 (°)</label>
+            <input class="form-ctrl" id="wc_t_gmax" type="number" placeholder="기본값: 75">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">루트갭 최댓값 (mm)</label>
+            <input class="form-ctrl" id="wc_t_rg" type="number" placeholder="기본값: 3">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">직각도 오차 최댓값 (mm)</label>
+            <input class="form-ctrl" id="wc_t_perp" type="number" placeholder="기본값: 2">
+          </div>
+          <div class="form-group">
+            <label class="form-lbl">최소 각장 계수 (%)</label>
+            <input class="form-ctrl" id="wc_t_leg" type="number" placeholder="기본값: 70">
+          </div>
+        </div>
+
+        <button class="btn-pri" style="width:100%;font-size:13px" onclick="saveWpsCrit()">💾 WPS 기준 저장</button>
+        <div style="font-size:11px;color:var(--txt-m);margin-top:8px;text-align:center">
+          저장된 기준은 계산기에 즉시 반영됩니다. 빈 칸 항목은 AWS D1.1 기본값을 유지합니다.
+        </div>
       </div>
       <!-- 푸터 -->
       <div class="modal-footer" style="gap:8px">
