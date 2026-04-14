@@ -5334,7 +5334,7 @@ function _autoGroove() {
   if(!t) { el.innerHTML='T₁을 먼저 입력하세요.'; el.style.cssText='background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;grid-column:1/-1;border-radius:6px;padding:8px 12px;font-size:12px;'; return; }
 
   if(backing === 'none') {
-    const nb = _getCrit('butt')?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
+    const nb = _getCrit(_wpsJoint)?.no_backing || WPS_DEFAULT_CRITERIA[_wpsJoint]?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
     const gMin=nb.groove_min??55, gMax=nb.groove_max??75;
     const rgMin=nb.root_gap_min??0, rgMax=nb.root_gap_max??4;
     const fgMin=t>0?calcFaceGap(t,rg,gMin,_wpsJoint):null, fgMax=t>0?calcFaceGap(t,rg,gMax,_wpsJoint):null;
@@ -5343,7 +5343,7 @@ function _autoGroove() {
   }
 
   // Backing 있음 — 겹침 구간 처리
-  const matched = (_getCrit('butt')?.backing_cases||WPS_DEFAULT_CRITERIA.butt.backing_cases)
+  const matched = (_getCrit(_wpsJoint)?.backing_cases||WPS_DEFAULT_CRITERIA[_wpsJoint]?.backing_cases||WPS_DEFAULT_CRITERIA.butt.backing_cases)
     .filter(c => rg>=(c.rg_min??0) && rg<=(c.rg_max??99));
 
   if(!matched.length) {
