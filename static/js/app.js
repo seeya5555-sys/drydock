@@ -4429,7 +4429,7 @@ async function openFitupRef(itemId, t) {
           ${cases.map((c,i)=>`
           <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
             <div style="padding:5px 8px;color:${i===0?'#0284c7':'#0369a1'};font-weight:600">${c.label??`Case ${i+1}`}</div>
-            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${c.rg_min??0} ~ ${c.rg_max??10} mm</div>
+            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${c.rg_nom!==undefined ? `${c.rg_nom}(+${c.tol_plus??'?'},-${c.tol_minus??'?'}) = ${c.rg_min??'?'}~${c.rg_max??'?'}mm` : `${c.rg_min??0}~${c.rg_max??10}mm`}</div>
             <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${c.groove_min??40} ~ ${c.groove_max??75}°</div>
           </div>`).join('')}
         </div>
@@ -4468,7 +4468,8 @@ function calcFitupRef(t) {
   let recIdx = -1;
   if(matched.length >= 2) {
     const dists = matched.map(c => {
-      const nom = ((c.rg_min??0) + (c.rg_max??99)) / 2;
+      // rg_nom이 있으면 사용, 없으면 (min+max)/2 추정
+      const nom = (c.rg_nom !== undefined) ? c.rg_nom : ((c.rg_min??0) + (c.rg_max??99)) / 2;
       return Math.abs(rg - nom);
     });
     const minDist = Math.min(...dists);
@@ -4527,7 +4528,7 @@ function calcFitupRef(t) {
 
       matched.forEach((c, i) => {
         const isRec = (i === recIdx);
-        const nom   = ((c.rg_min??0)+(c.rg_max??99))/2;
+        const nom   = c.rg_nom ?? ((c.rg_min??0)+(c.rg_max??99))/2;
         const dist  = Math.abs(rg - nom).toFixed(1);
         const recBadge = isRec
           ? `<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">⭐ 권장</span>`
@@ -5097,8 +5098,8 @@ const WPS_DEFAULT_CRITERIA = {
       groove_min:55,  groove_max:75,
     },
     backing_cases: [
-      { label:'Case 1', rg_min:0, rg_max:3,  groove_min:55, groove_max:75 },
-      { label:'Case 2', rg_min:3, rg_max:10, groove_min:40, groove_max:55 },
+      { label:'Case 1', rg_nom:0,  tol_plus:3,  tol_minus:0, rg_min:0, rg_max:3,  groove_min:55, groove_max:75 },
+      { label:'Case 2', rg_nom:6,  tol_plus:6,  tol_minus:2, rg_min:4, rg_max:12, groove_min:40, groove_max:55 },
     ],
     preheat:[{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
   },
@@ -5108,8 +5109,8 @@ const WPS_DEFAULT_CRITERIA = {
       groove_min:0,   groove_max:90,
     },
     backing_cases: [
-      { label:'Case 1', rg_min:0, rg_max:3,  groove_min:45, groove_max:75 },
-      { label:'Case 2', rg_min:3, rg_max:8,  groove_min:35, groove_max:55 },
+      { label:'Case 1', rg_nom:0,  tol_plus:3,  tol_minus:0, rg_min:0, rg_max:3,  groove_min:45, groove_max:75 },
+      { label:'Case 2', rg_nom:3,  tol_plus:5,  tol_minus:0, rg_min:3, rg_max:8,  groove_min:35, groove_max:55 },
     ],
     preheat:[{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
   },
@@ -5502,6 +5503,7 @@ async function _renderWpsCritForm() {
   const nb_b = cb.no_backing||{}, nb_f = cf.no_backing||{};
   const set = (id,v) => { const e=document.getElementById(id); if(e&&v!==undefined&&v!==null) e.value=v; };
   set('wc_b_nb_rgmin', nb_b.root_gap_min); set('wc_b_nb_rgmax', nb_b.root_gap_max);
+  // backing cases - load rg_nom/tol values
   set('wc_b_nb_gmin',  nb_b.groove_min);   set('wc_b_nb_gmax',  nb_b.groove_max);
   set('wc_f_nb_rgmin', nb_f.root_gap_min); set('wc_f_nb_rgmax', nb_f.root_gap_max);
   set('wc_f_nb_gmin',  nb_f.groove_min);   set('wc_f_nb_gmax',  nb_f.groove_max);
@@ -5541,15 +5543,20 @@ function _renderBackingCaseTables() {
 function _renderCaseTable(joint, tbody) {
   if(!tbody) return;
   const cases = _getCrit(joint)?.backing_cases || WPS_DEFAULT_CRITERIA[joint].backing_cases;
-  tbody.innerHTML = cases.map((c,i) => `
-    <tr id="cr-${joint}-${i}">
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" value="${c.label||'Case '+(i+1)}" style="width:70px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" value="${c.rg_min??''}" placeholder="0" style="width:65px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" value="${c.rg_max??''}" placeholder="" style="width:65px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" value="${c.groove_min??''}" placeholder="e.g. 45" style="width:65px;font-size:11px"></td>
-      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" value="${c.groove_max??''}" placeholder="e.g. 75" style="width:65px;font-size:11px"></td>
+  tbody.innerHTML = cases.map((c,i) => {
+    const nom      = c.rg_nom  ?? ((c.rg_min??0)+(c.rg_max??10))/2;
+    const tolPlus  = c.tol_plus  ?? ((c.rg_max??10) - nom);
+    const tolMinus = c.tol_minus ?? (nom - (c.rg_min??0));
+    return `<tr id="cr-${joint}-${i}">
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" value="${c.label||'Case '+(i+1)}" style="width:65px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border);background:#fefce8"><input class="fi" type="number" id="cr_${joint}_nom_${i}" value="${nom}" placeholder="e.g.6" style="width:60px;font-size:11px;font-weight:700"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_tolp_${i}" value="${tolPlus}" placeholder="+" style="width:50px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_tolm_${i}" value="${tolMinus}" placeholder="-" style="width:50px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" value="${c.groove_min??''}" placeholder="e.g.40" style="width:55px;font-size:11px"></td>
+      <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" value="${c.groove_max??''}" placeholder="e.g.55" style="width:55px;font-size:11px"></td>
       <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCaseRow('${joint}',${i})">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function addCaseRow(joint) {
@@ -5558,11 +5565,12 @@ function addCaseRow(joint) {
   const i = tbody.querySelectorAll('tr').length;
   const tr = document.createElement('tr'); tr.id=`cr-${joint}-${i}`;
   tr.innerHTML = `
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" placeholder="Case ${i+1}" style="width:70px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_min_${i}" placeholder="0" style="width:65px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_rg_max_${i}" placeholder="" style="width:65px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" placeholder="" style="width:65px;font-size:11px"></td>
-    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" placeholder="" style="width:65px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" id="cr_${joint}_label_${i}" placeholder="Case ${i+1}" style="width:65px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border);background:#fefce8"><input class="fi" type="number" id="cr_${joint}_nom_${i}" placeholder="기준값" style="width:60px;font-size:11px;font-weight:700"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_tolp_${i}" placeholder="+" style="width:50px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_tolm_${i}" placeholder="-" style="width:50px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmin_${i}" placeholder="MIN°" style="width:55px;font-size:11px"></td>
+    <td style="padding:4px;border:1px solid var(--border)"><input class="fi" type="number" id="cr_${joint}_gmax_${i}" placeholder="MAX°" style="width:55px;font-size:11px"></td>
     <td style="padding:4px;border:1px solid var(--border);text-align:center"><button class="edit-btn" style="color:var(--red)" onclick="delCaseRow('${joint}',${i})">✕</button></td>`;
   tbody.appendChild(tr);
 }
@@ -5575,8 +5583,14 @@ function _collectCases(joint) {
     const idx = r.id.replace(`cr-${joint}-`,'');
     const g = id => { const v=parseFloat(document.getElementById(`cr_${joint}_${id}_${idx}`)?.value); return isNaN(v)?undefined:v; };
     const s = id => document.getElementById(`cr_${joint}_${id}_${idx}`)?.value||'';
-    return { label:s('label'), rg_min:g('rg_min'), rg_max:g('rg_max'), groove_min:g('gmin'), groove_max:g('gmax') };
-  }).filter(c => c.rg_max!==undefined);
+    const nom      = g('nom');
+    const tolPlus  = g('tolp');
+    const tolMinus = g('tolm');
+    const rg_min   = (nom!==undefined && tolMinus!==undefined) ? +(nom-tolMinus).toFixed(1) : undefined;
+    const rg_max   = (nom!==undefined && tolPlus!==undefined)  ? +(nom+tolPlus).toFixed(1)  : undefined;
+    return { label:s('label'), rg_nom:nom, tol_plus:tolPlus, tol_minus:tolMinus,
+             rg_min, rg_max, groove_min:g('gmin'), groove_max:g('gmax') };
+  }).filter(c => c.rg_nom!==undefined);
 }
 
 async function saveWpsCrit() {
