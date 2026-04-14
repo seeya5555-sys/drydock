@@ -4364,11 +4364,6 @@ function _renderTankModalBody() {
                   onclick="openFitupRef(${item.id},${item.thickness_t||0})">📐 Fit-up</button>` : ''}
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
                   onclick="goToSteelItem(${item.id})">↗ 바로가기</button>
-          <button class="btn-sec attach-btn" id="tattbtn-${item.id}"
-                  style="font-size:11px;padding:4px 8px;${(FLEET[VID].attachSet||new Set()).has('steel:'+item.id)?'background:var(--blue);color:var(--white)':''}"
-                  onclick="openGenAttach('steel',${item.id})">
-            ${(FLEET[VID].attachSet||new Set()).has('steel:'+item.id)?'📎 +':'📎'}
-          </button>
         </div>
       </div>
       ${isEditing ? _tankEditForm(item) : ''}
@@ -5991,11 +5986,6 @@ function _renderPipeModalBody() {
             ${isEditing?'✕ 닫기':'✎ 편집'}</button>` : ''}
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
                   onclick="goToPipeItem(${item.id})">↗ 바로가기</button>
-          <button class="btn-sec attach-btn" id="pipebtn-${item.id}"
-                  style="font-size:11px;padding:4px 8px;${(FLEET[VID].attachSet||new Set()).has('pipe:'+item.id)?'background:var(--blue);color:var(--white)':''}"
-                  onclick="openGenAttach('pipe',${item.id})">
-            ${(FLEET[VID].attachSet||new Set()).has('pipe:'+item.id)?'📎 +':'📎'}
-          </button>
         </div>
       </div>
       ${isEditing ? _pipeEditForm(item) : ''}
