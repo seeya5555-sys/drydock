@@ -331,7 +331,6 @@
         <button class="btn-sec" id="btn-ga-tank" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
         <button class="btn-sec" id="btn-rp-tank" style="font-size:12px" onclick="openPlanDoc('tank_repair')">📋 Repair Plan</button>
         <button class="btn-sec" id="btn-wps-tank" style="font-size:12px" onclick="openWpsModal()">🔥 WPS</button>
-        <button class="btn-sec" style="font-size:12px" onclick="openOrphanRecovery()">🔧 데이터 복구</button>
         <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
       </div>
     </div>
@@ -590,19 +589,6 @@
   </div>
 
   <!-- ── Orphan Data Recovery Modal ──────────────────────────── -->
-  <div class="modal-overlay" id="m-orphan" onclick="if(event.target===this)closeM('m-orphan')">
-    <div class="modal" style="width:600px;max-height:80vh;display:flex;flex-direction:column">
-      <div class="modal-hdr">
-        <div class="modal-title">🔧 데이터 복구 — Position/Tank 재연결</div>
-        <button class="modal-x" onclick="closeM('m-orphan')">✕</button>
-      </div>
-      <div id="m-orphan-body" style="overflow-y:auto;flex:1"></div>
-      <div class="modal-footer">
-        <button class="btn-sec" onclick="closeM('m-orphan')">닫기</button>
-      </div>
-    </div>
-  </div>
-
   <!-- ── Tank Layout Editor Modal ─────────────────────────── -->
   <div class="modal-overlay" id="m-tank-layout" onclick="if(event.target===this)closeM('m-tank-layout')">
     <div class="modal" style="width:920px;max-height:90vh;display:flex;flex-direction:column">
