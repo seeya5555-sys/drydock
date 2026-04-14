@@ -149,6 +149,11 @@ with app.app_context():
         layout_json TEXT NOT NULL,
         updated_at  TEXT DEFAULT (datetime('now'))
     )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS vessel_wps_criteria (
+        vessel_id      TEXT PRIMARY KEY REFERENCES vessels(id) ON DELETE CASCADE,
+        criteria_json  TEXT NOT NULL,
+        updated_at     TEXT DEFAULT (datetime('now'))
+    )""")
     db.commit()
     db = get_db()
     # Documents 테이블 생성
@@ -1264,6 +1269,37 @@ def save_tank_layout(vid):
     db.commit()
     return jsonify({"success": True})
 
+
+@app.route("/api/vessels/<path:vid>/wps_criteria", methods=["GET"])
+@login_required
+def get_wps_criteria(vid):
+    db = get_db()
+    try:
+        db.execute("""CREATE TABLE IF NOT EXISTS vessel_wps_criteria (
+            vessel_id TEXT PRIMARY KEY, criteria_json TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now')))""")
+        db.commit()
+    except: pass
+    row = db.execute(
+        "SELECT criteria_json FROM vessel_wps_criteria WHERE vessel_id=?", (vid,)).fetchone()
+    if not row: return jsonify(None)
+    return jsonify(json.loads(row["criteria_json"]))
+
+@app.route("/api/vessels/<path:vid>/wps_criteria", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def save_wps_criteria(vid):
+    data = json.dumps(request.get_json(force=True))
+    db = get_db()
+    try:
+        db.execute("""CREATE TABLE IF NOT EXISTS vessel_wps_criteria (
+            vessel_id TEXT PRIMARY KEY, criteria_json TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now')))""")
+    except: pass
+    db.execute("""INSERT OR REPLACE INTO vessel_wps_criteria(vessel_id, criteria_json, updated_at)
+                  VALUES(?, ?, datetime('now'))""", (vid, data))
+    db.commit()
+    return jsonify({"success": True})
 
 @app.route("/api/vessels/<vid>/orphan_positions", methods=["GET"])
 @login_required
