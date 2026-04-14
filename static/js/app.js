@@ -4360,6 +4360,8 @@ function _renderTankModalBody() {
           ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;${isEditing?'background:var(--blue);color:white':''}"
                   onclick="${isEditing?'cancelTankItemEdit()':'startTankItemEdit('+item.id+')'}">
             ${isEditing?'✕ 닫기':'✎ 편집'}</button>` : ''}
+          ${item.thickness_t ? `<button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap;color:#7c3aed;border-color:#c4b5fd"
+                  onclick="openFitupRef(${item.id},${item.thickness_t||0})">📐 Fit-up</button>` : ''}
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;white-space:nowrap"
                   onclick="goToSteelItem(${item.id})">↗ 바로가기</button>
           <button class="btn-sec attach-btn" id="tattbtn-${item.id}"
@@ -4372,6 +4374,81 @@ function _renderTankModalBody() {
       ${isEditing ? _tankEditForm(item) : ''}
     </div>`;
   }).join('');
+}
+
+// ── Fit-up Reference Card (Tank Modal) ─────────────────────────
+function openFitupRef(itemId, t) {
+  const crit = _wpsCriteria || WPS_DEFAULT_CRITERIA;
+  const bc = crit?.butt;
+  const nb = bc?.no_backing || WPS_DEFAULT_CRITERIA.butt.no_backing;
+  const cases = bc?.backing_cases || WPS_DEFAULT_CRITERIA.butt.backing_cases;
+
+  // 끝단갭 역산: fg = rg_bound + 2×T×tan(groove/2)
+  const fg = (rg, angleDeg) => t > 0
+    ? +(rg + 2*t*Math.tan(angleDeg/2*Math.PI/180)).toFixed(1) : '—';
+
+  // No Backing
+  const nb_rg  = `${nb.root_gap_min??0} ~ ${nb.root_gap_max??4}`;
+  const nb_fgMin = fg(nb.root_gap_min??0, nb.groove_min??55);
+  const nb_fgMax = fg(nb.root_gap_max??4, nb.groove_max??75);
+  const nb_fg  = `${nb_fgMin} ~ ${nb_fgMax}`;
+
+  // Backing Cases
+  const caseCards = cases.map((c,i) => {
+    const rgStr  = `${c.rg_min??0} ~ ${c.rg_max??10}`;
+    const fgMin  = fg(c.rg_min??0, c.groove_min??40);
+    const fgMax  = fg(c.rg_max??10, c.groove_max??75);
+    const fgStr  = `${fgMin} ~ ${fgMax}`;
+    const gStr   = `${c.groove_min??40} ~ ${c.groove_max??75}`;
+    return { label: c.label||`Case ${i+1}`, rgStr, fgStr, gStr,
+             rg_min:c.rg_min??0, rg_max:c.rg_max??99,
+             groove_min:c.groove_min??40, groove_max:c.groove_max??75 };
+  });
+
+  // Union 겹침 구간
+  let unionCard = null;
+  if(cases.length >= 2) {
+    const [c1,c2] = [cases[0],cases[1]];
+    const overMin = Math.max(c1.rg_min??0, c2.rg_min??0);
+    const overMax = Math.min(c1.rg_max??99, c2.rg_max??99);
+    if(overMin < overMax) {
+      const gMin = Math.min(c1.groove_min??40, c2.groove_min??40);
+      const gMax = Math.max(c1.groove_max??75, c2.groove_max??75);
+      const fgMin = fg(overMin, gMin);
+      const fgMax = fg(overMax, gMax);
+      unionCard = { rgStr:`${overMin} ~ ${overMax}`, fgStr:`${fgMin} ~ ${fgMax}`,
+                    gStr:`${gMin} ~ ${gMax}` };
+    }
+  }
+
+  // 팝업 렌더링
+  const el = document.getElementById('m-fitup-ref');
+  if(!el) return;
+  document.getElementById('fitup-ref-t').textContent = `T = ${t} mm`;
+
+  const row = (label, rg, fg, g, color='var(--blue)') => `
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
+      <div style="padding:7px 10px;font-size:11px;font-weight:700;color:${color};background:var(--bg-panel);border-right:1px solid var(--border)">${label}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--txt-h)">${rg}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#059669">${fg}</div>
+      <div style="padding:7px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${g}</div>
+    </div>`;
+
+  document.getElementById('fitup-ref-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;background:var(--bg-panel);border-bottom:2px solid var(--border)">
+      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--txt-m);text-transform:uppercase;border-right:1px solid var(--border)">구분</div>
+      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--txt-m);text-transform:uppercase">루트갭 (mm)</div>
+      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase">끝단갭 (mm)</div>
+      <div style="padding:5px 10px;font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase">개선각 (°)</div>
+    </div>
+    ${row('No Backing', nb_rg, nb_fg, `${nb.groove_min??55} ~ ${nb.groove_max??75}`, '#64748b')}
+    ${caseCards.map((c,i)=>row(c.label, c.rgStr, c.fgStr, c.gStr, i===0?'#0284c7':'#0369a1')).join('')}
+    ${unionCard ? row('Union ⚡', unionCard.rgStr, unionCard.fgStr, unionCard.gStr, '#d97706') : ''}
+    <div style="padding:6px 10px;font-size:10px;color:var(--txt-m);background:var(--bg-panel)">
+      끝단갭 = 루트갭 + 2×T×tan(개선각/2) 기준 역산 · T=${t}mm 적용
+    </div>`;
+
+  openM('m-fitup-ref');
 }
 
 // 탱크 모달 → Steel Repair 탭 해당 행으로 바로가기
