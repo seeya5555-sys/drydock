@@ -5142,18 +5142,6 @@ function setWpsJoint(joint) {
   document.getElementById('wps-result').style.display = 'none';
 }
 
-function _renderWpsInputs() {
-  const fields = WPS_INPUTS[_wpsJoint] || [];
-  document.getElementById('wps-inputs').innerHTML = fields.map(f => `
-    <div class="form-group">
-      <label class="form-lbl">${f.label}${f.hint?`<span style="font-weight:400;color:var(--txt-m)"> (${f.hint})</span>`:''}</label>
-      ${f.type==='select'
-        ? `<select class="form-ctrl" id="${f.id}">${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`
-        : `<input class="form-ctrl" id="${f.id}" type="number" step="0.1" min="0" placeholder="0">`
-      }
-    </div>`).join('');
-}
-
 function _renderWpsRefTable() {
   const c = WPS_CRITERIA[_wpsJoint]||{};
   const rows = Object.entries(c).map(([k,v]) =>
