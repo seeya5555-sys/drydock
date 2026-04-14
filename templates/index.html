@@ -589,6 +589,31 @@
   </div>
 
   <!-- ── Orphan Data Recovery Modal ──────────────────────────── -->
+  <!-- ── Fit-up Reference Modal ──────────────────────────── -->
+  <div class="modal-overlay" id="m-fitup-ref" onclick="if(event.target===this)closeM('m-fitup-ref')" style="z-index:600">
+    <div class="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="modal-hdr" style="background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);border-radius:12px 12px 0 0">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">📐</span>
+          <div>
+            <div class="modal-title" style="color:#fff;margin:0">Fit-up 허용 범위 참고</div>
+            <div id="fitup-ref-t" style="font-size:11px;color:#c7d2fe;margin-top:1px"></div>
+          </div>
+        </div>
+        <button class="modal-x" onclick="closeM('m-fitup-ref')" style="color:#fff">✕</button>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <div id="fitup-ref-body"></div>
+      </div>
+      <div class="modal-footer">
+        <div style="font-size:11px;color:var(--txt-m)">
+          💡 WPS 기준 탭에서 기준값 수정 가능
+        </div>
+        <button class="btn-sec" onclick="closeM('m-fitup-ref')">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Tank Layout Editor Modal ─────────────────────────── -->
   <div class="modal-overlay" id="m-tank-layout" onclick="if(event.target===this)closeM('m-tank-layout')">
     <div class="modal" style="width:920px;max-height:90vh;display:flex;flex-direction:column">
