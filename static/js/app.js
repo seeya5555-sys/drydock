@@ -4376,74 +4376,109 @@ async function openFitupRef(itemId, t) {
   if(!_wpsCriteria) {
     _wpsCriteria = await apiFetch(`${API}/vessels/${VID}/wps_criteria`).catch(()=>null);
   }
-  const crit  = _wpsCriteria || WPS_DEFAULT_CRITERIA;
-  const bc    = crit?.butt;
-  const nb    = bc?.no_backing    || WPS_DEFAULT_CRITERIA.butt.no_backing;
-  const cases = bc?.backing_cases || WPS_DEFAULT_CRITERIA.butt.backing_cases;
+  window._fitupT    = t;
+  window._fitupCrit = _wpsCriteria || WPS_DEFAULT_CRITERIA;
 
   const el = document.getElementById('m-fitup-ref');
   if(!el) return;
   document.getElementById('fitup-ref-t').textContent = `T = ${t} mm`;
 
   document.getElementById('fitup-ref-body').innerHTML = `
-    <div style="padding:16px 18px">
+    <div style="padding:0">
 
-      <!-- 루트간격 입력 -->
-      <div style="margin-bottom:14px">
-        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
-          루트 간격 Root Gap (mm)
-        </label>
-        <input id="fref-rg" type="number" step="0.5" min="0" placeholder="측정값 입력"
-          class="form-ctrl" style="font-size:15px;font-weight:700;text-align:center;width:100%"
-          oninput="calcFitupRef(${t})">
+      <!-- Joint Type 탭 -->
+      <div style="display:flex;border-bottom:2px solid #e2e8f0;background:#f8fafc">
+        <button id="fref-tab-butt" onclick="switchFitupJoint('butt')"
+          style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:var(--blue);color:#fff;cursor:pointer">
+          Butt Joint
+        </button>
+        <button id="fref-tab-fillet" onclick="switchFitupJoint('fillet')"
+          style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:transparent;color:#64748b;cursor:pointer">
+          Fillet Joint
+        </button>
       </div>
 
-      <!-- 결과 표시 -->
-      <div id="fref-result" style="min-height:80px">
-        <div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">
-          루트 간격을 입력하면 허용 끝단갭 범위가 표시됩니다
+      <div style="padding:16px 18px">
+        <!-- 루트간격 입력 -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
+            루트 간격 Root Gap (mm)
+          </label>
+          <input id="fref-rg" type="number" step="0.5" min="0" placeholder="측정값 입력"
+            class="form-ctrl" style="font-size:15px;font-weight:700;text-align:center;width:100%"
+            oninput="calcFitupRef(window._fitupT)">
         </div>
+
+        <!-- 결과 표시 -->
+        <div id="fref-result" style="min-height:80px">
+          <div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">
+            루트 간격을 입력하면 허용 끝단갭 범위가 표시됩니다
+          </div>
+        </div>
+
+        <!-- 케이스 범위 요약 -->
+        <details style="margin-top:14px">
+          <summary style="font-size:11px;color:#64748b;cursor:pointer;padding:4px 0">
+            📋 WPS 케이스 범위 전체 보기
+          </summary>
+          <div id="fref-summary" style="margin-top:8px"></div>
+        </details>
       </div>
-
-      <!-- 케이스 범위 요약 (참고) -->
-      <details style="margin-top:14px">
-        <summary style="font-size:11px;color:#64748b;cursor:pointer;padding:4px 0">
-          📋 WPS 케이스 범위 전체 보기
-        </summary>
-        <div style="margin-top:8px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:11px">
-          <div style="display:grid;grid-template-columns:90px 1fr 1fr;background:#f1f5f9;border-bottom:1px solid #e2e8f0">
-            <div style="padding:4px 8px;font-weight:700;color:#475569">구분</div>
-            <div style="padding:4px 8px;font-weight:700;color:#475569">루트갭 범위</div>
-            <div style="padding:4px 8px;font-weight:700;color:#7c3aed">개선각 허용</div>
-          </div>
-          <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
-            <div style="padding:5px 8px;color:#475569;font-weight:600">No Backing</div>
-            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${nb.root_gap_min??0} ~ ${nb.root_gap_max??4} mm</div>
-            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${nb.groove_min??55} ~ ${nb.groove_max??75}°</div>
-          </div>
-          ${cases.map((c,i)=>`
-          <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
-            <div style="padding:5px 8px;color:${i===0?'#0284c7':'#0369a1'};font-weight:600">${c.label??`Case ${i+1}`}</div>
-            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${c.rg_nom!==undefined ? `${c.rg_nom}(+${c.tol_plus??'?'},-${c.tol_minus??'?'}) = ${c.rg_min??'?'}~${c.rg_max??'?'}mm` : `${c.rg_min??0}~${c.rg_max??10}mm`}</div>
-            <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${c.groove_min??40} ~ ${c.groove_max??75}°</div>
-          </div>`).join('')}
-        </div>
-      </details>
-
     </div>`;
 
-  // 전역에 현재 기준 저장 (calcFitupRef에서 사용)
-  window._fitupNb    = nb;
-  window._fitupCases = cases;
-
+  window._fitupJoint = 'butt';
+  _renderFitupSummary('butt');
   openM('m-fitup-ref');
+}
+
+function switchFitupJoint(joint) {
+  window._fitupJoint = joint;
+  // 탭 스타일
+  document.getElementById('fref-tab-butt').style.cssText   = `flex:1;padding:10px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${joint==='butt'?'var(--blue)':'transparent'};color:${joint==='butt'?'#fff':'#64748b'}`;
+  document.getElementById('fref-tab-fillet').style.cssText = `flex:1;padding:10px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${joint==='fillet'?'var(--blue)':'transparent'};color:${joint==='fillet'?'#fff':'#64748b'}`;
+  // 루트갭 초기화
+  const rgEl = document.getElementById('fref-rg');
+  if(rgEl) rgEl.value = '';
+  document.getElementById('fref-result').innerHTML = `<div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">루트 간격을 입력하면 허용 끝단갭 범위가 표시됩니다</div>`;
+  _renderFitupSummary(joint);
+}
+
+function _renderFitupSummary(joint) {
+  const crit  = window._fitupCrit || WPS_DEFAULT_CRITERIA;
+  const jc    = crit?.[joint];
+  const nb    = jc?.no_backing    || WPS_DEFAULT_CRITERIA[joint].no_backing;
+  const cases = jc?.backing_cases || WPS_DEFAULT_CRITERIA[joint].backing_cases;
+  const el    = document.getElementById('fref-summary');
+  if(!el) return;
+  el.innerHTML = `
+    <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:11px">
+      <div style="display:grid;grid-template-columns:90px 1fr 1fr;background:#f1f5f9;border-bottom:1px solid #e2e8f0">
+        <div style="padding:4px 8px;font-weight:700;color:#475569">구분</div>
+        <div style="padding:4px 8px;font-weight:700;color:#475569">루트갭 범위</div>
+        <div style="padding:4px 8px;font-weight:700;color:#7c3aed">개선각 허용</div>
+      </div>
+      <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
+        <div style="padding:5px 8px;color:#475569;font-weight:600">No Backing</div>
+        <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${nb.root_gap_min??0} ~ ${nb.root_gap_max??4} mm</div>
+        <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${nb.groove_min??55} ~ ${nb.groove_max??75}°</div>
+      </div>
+      ${cases.map((c,i)=>`
+      <div style="display:grid;grid-template-columns:90px 1fr 1fr;border-bottom:1px solid #f1f5f9">
+        <div style="padding:5px 8px;color:${i===0?'#0284c7':'#0369a1'};font-weight:600">${c.label??`Case ${i+1}`}</div>
+        <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace">${c.rg_nom!==undefined?`${c.rg_nom}(+${c.tol_plus??'?'},-${c.tol_minus??'?'}) = ${c.rg_min??'?'}~${c.rg_max??'?'}mm`:`${c.rg_min??0}~${c.rg_max??10}mm`}</div>
+        <div style="padding:5px 8px;font-family:'IBM Plex Mono',monospace;color:#7c3aed">${c.groove_min??40} ~ ${c.groove_max??75}°</div>
+      </div>`).join('')}
+    </div>`;
 }
 
 function calcFitupRef(t) {
   const rg    = parseFloat(document.getElementById('fref-rg')?.value);
   const el    = document.getElementById('fref-result');
-  const nb    = window._fitupNb;
-  const cases = window._fitupCases || [];
+  const joint = window._fitupJoint || 'butt';
+  const crit  = window._fitupCrit  || WPS_DEFAULT_CRITERIA;
+  const jc    = crit?.[joint];
+  const nb    = jc?.no_backing    || WPS_DEFAULT_CRITERIA[joint].no_backing;
+  const cases = jc?.backing_cases || WPS_DEFAULT_CRITERIA[joint].backing_cases;
   if(!el) return;
 
   if(isNaN(rg) || rg < 0) {
