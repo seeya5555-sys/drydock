@@ -330,6 +330,7 @@
         <div id="tank-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
         <button class="btn-sec" id="btn-ga-tank" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
         <button class="btn-sec" id="btn-rp-tank" style="font-size:12px" onclick="openPlanDoc('tank_repair')">📋 Repair Plan</button>
+        <button class="btn-sec" id="btn-wps-tank" style="font-size:12px" onclick="openWpsModal()">🔥 WPS</button>
         <button class="btn-sec" style="font-size:12px" onclick="openOrphanRecovery()">🔧 데이터 복구</button>
         <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
       </div>
@@ -447,6 +448,69 @@
         <button class="btn-pri" onclick="savePipeItem()">💾 Save</button>
         <button class="btn-sec" onclick="document.getElementById('m-pipe-addform').style.display='none';document.getElementById('m-pipe-addbtn').style.display=''">Cancel</button>
         <button class="btn-sec" onclick="closeM('m-pipe')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WPS & Fit-up Inspector Modal ─────────────────────────── -->
+  <div class="modal-overlay" id="m-wps" onclick="if(event.target===this)closeM('m-wps')">
+    <div class="modal" style="width:780px;max-height:92vh;display:flex;flex-direction:column">
+      <div class="modal-hdr">
+        <div class="modal-title">🔥 WPS — Fit-up 검사 기준 & 계산기</div>
+        <button class="modal-x" onclick="closeM('m-wps')">✕</button>
+      </div>
+      <!-- 탭 -->
+      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-panel)">
+        <button id="wps-tab-calc" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid var(--blue);font-weight:700;font-size:12px;padding:8px 18px"
+                onclick="switchWpsTab('calc')">📐 Fit-up 계산기</button>
+        <button id="wps-tab-files" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid transparent;font-size:12px;padding:8px 18px"
+                onclick="switchWpsTab('files')">📎 WPS 파일 <span id="wps-file-badge"></span></button>
+      </div>
+      <!-- 계산기 패널 -->
+      <div id="wps-panel-calc" style="overflow-y:auto;flex:1;padding:18px 22px">
+
+        <!-- 조인트 타입 선택 -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--txt-s);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Joint Type</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="wps-joint-btns">
+            <button class="btn-sec wps-joint-btn active" data-joint="butt" onclick="setWpsJoint('butt')">Butt Joint</button>
+            <button class="btn-sec wps-joint-btn" data-joint="fillet" onclick="setWpsJoint('fillet')">Fillet Joint</button>
+            <button class="btn-sec wps-joint-btn" data-joint="tee" onclick="setWpsJoint('tee')">T-Joint</button>
+          </div>
+        </div>
+
+        <!-- 입력 그리드 -->
+        <div id="wps-inputs" style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;margin-bottom:16px">
+          <!-- 동적으로 채워짐 -->
+        </div>
+
+        <!-- 계산 버튼 -->
+        <button class="btn-pri" style="width:100%;font-size:13px;margin-bottom:16px" onclick="runWpsCalc()">
+          ✅ Fit-up 검사 항목 계산 & 판정
+        </button>
+
+        <!-- 결과 패널 -->
+        <div id="wps-result" style="display:none"></div>
+
+        <!-- 기준 요약 테이블 -->
+        <details style="margin-top:16px">
+          <summary style="font-size:12px;font-weight:700;color:var(--txt-s);cursor:pointer;padding:6px 0">
+            📋 Fit-up 검사 기준 참고 (AWS D1.1 / ISO 15614)
+          </summary>
+          <div id="wps-ref-table" style="margin-top:8px"></div>
+        </details>
+      </div>
+      <!-- 파일 패널 -->
+      <div id="wps-panel-files" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
+        <div id="wps-file-list"></div>
+      </div>
+      <!-- 푸터 -->
+      <div class="modal-footer" style="gap:8px">
+        <label id="wps-upload-lbl" class="btn-sec" style="cursor:pointer;font-size:12px;display:none">
+          📎 WPS 파일 업로드
+          <input type="file" id="wps-file-input" multiple style="display:none" onchange="uploadWpsFile(this)">
+        </label>
+        <button class="btn-sec" onclick="closeM('m-wps')">닫기</button>
       </div>
     </div>
   </div>
