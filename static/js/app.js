@@ -4975,7 +4975,7 @@ function openWpsModal() {
   if(!VID) return;
   _wpsJoint = 'butt';
   openM('m-wps');
-  switchWpsTab('files');
+  switchWpsTab('calc');
   _loadWpsFiles();
   apiFetch(`${API}/vessels/${VID}/wps_criteria`)
     .then(d => { if(d) _wpsCriteria = d; }).catch(()=>{});
