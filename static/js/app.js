@@ -4114,6 +4114,8 @@ async function renderTankPlan() {
   const _tankColFn = _makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8');
   if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', _tankColFn);
 
+  _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
+
   const total=_tankPlanData.length, cr=_tankPlanData.filter(i=>i.priority==='Critical').length;
   const ug=_tankPlanData.filter(i=>i.priority==='Urgent').length;
   const tnks=new Set(_tankPlanData.map(i=>i.position_tank).filter(Boolean)).size;
@@ -4752,6 +4754,128 @@ async function saveTankLayoutToDb() {
   } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
 }
 
+// ══ PLAN DOCUMENTS (GA / Repair Plan) ════════════════════════
+// ref_id 규칙: GA=0(공유), Tank Repair Plan=1, Pipe Repair Plan=2
+const PLAN_DOC_CFG = {
+  ga:           { ref_type:'vessel_ga',   ref_id:0, title:'📐 General Arrangement (GA)', btnTank:'btn-ga-tank',   btnPipe:'btn-ga-pipe'   },
+  tank_repair:  { ref_type:'vessel_plan', ref_id:1, title:'📋 Tank Repair Plan',          btnTank:'btn-rp-tank',   btnPipe:null            },
+  pipe_repair:  { ref_type:'vessel_plan', ref_id:2, title:'📋 Pipe Repair Plan',          btnTank:null,            btnPipe:'btn-rp-pipe'   },
+};
+let _curPlanDocKey = null;
+
+async function openPlanDoc(docKey) {
+  if(!VID) return;
+  _curPlanDocKey = docKey;
+  const cfg = PLAN_DOC_CFG[docKey];
+  document.getElementById('m-plan-doc-title').textContent = cfg.title;
+  document.getElementById('m-plan-doc-body').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--txt-m)">로딩 중…</div>';
+
+  // 뷰어는 업로드 버튼 숨김
+  const footer = document.getElementById('m-plan-doc-footer');
+  if(footer) footer.querySelector('label').style.display = isViewer() ? 'none' : '';
+
+  openM('m-plan-doc');
+  await _loadPlanDocList();
+}
+
+async function _loadPlanDocList() {
+  const cfg = PLAN_DOC_CFG[_curPlanDocKey];
+  const files = await apiFetch(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`)
+    .catch(()=>[]);
+  _renderPlanDocList(files || []);
+  _updatePlanDocBtn(_curPlanDocKey, (files||[]).length);
+}
+
+function _renderPlanDocList(files) {
+  const body = document.getElementById('m-plan-doc-body');
+  if(!files.length) {
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--txt-m)">
+      <div style="font-size:36px;margin-bottom:10px">📂</div>
+      <div style="font-size:13px">업로드된 문서가 없습니다.</div>
+      <div style="font-size:12px;color:var(--txt-s);margin-top:4px">하단 버튼으로 파일을 업로드하세요.</div>
+    </div>`;
+    return;
+  }
+  body.innerHTML = files.map(f => {
+    const ext  = (f.filename||'').split('.').pop().toLowerCase();
+    const icon = f.mimetype?.startsWith('image/') ? '🖼️'
+               : f.mimetype==='application/pdf'    ? '📄'
+               : ['xlsx','xls','xlsm'].includes(ext) ? '📊'
+               : ['docx','doc'].includes(ext)        ? '📝' : '📁';
+    const size = f.filesize ? (f.filesize >= 1024*1024
+      ? (f.filesize/1024/1024).toFixed(1)+' MB'
+      : (f.filesize/1024).toFixed(0)+' KB') : '';
+    const canPreview = f.mimetype?.startsWith('image/') || f.mimetype==='application/pdf';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border)">
+      <span style="font-size:28px;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--txt-h);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div>
+        <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${size}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${canPreview ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px"
+          onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>` : ''}
+        <a class="btn-sec" style="font-size:11px;padding:4px 10px;text-decoration:none"
+           href="/api/attachments/${f.id}">⬇ 다운로드</a>
+        ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px;color:var(--red)"
+          onclick="deletePlanDoc(${f.id})">✕</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _updatePlanDocBtn(docKey, count) {
+  const cfg = PLAN_DOC_CFG[docKey];
+  [cfg.btnTank, cfg.btnPipe].filter(Boolean).forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    if(!btn) return;
+    btn.style.background = count > 0 ? 'var(--blue)' : '';
+    btn.style.color      = count > 0 ? 'var(--white)' : '';
+    btn.style.fontWeight = count > 0 ? '700' : '';
+    // 파일 수 뱃지
+    const label = docKey === 'ga' ? '📐 GA' : '📋 Repair Plan';
+    btn.textContent = count > 0 ? `${label} (${count})` : label;
+  });
+}
+
+async function uploadPlanDoc(input) {
+  if(!VID || !input.files.length || !_curPlanDocKey) return;
+  const cfg = PLAN_DOC_CFG[_curPlanDocKey];
+  const formData = new FormData();
+  for(const f of input.files) formData.append('files', f);
+  setSS('saving');
+  try {
+    await fetch(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`,
+      {method:'POST', body:formData});
+    await _loadPlanDocList();
+    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+  } catch(e) { setSS('error'); toast('업로드 실패: '+e.message, true); }
+  input.value = '';
+}
+
+async function deletePlanDoc(aid) {
+  if(!confirm('파일을 삭제하시겠습니까?')) return;
+  setSS('saving');
+  try {
+    await apiFetch(`${API}/attachments/${aid}`, 'DELETE');
+    await _loadPlanDocList();
+    setSS('synced'); toast('삭제됐습니다');
+  } catch(e) { setSS('error'); toast('삭제 실패: '+e.message, true); }
+}
+
+// 탭 로드 시 버튼 뱃지 초기화
+async function _initPlanDocBadges() {
+  if(!VID) return;
+  for(const [docKey, cfg] of Object.entries(PLAN_DOC_CFG)) {
+    try {
+      const files = await apiFetch(
+        `${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`);
+      _updatePlanDocBtn(docKey, (files||[]).length);
+    } catch(e) {}
+  }
+}
+
 // ══ PIPE PLAN ═════════════════════════════════════════════════
 
 let _pipePlanData = [];
@@ -4787,6 +4911,8 @@ async function renderPipePlan() {
   // Pipe Plan 색상: 초록색 — 렌더 시점 데이터 캡처
   const _pipeColFn = _makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46');
   if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', _pipeColFn);
+
+  _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
 
   const total=_pipePlanData.length;
   const cr=_pipePlanData.filter(i=>i.priority==='Critical').length;
