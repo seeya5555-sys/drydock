@@ -5437,18 +5437,57 @@ function runWpsCalc() {
     if(rg>=rgMin&&rg<=rgMax) pass('루트 간격 Root Gap',rg,`${rgMin}~${rgMax}`,'mm');
     else                      fail('루트 간격 Root Gap',rg,`${rgMin}~${rgMax}`,'mm');
 
-    // 개선 끝단 갭
+    // 개선 끝단 갭 + 개선각 — 겹침 구간이면 전체 케이스 검토
     if(fg>0) {
-      const limStr = fgMin&&fgMax ? `${fgMin}~${fgMax}` : '—';
-      if(fgMin&&fgMax) {
-        if(fg>=fgMin&&fg<=fgMax) pass('개선 끝단 갭 Face Gap',fg,limStr,'mm');
-        else                      fail('개선 끝단 갭 Face Gap',fg,limStr,'mm');
-      }
-      // 개선각
       const angle = calcGrooveAngle(t1,rg,fg);
-      if(angle!==null) {
-        if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°',`2×atan((${fg}-${rg})/(2×${t1}))`);
-        else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+      const _matched = (backing!=='none')
+        ? (crit?.backing_cases||WPS_DEFAULT_CRITERIA.butt.backing_cases).filter(c=>rg>=(c.rg_min??0)&&rg<=(c.rg_max??99))
+        : null;
+      const isOverlap = _matched && _matched.length >= 2;
+
+      // 권장 케이스 기준 pass 여부
+      const recFgPass  = fgMin&&fgMax ? fg>=fgMin&&fg<=fgMax : true;
+      const recAngPass = angle!==null ? angle>=gMin&&angle<=gMax : true;
+
+      if(!isOverlap) {
+        // 단독 구간 — 기존 방식
+        if(fgMin&&fgMax) {
+          if(fg>=fgMin&&fg<=fgMax) pass('개선 끝단 갭 Face Gap',fg,`${fgMin}~${fgMax}`,'mm');
+          else                      fail('개선 끝단 갭 Face Gap',fg,`${fgMin}~${fgMax}`,'mm');
+        }
+        if(angle!==null) {
+          if(angle>=gMin&&angle<=gMax) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°',`2×atan((${fg}-${rg})/(2×${t1}))`);
+          else                         fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+        }
+      } else {
+        // 겹침 구간 — 적용가능 케이스도 함께 검토
+        const passingCase = _matched.find(c => {
+          const cfgMin = t1>0?calcFaceGap(t1,rg,c.groove_min??40):null;
+          const cfgMax = t1>0?calcFaceGap(t1,rg,c.groove_max??75):null;
+          const fgOk   = cfgMin&&cfgMax ? fg>=cfgMin&&fg<=cfgMax : true;
+          const angOk  = angle!==null ? angle>=(c.groove_min??40)&&angle<=(c.groove_max??75) : true;
+          return fgOk && angOk;
+        });
+        const rec = _getRecommendedCase(_matched, rg);
+        const recPasses = recFgPass && recAngPass;
+
+        if(recPasses) {
+          // 권장 케이스 통과
+          if(fgMin&&fgMax) pass('개선 끝단 갭 Face Gap',fg,`${fgMin}~${fgMax}`,'mm');
+          if(angle!==null) pass('개선각 (총)',angle,`${gMin}~${gMax}`,'°',`2×atan((${fg}-${rg})/(2×${t1}))`);
+        } else if(passingCase && passingCase !== rec) {
+          // 권장 아닌 적용가능 케이스로 통과
+          const pfgMin = t1>0?calcFaceGap(t1,rg,passingCase.groove_min??40):null;
+          const pfgMax = t1>0?calcFaceGap(t1,rg,passingCase.groove_max??75):null;
+          if(pfgMin&&pfgMax) warn('개선 끝단 갭 Face Gap',fg,`${pfgMin}~${pfgMax}`,'mm',
+            `권장(${rec.label}) 범위 외 — ${passingCase.label} 적용 시 허용. 해당 WPS 파라미터 전체 준수 필요`);
+          if(angle!==null) warn('개선각 (총)',angle,`${passingCase.groove_min??40}~${passingCase.groove_max??75}`,'°',
+            `권장(${rec.label}) 범위 외 — ${passingCase.label} 기준 적용 가능`);
+        } else {
+          // 모든 케이스 실패
+          if(fgMin&&fgMax) fail('개선 끝단 갭 Face Gap',fg,`${fgMin}~${fgMax}`,'mm');
+          if(angle!==null) fail('개선각 (총)',angle,`${gMin}~${gMax}`,'°');
+        }
       }
     }
 
@@ -5513,7 +5552,7 @@ function _renderWpsCalcResult(results) {
   if(!results){el.style.display='none';return;}
   const hasFail=results.some(r=>r.pass===false), hasWarn=results.some(r=>r.pass==='warn');
   const[oBg,oCol,oIcon,oText]=hasFail?['#fee2e2','#991b1b','❌','FAIL — 재작업 필요']:
-    hasWarn?['#fef9c3','#854d0e','⚠️','MARGINAL — 조건부 허용']:
+    hasWarn?['#fef9c3','#854d0e','⚠️','REVIEW — 권장 케이스 외 적용가능 케이스 범위 해당, 해당 WPS 파라미터 전체 준수 필요']:
     ['#dcfce7','#166534','✅','PASS — 용접 진행 가능'];
   const rows=results.map(r=>{
     const ic=r.pass===true?'✅':r.pass===false?'❌':r.pass==='warn'?'⚠️':'ℹ️';
