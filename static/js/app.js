@@ -4893,7 +4893,6 @@ const WPS_DEFAULT_CRITERIA = {
       { label:'Case 1', rg_min:0, rg_max:3,  groove_min:55, groove_max:75 },
       { label:'Case 2', rg_min:3, rg_max:10, groove_min:40, groove_max:55 },
     ],
-    hi_lo_abs_max:3, hi_lo_max_pct:15,
     preheat:[{t_max:20,temp:5},{t_max:40,temp:50},{t_max:60,temp:100},{t_max:999,temp:150}],
   },
   fillet: {
@@ -5015,7 +5014,6 @@ function _renderWpsInputs() {
          + N('wps_root_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
          + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
          + groovePreview
-         + N('wps_misalign','선형 오차 Hi-Lo (mm)','0')
          + `<div class="form-group" style="grid-column:1/-1">
               <label class="form-lbl">용접 방법</label>
               <select class="form-ctrl" id="wps_process">${procOpts}</select>
@@ -5125,7 +5123,7 @@ function runWpsCalc() {
 
   if(joint==='butt') {
     const t1=_val('wps_t1'), t2=_valT2(), tMax=Math.max(t1,t2);
-    const rg=_val('wps_root_gap'), fg=_val('wps_face_gap'), hiLo=_val('wps_misalign');
+    const rg=_val('wps_root_gap'), fg=_val('wps_face_gap');
 
     let rgMin, rgMax, gMin, gMax, fgMin, fgMax;
     if(backing==='none') {
@@ -5165,9 +5163,6 @@ function runWpsCalc() {
     }
 
     // Hi-Lo
-    const hiLoMax = Math.min(tMax*(crit?.hi_lo_max_pct??15)/100, crit?.hi_lo_abs_max??3);
-    if(hiLo<=hiLoMax) pass('선형 오차 Hi-Lo',hiLo,`≤ ${hiLoMax.toFixed(1)}`,'mm');
-    else              fail('선형 오차 Hi-Lo',hiLo,`≤ ${hiLoMax.toFixed(1)}`,'mm');
 
     if(document.getElementById('wps_t2_diff')?.checked && t1!==t2) {
       const d=Math.abs(t1-t2); info(`두께 차이`,d.toFixed(1),'mm',d>3?'⚠ 테이퍼 필요':'OK');
@@ -5266,7 +5261,6 @@ async function _renderWpsCritForm() {
   const set = (id,v) => { const e=document.getElementById(id); if(e&&v!==undefined&&v!==null) e.value=v; };
   set('wc_b_nb_rgmin', nb_b.root_gap_min); set('wc_b_nb_rgmax', nb_b.root_gap_max);
   set('wc_b_nb_gmin',  nb_b.groove_min);   set('wc_b_nb_gmax',  nb_b.groove_max);
-  set('wc_b_hilo',     cb.hi_lo_abs_max);
   set('wc_f_nb_rgmin', nb_f.root_gap_min); set('wc_f_nb_rgmax', nb_f.root_gap_max);
   set('wc_f_nb_gmin',  nb_f.groove_min);   set('wc_f_nb_gmax',  nb_f.groove_max);
 }
@@ -5324,7 +5318,6 @@ async function saveWpsCrit() {
     butt: {
       no_backing:{ root_gap_min:g('wc_b_nb_rgmin'), root_gap_max:g('wc_b_nb_rgmax'), groove_min:g('wc_b_nb_gmin'), groove_max:g('wc_b_nb_gmax') },
       backing_cases: _collectCases('butt'),
-      hi_lo_abs_max:g('wc_b_hilo'), hi_lo_max_pct:15,
       preheat:WPS_DEFAULT_CRITERIA.butt.preheat,
     },
     fillet: {
