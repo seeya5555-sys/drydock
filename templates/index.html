@@ -461,14 +461,17 @@
       </div>
       <!-- 탭 -->
       <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-panel)">
-        <button id="wps-tab-calc" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid var(--blue);font-weight:700;font-size:12px;padding:8px 18px"
-                onclick="switchWpsTab('calc')">📐 Fit-up 계산기</button>
-        <button id="wps-tab-files" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid transparent;font-size:12px;padding:8px 18px"
+        <button id="wps-tab-files" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid var(--blue);font-weight:700;font-size:12px;padding:8px 18px"
                 onclick="switchWpsTab('files')">📎 WPS 파일 <span id="wps-file-badge"></span></button>
+        <button id="wps-tab-calc" class="btn-sec" style="border-radius:0;border:none;border-bottom:2px solid transparent;font-size:12px;padding:8px 18px"
+                onclick="switchWpsTab('calc')">📐 Fit-up 계산기</button>
+      </div>
+      <!-- 파일 패널 -->
+      <div id="wps-panel-files" style="overflow-y:auto;flex:1;padding:18px 22px">
+        <div id="wps-file-list"></div>
       </div>
       <!-- 계산기 패널 -->
-      <div id="wps-panel-calc" style="overflow-y:auto;flex:1;padding:18px 22px">
-
+      <div id="wps-panel-calc" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
         <!-- 조인트 타입 선택 -->
         <div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;color:var(--txt-s);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Joint Type</div>
@@ -501,7 +504,7 @@
         </details>
       </div>
       <!-- 파일 패널 -->
-      <div id="wps-panel-files" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
+      <div id="wps-panel-files" style="overflow-y:auto;flex:1;padding:18px 22px">
         <div id="wps-file-list"></div>
       </div>
       <!-- 푸터 -->
