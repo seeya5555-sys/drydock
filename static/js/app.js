@@ -4912,12 +4912,32 @@ function _getCrit(joint) {
   return (_wpsCriteria?.[joint]) ?? WPS_DEFAULT_CRITERIA[joint];
 }
 
+// 매칭 케이스 찾기 — 루트갭이 범위 안에 있는 모든 케이스 반환 (겹치는 구간 union 처리)
 function _matchBackingCase(joint, rg) {
   const cases = _getCrit(joint)?.backing_cases;
   if(!cases?.length) return null;
-  const sorted = [...cases].sort((a,b)=>(a.rg_max??99)-(b.rg_max??99));
-  for(const c of sorted) { if(rg <= (c.rg_max??99)) return c; }
-  return sorted[sorted.length-1];
+  // rg가 [rg_min, rg_max] 안에 있는 케이스 모두 수집
+  const matches = cases.filter(c => rg >= (c.rg_min??0) && rg <= (c.rg_max??99));
+  if(!matches.length) {
+    // 완전 미매칭이면 가장 가까운 케이스 사용
+    const sorted = [...cases].sort((a,b)=>(a.rg_max??99)-(b.rg_max??99));
+    return { _merged: true, _cases: [sorted[sorted.length-1]],
+      groove_min: sorted[sorted.length-1].groove_min??40,
+      groove_max: sorted[sorted.length-1].groove_max??75,
+      rg_min: sorted[sorted.length-1].rg_min??0,
+      rg_max: sorted[sorted.length-1].rg_max??99,
+      label: sorted[sorted.length-1].label };
+  }
+  if(matches.length === 1) return matches[0];
+  // 여러 케이스 겹침 — 개선각 범위 union (더 넓은 범위 적용)
+  const gMin = Math.min(...matches.map(c => c.groove_min??0));
+  const gMax = Math.max(...matches.map(c => c.groove_max??90));
+  const labels = matches.map(c => c.label).join('+');
+  return { _merged: true, _cases: matches,
+    groove_min: gMin, groove_max: gMax,
+    rg_min: Math.min(...matches.map(c=>c.rg_min??0)),
+    rg_max: Math.max(...matches.map(c=>c.rg_max??99)),
+    label: labels };
 }
 
 // 개선각 계산 공식: 2 × atan((끝단갭 - 루트갭) / (2 × T))
@@ -5072,13 +5092,13 @@ function _autoGroove() {
   } else {
     const rule = _matchBackingCase('butt', rg);
     if(!rule) { el.innerHTML='⚠ 루트갭에 맞는 Backing Rule이 없습니다. WPS 기준 탭 확인.'; return; }
-    gMin=rule.groove_min??55; gMax=rule.groove_max??75;
-    rgMin=rule.root_gap_min??0; rgMax=rule.root_gap_max??10;
-    fgMin=rule.face_gap_min??null; fgMax=rule.face_gap_max??null;
-    caseLabel=`${backing==='ceramic'?'Ceramic':'Steel/Flux'} Backing — ${rule.label} (루트갭 ${rule.rg_min??0}~${rule.rg_max}mm)`;
-    // 개선각 기준으로 끝단갭 범위 역산
-    if(t>0 && !fgMin && gMin) fgMin = calcFaceGap(t, rgMin, gMin);
-    if(t>0 && !fgMax && gMax) fgMax = calcFaceGap(t, rgMax, gMax);
+    gMin=rule.groove_min??40; gMax=rule.groove_max??75;
+    rgMin=rule.rg_min??0; rgMax=rule.rg_max??99;
+    // 끝단갭 역산: 개선각 범위 기반
+    fgMin = t>0 ? calcFaceGap(t, rg, gMin) : null;
+    fgMax = t>0 ? calcFaceGap(t, rg, gMax) : null;
+    const mergeNote = rule._merged ? ` <span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:3px">케이스 겹침 → Union 적용</span>` : '';
+    caseLabel=`${backing==='ceramic'?'Ceramic':'Steel/Flux'} Backing — ${rule.label}${mergeNote}`;
   }
 
   // 루트갭 체크
@@ -5093,16 +5113,22 @@ function _autoGroove() {
 
   const ok = rgOk && (angleOk===null ? true : angleOk);
   const bg = ok?'#f0fdf4':'#fef2f2', bc=ok?'#86efac':'#fca5a5', co=ok?'#166534':'#991b1b';
-  el.style.cssText=`background:${bg};border:1px solid ${bc};border-radius:6px;padding:8px 12px;font-size:12px;color:${co};grid-column:1/-1;`;
+  el.style.cssText=`background:${bg};border:1px solid ${bc};border-radius:6px;padding:10px 12px;font-size:12px;color:${co};grid-column:1/-1;`;
 
-  const rgRange = `루트갭 허용: <b>${rgMin}~${rgMax}mm</b> → ${rgOk?'✅':'❌'} ${rg}mm`;
-  const gRange  = `개선각 허용: <b>${gMin}~${gMax}°</b>`;
-  const fgRange = fgMin&&fgMax ? ` &nbsp;|&nbsp; 끝단갭 역산: <b>${fgMin}~${fgMax}mm</b>` : '';
-  const calcLine = calcAngle!==null
-    ? ` &nbsp;|&nbsp; 계산각: <b>${calcAngle}°</b> → ${angleOk?'✅':'❌'}`
+  const rgBadge = rgOk
+    ? `<span style="color:#166534">✅ ${rg}mm</span>`
+    : `<span style="color:#991b1b">❌ ${rg}mm (허용 ${rgMin}~${rgMax}mm)</span>`;
+  const gBadge = calcAngle===null ? `<span style="opacity:.7">끝단갭 입력 시 자동 계산</span>`
+    : angleOk ? `<span style="color:#166534">✅ ${calcAngle}°</span>`
+    : `<span style="color:#991b1b">❌ ${calcAngle}° (허용 ${gMin}~${gMax}°)</span>`;
+  const fgRequired = fgMin&&fgMax
+    ? `<br><span style="font-size:11px;opacity:.8">→ ${gMin}~${gMax}° 만족하려면 끝단갭 <b>${fgMin}~${fgMax}mm</b> 필요 (현재 T=${t}, RG=${rg}mm 기준)</span>`
     : '';
-  el.innerHTML = `<b>${caseLabel}</b><br>${rgRange} &nbsp;|&nbsp; ${gRange}${fgRange}${calcLine}
-    ${calcAngle!==null?`<br><span style="font-size:10px;opacity:.75">2×atan((${fg}-${rg})/(2×${t})) = ${calcAngle}°</span>`:''}`;
+  const formula = calcAngle!==null
+    ? `<br><span style="font-size:10px;opacity:.65">공식: 2×atan((${fg}−${rg}) / (2×${t})) = ${calcAngle}°</span>`
+    : '';
+  el.innerHTML = `<b>${caseLabel}</b><br>
+    루트갭: ${rgBadge} &nbsp;|&nbsp; 개선각: ${gBadge}${fgRequired}${formula}`;
 }
 
 function _val(id){ return parseFloat(document.getElementById(id)?.value)||0; }
@@ -5135,12 +5161,13 @@ function runWpsCalc() {
     } else {
       const rule = _matchBackingCase('butt', rg);
       if(!rule) { warn('뒷댐재',backing,'','','루트갭에 맞는 Rule 없음 — WPS 기준 탭 확인'); _renderWpsCalcResult(results); return; }
-      rgMin=rule.root_gap_min??0; rgMax=rule.root_gap_max??10;
+      rgMin=rule.rg_min??0; rgMax=rule.rg_max??99;
       gMin=rule.groove_min??40; gMax=rule.groove_max??75;
-      fgMin=rule.face_gap_min??null; fgMax=rule.face_gap_max??null;
-      if(t1>0 && !fgMin) fgMin=calcFaceGap(t1,rgMin,gMin);
-      if(t1>0 && !fgMax) fgMax=calcFaceGap(t1,rgMax,gMax);
-      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'} — ${rule.label}`,'',rule.note||'');
+      // 끝단갭 범위: 현재 루트갭 기준으로 역산 (더 정확)
+      fgMin = t1>0 ? calcFaceGap(t1, rg, gMin) : null;
+      fgMax = t1>0 ? calcFaceGap(t1, rg, gMax) : null;
+      const mergeNote = rule._merged ? ` (케이스 겹침 → Union 적용: ${rule.label})` : ` — ${rule.label}`;
+      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'}${mergeNote}`,'','');
     }
 
     // 루트 간격
@@ -5193,7 +5220,8 @@ function runWpsCalc() {
       if(!rule) { warn('뒷댐재',backing,'','','루트갭에 맞는 Rule 없음'); _renderWpsCalcResult(results); return; }
       const rgMin=rule.rg_min??0, rgMax=rule.rg_max??99;
       const gMin=rule.groove_min??0, gMax=rule.groove_max??90;
-      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'} — ${rule.label}`,'','');
+      const mergeNote = rule._merged ? ` (케이스 겹침 → Union: ${rule.label})` : ` — ${rule.label}`;
+      info('뒷댐재',`${backing==='ceramic'?'Ceramic':'Steel/Flux'}${mergeNote}`,'','');
       if(gap>=rgMin&&gap<=rgMax) pass('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       else                       fail('루트 간격',gap,`${rgMin}~${rgMax}`,'mm');
       if(fg>0 && t1>0) {
