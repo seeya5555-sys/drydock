@@ -5247,10 +5247,12 @@ function setWpsJoint(joint) {
 // ── 계산기 입력폼 ────────────────────────────────────────────
 function _renderWpsInputs() {
   const j = _wpsJoint;
-  const procOpts = WPS_PROCESS_OPTS.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const procOpts = `<option value="">— 용접 방법 선택 —</option>`
+    + WPS_PROCESS_OPTS.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
   const N = (id,label,ph,fn='') =>
     `<div class="form-group"><label class="form-lbl">${label}</label>
      <input class="form-ctrl" id="${id}" type="number" step="0.1" min="0" placeholder="${ph}"
+            disabled style="opacity:.5;cursor:not-allowed"
             ${fn?`oninput="${fn}"`:''}>
      </div>`;
 
@@ -5258,16 +5260,16 @@ function _renderWpsInputs() {
     <label class="form-lbl">부재 두께 T₂ (mm)
       <label style="font-size:10px;font-weight:400;color:var(--txt-m);margin-left:8px;cursor:pointer">
         <input type="checkbox" id="wps_t2_diff" onchange="toggleWpsT2(this.checked)"
-               style="width:11px;height:11px;vertical-align:middle"> 주재와 다름
+               style="width:11px;height:11px;vertical-align:middle" disabled> 주재와 다름
       </label></label>
     <input class="form-ctrl" id="wps_t2" type="number" step="0.1" min="0" disabled
-           placeholder="주재와 동일" style="color:var(--txt-m);background:var(--bg-panel)"
+           placeholder="주재와 동일" style="color:var(--txt-m);background:var(--bg-panel);opacity:.5;cursor:not-allowed"
            oninput="_autoGroove()">
   </div>`;
 
   const backingRow = `<div class="form-group" style="grid-column:1/-1">
     <label class="form-lbl">뒷댐재 (Backing)</label>
-    <select class="form-ctrl" id="wps_backing" onchange="_onBackingChange()">
+    <select class="form-ctrl" id="wps_backing" onchange="_onBackingChange()" disabled style="opacity:.5;cursor:not-allowed">
       <option value="none">없음 (No Backing)</option>
       <option value="ceramic">Chill Plate / Ceramic Backing</option>
       <option value="steel">Steel Backing Bar</option>
@@ -5279,29 +5281,46 @@ function _renderWpsInputs() {
     T₁, 루트 간격, 개선 끝단 갭을 입력하면 개선각이 자동 계산됩니다.
   </div>`;
 
+  const processRow = `<div class="form-group" style="grid-column:1/-1">
+    <label class="form-lbl">용접 방법 <span style="color:var(--red)">*</span></label>
+    <select class="form-ctrl" id="wps_process" onchange="_onProcessSelect()">${procOpts}</select>
+  </div>`;
+
   let html = '';
   if(j==='butt') {
-    html = N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()') + t2Row
+    html = processRow
+         + N('wps_t1','모재 두께 T₁ (mm)','주재 두께','_autoGroove()') + t2Row
          + backingRow
          + N('wps_root_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
          + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
-         + groovePreview
-         + `<div class="form-group" style="grid-column:1/-1">
-              <label class="form-lbl">용접 방법</label>
-              <select class="form-ctrl" id="wps_process">${procOpts}</select>
-            </div>`;
+         + groovePreview;
   } else {
-    html = N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()')
+    html = processRow
+         + N('wps_t1','모재 두께 T₁ (mm)','주재 두께','_autoGroove()')
          + t2Row + backingRow
          + N('wps_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
          + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
-         + groovePreview
-         + `<div class="form-group" style="grid-column:1/-1">
-              <label class="form-lbl">용접 방법</label>
-              <select class="form-ctrl" id="wps_process">${procOpts}</select>
-            </div>`;
+         + groovePreview;
   }
   document.getElementById('wps-inputs').innerHTML = html;
+}
+
+function _onProcessSelect() {
+  const proc = document.getElementById('wps_process')?.value;
+  const enabled = !!proc;
+  // 모든 입력 활성화/비활성화
+  ['wps_t1','wps_root_gap','wps_face_gap','wps_gap'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.disabled = !enabled;
+    el.style.opacity = enabled ? '' : '.5';
+    el.style.cursor  = enabled ? '' : 'not-allowed';
+  });
+  const backing = document.getElementById('wps_backing');
+  if(backing) { backing.disabled=!enabled; backing.style.opacity=enabled?'':'.5'; backing.style.cursor=enabled?'':'not-allowed'; }
+  const t2diff = document.getElementById('wps_t2_diff');
+  if(t2diff) { t2diff.disabled=!enabled; }
+  _autoGroove();
 }
 
 function _onBackingChange() { _autoGroove(); }
