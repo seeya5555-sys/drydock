@@ -5289,10 +5289,14 @@ function _renderWpsInputs() {
     </select>
   </div>`;
 
-  const groovePreview = locked
-    ? `<div style="grid-column:1/-1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:12px;color:#94a3b8;text-align:center">
+  const jointNotice = locked
+    ? `<div style="grid-column:1/-1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:12px;color:#94a3b8;text-align:center;margin-bottom:4px">
         👆 Joint Type을 먼저 선택하세요
        </div>`
+    : '';
+
+  const groovePreview = locked
+    ? ''
     : `<div id="wps-groove-preview" style="grid-column:1/-1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e3a8a;min-height:36px">
         T₁, 루트 간격, 개선 끝단 갭을 입력하면 개선각이 자동 계산됩니다.
        </div>`;
@@ -5304,13 +5308,15 @@ function _renderWpsInputs() {
 
   let html = '';
   if(!j || j==='butt') {
-    html = N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()') + t2Row
+    html = jointNotice
+         + N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()') + t2Row
          + backingRow
          + N('wps_root_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
          + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
          + groovePreview + processRow;
   } else {
-    html = N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()')
+    html = jointNotice
+         + N('wps_t1','모재 두께 T₁ (mm) *','주재 두께','_autoGroove()')
          + t2Row + backingRow
          + N('wps_gap','루트 간격 Root Gap (mm)','0','_autoGroove()')
          + N('wps_face_gap','개선 끝단 갭 Face Gap (mm)','개선 상단 열린 거리','_autoGroove()')
