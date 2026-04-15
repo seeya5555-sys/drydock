@@ -3295,6 +3295,8 @@ function saveDisc(){
     status:document.getElementById('md-stat').value,
     priority:selPri?selPri.value:'Normal'
   };
+  // 기존 항목 수정 시 _id 반드시 보존 — 없으면 서버가 신규 INSERT → 첨부파일 ref_id 불일치
+  if(eDscIdx!==null && items[eDscIdx]?._id) d._id = items[eDscIdx]._id;
   if(!d.item){toast('Topic is required',true);return;}
   if(!FLEET[VID].discussions)FLEET[VID].discussions=[];
   if(eDscIdx===null)FLEET[VID].discussions.push(d);else FLEET[VID].discussions[eDscIdx]=d;
