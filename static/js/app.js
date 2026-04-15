@@ -3489,7 +3489,7 @@ const PRI_OPTS  = ['Normal','Urgent','Critical','On Hold'];
 const PRI_OPTS_LMH = ['Low','Medium','High'];
 const STAT_OPTS = ['Not Started','In Progress','Completed','On Hold'];
 const STEEL_TYPE_OPTS = ['Shell Plate','Stiffener','Longitudinal','Bulb Bar','Angle Bar','Flat Bar','Checked Plate','Web Plate','Other'];
-const STEEL_GRADE_OPTS = ['A','B','AH32','AH36','DH32','EH32','Other'];
+const STEEL_GRADE_OPTS = ['A','B','AH32','AH36','DH32','DH36','EH32','EH36','Other'];
 const STEEL_SPACE_OPTS = ['Open Space','Closed Space','DBT / FPT / Oil Tank','Dry Dock (Underwater)'];
 const STEEL_SHAPE_OPTS = ['Flat','Single Curved','Double Curved','Profiled (Bulb/Angle/Bar)'];
 const STEEL_TEST_OPTS  = ['None','UT Gauging','Dye-Check','Vacuum Test','X-Ray','UT Detection'];
@@ -4254,7 +4254,7 @@ function _tankEditForm(item) {
       </div>
       <div class="form-group">
         <label class="form-lbl">Grade</label>
-        ${sel('te-steel_grade',['','A','B','AH32','AH36','DH32','EH32','Other'],item.steel_grade)}
+        ${sel('te-steel_grade',['','A','B','AH32','AH36','DH32','DH36','EH32','EH36','Other'],item.steel_grade)}
       </div>
       <div class="form-group">
         <label class="form-lbl">Space Type</label>
