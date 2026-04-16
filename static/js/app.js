@@ -1442,10 +1442,9 @@ function toggleGanttCollapse(num) {
   else jobCollapsed.add(num);
   const btn = document.getElementById('btn-gantt-expand');
   if(btn) btn.textContent = '▶ 전체 펼치기';
-  buildGantt(null, null, null);
+  buildGantt(null, null, null, true);
 }
 
-// 상위항목 날짜를 하위항목 기준으로 자동 계산
 function computeParentDates(jobs) {
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
@@ -2015,7 +2014,7 @@ function expandCollapseAllGantt() {
   }
   const jpBtn = document.getElementById('btn-expand-all');
   if(jpBtn) jpBtn.textContent = isExpanding ? '▼ 전체 접기' : '▶ 전체 펼치기';
-  buildGantt(null, null, null);
+  buildGantt(null, null, null, true);
 }
 
 function expandCollapseAll() {
@@ -2535,7 +2534,7 @@ function renderGantt(){
     allCats.map(c=>`<button class="g-chip" onclick="buildGantt(null,'${c}',this)">${c}</button>`).join('');
   buildGantt(null,null,null);
 }
-function buildGantt(sf,cf,btn){
+function buildGantt(sf,cf,btn,preserveState=false){
   document.querySelectorAll('.g-chip').forEach(c=>c.classList.remove('active'));
   if(btn)btn.classList.add('active');else document.querySelector('.g-chip')?.classList.add('active');
   if(!VID)return;
@@ -2549,7 +2548,7 @@ function buildGantt(sf,cf,btn){
     _expandAll = true;
     const expandBtn = document.getElementById('btn-gantt-expand');
     if(expandBtn) expandBtn.textContent = '▼ 전체 접기';
-  } else {
+  } else if(!preserveState) {
     // All Sections → 대분류만 보이게 (중분류·소분류 전부 접기)
     catCollapsed.clear();
     jobCollapsed.clear();
@@ -2566,6 +2565,7 @@ function buildGantt(sf,cf,btn){
     const expandBtn = document.getElementById('btn-gantt-expand');
     if(expandBtn) expandBtn.textContent = '▶ 전체 펼치기';
   }
+  // preserveState=true 이면 catCollapsed/jobCollapsed 현재 상태 그대로 유지
   const info=FLEET[VID].info;
   const ds = (info.berthingDate||info.dockIn) ? new Date(info.berthingDate||info.dockIn) : new Date();
   const de = (info.departureDate||info.dockOut) ? new Date(info.departureDate||info.dockOut) : new Date(ds.getTime()+25*86400000);
