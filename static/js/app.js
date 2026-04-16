@@ -2556,7 +2556,7 @@ function buildGantt(sf,cf,btn,preserveState=false){
     _expandAll = false;
     const cats = [...new Set(jobs_all.map(j=>j.category||'Uncategorized'))];
     cats.forEach(c => {
-      // 중분류(section 그룹) 접기
+      catCollapsed.add(c);  // 대분류 접기
       const secs = [...new Set(jobs_all.filter(j=>(j.category||'Uncategorized')===c).map(j=>j.section||'GENERAL'))];
       secs.forEach(s => catCollapsed.add(c+'::'+s));
     });
