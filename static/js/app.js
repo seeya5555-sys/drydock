@@ -2674,7 +2674,7 @@ function buildGantt(sf,cf,btn,preserveState=false){
     const catCls = cat==='Shipyard'?'cat-sy':cat==='Shore Repair'?'cat-sh':cat==='Spare'?'cat-sp':cat==='Store'?'cat-st':cat==='Paint'?'cat-pt':'cat-cr';
 
     // Category 헤더 행
-    html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:38px;background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');buildGantt(null,null,null)">
+    html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:38px;background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');buildGantt(null,null,null,true)">
       <div style="width:280px;min-width:280px;max-width:280px;padding:8px 14px;border-right:2px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-size:10px;color:#fff;user-select:none">${isCatColl?'▶':'▼'}</span>
         <span class="cat-badge ${catCls}" style="font-size:11px">${cat}</span>
@@ -2703,7 +2703,7 @@ function buildGantt(sf,cf,btn,preserveState=false){
         const isSecColl = catCollapsed.has(secKey);
 
         // Section 헤더 행
-        html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:34px;background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');buildGantt(null,null,null)">
+        html+=`<div style="display:flex;border-bottom:1px solid var(--border);min-height:34px;background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');buildGantt(null,null,null,true)">
           <div style="width:280px;min-width:280px;max-width:280px;padding:6px 14px 6px 28px;border-right:2px solid var(--border);display:flex;align-items:center;gap:6px;">
             <span style="font-size:9px;color:rgba(255,255,255,.7);user-select:none">${isSecColl?'▶':'▼'}</span>
             <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.85)">${sec}</span>
