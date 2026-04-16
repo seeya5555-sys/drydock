@@ -1686,7 +1686,7 @@ function renderJobs(){
     const catConsCol = catConsOver ? 'var(--red)' : 'var(--green)';
     const catConsBarCol = catConsOver ? 'var(--red)' : 'var(--green)';
 
-    html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}')">
+    html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');renderJobs()">
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:10px;color:#fff;user-select:none">${isCollapsed?'▶':'▼'}</span>
@@ -1821,7 +1821,7 @@ function renderJobs(){
         const dispConsumed = sec === 'STORE' && storeData.consumed > 0 ? storeData.consumed : sConsumed;
 
         // Section 헤더 행 (파란색 계열)
-        html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}')">
+        html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');renderJobs()">
           <td colspan="2" style="padding:8px 14px 8px 28px">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:9px;color:rgba(255,255,255,.7);user-select:none">${isSecCollapsed?'▶':'▼'}</span>
@@ -1975,7 +1975,7 @@ function toggleCatGroup(cat) {
   _expandAll = false;
   if(catCollapsed.has(cat)) catCollapsed.delete(cat);
   else catCollapsed.add(cat);
-  renderJobs();
+  // Gantt 탭에서 호출된 경우 renderJobs 대신 buildGantt 유지 (buildGantt는 inline onclick에서 별도 호출)
 }
 
 function toggleSecGroup(secKey) {
@@ -1986,7 +1986,7 @@ function toggleSecGroup(secKey) {
     catCollapsed.add(secKey);
   }
   catCollapsed.delete(secKey+'_opened');
-  renderJobs();
+  // Gantt 탭에서 호출된 경우 renderJobs 대신 buildGantt 유지 (buildGantt는 inline onclick에서 별도 호출)
 }
 
 function expandCollapseAllGantt() {
