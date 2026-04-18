@@ -1593,12 +1593,9 @@ def get_documents(vid):
     doc_type = request.args.get('doc_type')
     if doc_type:
         data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=?", vid, doc_type)
-        data.sort(key=natural_key)
-        return jsonify(data)
+    else:
         data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=?", vid)
-        data.sort(key=lambda x: (x.get('doc_type',''), natural_key(x)))
-        return jsonify(data)
-    data.sort(key=natural_key)
+    data.sort(key=lambda x: (x.get('doc_type',''), natural_key(x)))
     return jsonify(data)
 
 @app.route("/api/vessels/<vid>/documents", methods=["POST"])
