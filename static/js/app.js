@@ -3963,14 +3963,15 @@ function _matchItemsFrom(tankName, data) {
 function _makeColFn(data, hasItemsFill, hasItemsStroke, hasItemsText) {
   return function(name, type, clickable) {
     const b = TANK_BASE_COLORS[type] || TANK_BASE_COLORS.MISC;
-    if(!clickable) return {fill:'#f1f5f9', stroke:'#cbd5e1', text:'#94a3b8', count:0};
+    if(!clickable) return {fill:'#f1f5f9', stroke:'#cbd5e1', text:'#94a3b8', count:0, done:0};
     const items = _matchItemsFrom(name, data);
-    if(!items.length) return {fill:b.f, stroke:b.s, text:'#475569', count:0};
-    const cr = items.filter(i=>i.priority==='Critical').length;
-    const ug = items.filter(i=>i.priority==='Urgent').length;
-    if(cr>0) return {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b', count:items.length, critical:cr};
-    if(ug>0) return {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e', count:items.length};
-    return {fill:hasItemsFill, stroke:hasItemsStroke, text:hasItemsText, count:items.length};
+    if(!items.length) return {fill:b.f, stroke:b.s, text:'#475569', count:0, done:0};
+    const cr   = items.filter(i=>i.priority==='Critical').length;
+    const ug   = items.filter(i=>i.priority==='Urgent').length;
+    const done = items.filter(i=>i.status==='Completed').length;
+    if(cr>0) return {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b', count:items.length, done, critical:cr};
+    if(ug>0) return {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e', count:items.length, done};
+    return {fill:hasItemsFill, stroke:hasItemsStroke, text:hasItemsText, count:items.length, done};
   };
 }
 
@@ -4018,10 +4019,29 @@ function _svgFromLayout(layout, clickFn, colFn) {
     const oc = t.cl ? `onclick="${clickFn||'openTankModal'}('${esc(t.id)}','${esc(t.name)}')"` : '';
     const cursor = t.cl ? 'pointer' : 'default';
     const badge = c.count > 0
-      ? `<rect x="${cx+w-20}" y="${ry+h-16}" width="17" height="13" rx="2"
-           fill="${c.critical?'#ef4444':'#3b82f6'}" opacity=".9"/>
-         <text x="${cx+w-11.5}" y="${ry+h-6}" font-family="IBM Plex Mono" font-size="9"
-           font-weight="700" fill="white" text-anchor="middle">${c.count}</text>`
+      ? (() => {
+          const allDone = c.done === c.count;
+          const bgCol   = c.critical ? '#ef4444' : allDone ? '#16a34a' : '#3b82f6';
+          const label   = `${c.done}/${c.count}`;
+          const bw      = 8 + label.length * 5.5;
+          const bx      = cx + w - bw - 3;
+          const by      = ry + h - 16;
+          // 완료율 프로그레스 바
+          const pct     = c.count > 0 ? c.done / c.count : 0;
+          const barW    = w - 6;
+          const barFill = allDone ? '#16a34a' : c.critical ? '#ef4444' : '#3b82f6';
+          const progressBar = pct > 0 && pct < 1
+            ? `<rect x="${cx+3}" y="${ry+h-4}" width="${barW}" height="3" rx="1.5" fill="#e2e8f0"/>
+               <rect x="${cx+3}" y="${ry+h-4}" width="${barW*pct}" height="3" rx="1.5" fill="${barFill}"/>`
+            : allDone
+            ? `<rect x="${cx+3}" y="${ry+h-4}" width="${barW}" height="3" rx="1.5" fill="#16a34a"/>`
+            : '';
+          return `<rect x="${bx}" y="${by}" width="${bw}" height="13" rx="2"
+               fill="${bgCol}" opacity=".92"/>
+             <text x="${bx+bw/2}" y="${by+9}" font-family="IBM Plex Mono" font-size="8.5"
+               font-weight="700" fill="white" text-anchor="middle">${label}</text>
+             ${progressBar}`;
+        })()
       : '';
     const nl = t.name.split(/[\n\/]/);
     const ty = ry + h/2;
