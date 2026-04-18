@@ -717,7 +717,14 @@ function renderDash(){
     const c = +j.consumption||0;
     return s + (j.category==='Shipyard' ? c*(1-dcRate/100) : c);
   }, 0);
-  const leafJobs = jobs.filter(j => !hasChildren(j.number, jobs));
+  const EXCLUDED_CATS = new Set(['Spare','Store','Paint']);
+  const countJobs = jobs.filter(j => {
+    if(EXCLUDED_CATS.has(j.category)) return false;
+    if(j.category === 'Shipyard' && (j.section || 'GENERAL') === 'GENERAL') return false;
+    if((j.section || '').toUpperCase() === 'CANCEL') return false;
+    return true;
+  });
+  const leafJobs = countJobs.filter(j => !hasChildren(j.number, countJobs));
   const done=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);return (p!==null?p:j.completion||0)>=100;}).length;
   const prog=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);const pct=p!==null?p:j.completion||0;return pct>0&&pct<100;}).length;
   const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
