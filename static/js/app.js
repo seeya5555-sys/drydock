@@ -6485,8 +6485,12 @@ async function renderDocuments() {
     const byType = {};
     DOC_TYPES.forEach(t => byType[t.key] = []);
     (allDocs||[]).forEach(d => { if(byType[d.doc_type]) byType[d.doc_type].push(d); });
-    // 각 섹션 파일 이름순 정렬
-    Object.keys(byType).forEach(k => byType[k].sort((a,b) => a.filename.localeCompare(b.filename)));
+    // 각 섹션 파일 이름순 자연 정렬 (R3 < R9 < R13)
+    const naturalSort = (a, b) => {
+      const seg = s => s.replace(/(\d+)/g, n => n.padStart(10,'0')).toLowerCase();
+      return seg(a.filename).localeCompare(seg(b.filename));
+    };
+    Object.keys(byType).forEach(k => byType[k].sort(naturalSort));
 
     // 최초 진입 시 모두 접기
     if(_docCollapsed.size === 0) DOC_TYPES.forEach(t => _docCollapsed.add(t.key));
