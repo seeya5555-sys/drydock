@@ -1585,11 +1585,19 @@ DOC_TYPES = ['Shipyard Specification', 'Shipyard Quotation', 'Shipyard Workdone 
 @app.route("/api/vessels/<vid>/documents", methods=["GET"])
 @login_required
 def get_documents(vid):
+    import re
+    def natural_key(item):
+        return [int(c) if c.isdigit() else c.lower()
+                for c in re.split(r'(\d+)', item.get('filename',''))]
+
     doc_type = request.args.get('doc_type')
     if doc_type:
-        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=? ORDER BY filename COLLATE NOCASE", vid, doc_type)
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=?", vid, doc_type)
     else:
-        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? ORDER BY doc_type, filename COLLATE NOCASE", vid)
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=?", vid)
+        data.sort(key=lambda x: (x.get('doc_type',''), natural_key(x)))
+        return jsonify(data)
+    data.sort(key=natural_key)
     return jsonify(data)
 
 @app.route("/api/vessels/<vid>/documents", methods=["POST"])
