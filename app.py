@@ -1587,9 +1587,9 @@ DOC_TYPES = ['Shipyard Specification', 'Shipyard Quotation', 'Shipyard Workdone 
 def get_documents(vid):
     doc_type = request.args.get('doc_type')
     if doc_type:
-        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=? ORDER BY id", vid, doc_type)
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? AND doc_type=? ORDER BY filename COLLATE NOCASE", vid, doc_type)
     else:
-        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? ORDER BY doc_type,id", vid)
+        data = rows("SELECT id,doc_type,filename,filesize,mimetype,uploaded_at FROM vessel_documents WHERE vessel_id=? ORDER BY doc_type, filename COLLATE NOCASE", vid)
     return jsonify(data)
 
 @app.route("/api/vessels/<vid>/documents", methods=["POST"])
