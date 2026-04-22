@@ -1746,6 +1746,14 @@ def oauth_token():
     _mcp_tokens[token] = {"username": entry['username'], "exp": time.time() + 86400*30}
     return jsonify({"access_token": token, "token_type": "bearer", "expires_in": 86400*30})
 
+@app.route('/.well-known/oauth-protected-resource', methods=['GET'])
+def oauth_protected_resource():
+    base = request.headers.get('X-Forwarded-Proto','https') + '://' + request.host
+    return jsonify({
+        "resource": f"{base}/mcp",
+        "authorization_servers": [base]
+    })
+
 def _check_mcp_auth():
     auth  = request.headers.get('Authorization','')
     token = auth.replace('Bearer ','').strip()
@@ -1758,7 +1766,14 @@ def _check_mcp_auth():
 def mcp_endpoint():
     username = _check_mcp_auth()
     if not username:
-        return jsonify({"error":"unauthorized"}), 401
+        base = request.headers.get('X-Forwarded-Proto','https') + '://' + request.host
+        resp = jsonify({"error":"unauthorized"})
+        resp.status_code = 401
+        resp.headers['WWW-Authenticate'] = (
+            f'Bearer realm="{base}",'
+            f' resource_metadata_url="{base}/.well-known/oauth-protected-resource"'
+        )
+        return resp
 
     # GET → 초기화 응답 (SSE 대신 JSON)
     if request.method == 'GET':
