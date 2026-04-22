@@ -1681,6 +1681,7 @@ def oauth_authorize():
         redirect_uri   = request.args.get('redirect_uri','')
         state          = request.args.get('state','')
         code_challenge = request.args.get('code_challenge','')
+        code_challenge_method = request.args.get('code_challenge_method','S256')
         return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>DD Manager 로그인</title>
 <style>body{{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0d1b2a}}
@@ -1689,35 +1690,58 @@ h2{{margin-top:0}}input{{width:100%;padding:.6rem;margin:.4rem 0 1rem;box-sizing
 button{{width:100%;padding:.7rem;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1rem}}</style></head>
 <body><div class="box"><h2>🚢 DD Manager</h2>
 <form method="POST">
-  <input type="hidden" name="redirect_uri"   value="{redirect_uri}">
-  <input type="hidden" name="state"          value="{state}">
-  <input type="hidden" name="code_challenge" value="{code_challenge}">
+  <input type="hidden" name="redirect_uri"          value="{redirect_uri}">
+  <input type="hidden" name="state"                 value="{state}">
+  <input type="hidden" name="code_challenge"        value="{code_challenge}">
+  <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
   <label>아이디</label><input name="username" required>
   <label>비밀번호</label><input type="password" name="password" required>
   <button type="submit">로그인 &amp; 연결</button>
 </form></div></body></html>"""
 
-    username     = request.form.get('username','').strip()
-    password     = request.form.get('password','').strip()
-    redirect_uri = request.form.get('redirect_uri','')
-    state        = request.form.get('state','')
+    username              = request.form.get('username','').strip()
+    password              = request.form.get('password','').strip()
+    redirect_uri          = request.form.get('redirect_uri','')
+    state                 = request.form.get('state','')
+    code_challenge        = request.form.get('code_challenge','')
+    code_challenge_method = request.form.get('code_challenge_method','S256')
 
     user = _authenticate(username, password)
     if not user:
         return "인증 실패. 뒤로 가서 다시 시도하세요.", 401
 
     code = secrets.token_urlsafe(32)
-    _auth_codes[code] = {"username": username, "exp": time.time() + 300}
+    _auth_codes[code] = {
+        "username": username,
+        "exp": time.time() + 300,
+        "code_challenge": code_challenge,
+        "code_challenge_method": code_challenge_method
+    }
     sep = '&' if '?' in redirect_uri else '?'
     return redirect(f"{redirect_uri}{sep}code={code}&state={state}")
 
 @app.route('/oauth/token', methods=['POST'])
 def oauth_token():
-    data = request.get_json(force=True) if request.is_json else request.form
-    code  = data.get('code','')
-    entry = _auth_codes.pop(code, None)
+    import hashlib, base64
+    if request.is_json:
+        data = request.get_json(force=True)
+    else:
+        data = request.form
+    code         = data.get('code','')
+    code_verifier= data.get('code_verifier','')
+    entry        = _auth_codes.pop(code, None)
     if not entry or time.time() > entry['exp']:
         return jsonify({"error":"invalid_grant"}), 400
+    # PKCE 검증
+    challenge = entry.get('code_challenge','')
+    method    = entry.get('code_challenge_method','S256')
+    if challenge:
+        if method == 'S256':
+            digest = base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode()).digest()
+            ).rstrip(b'=').decode()
+            if digest != challenge:
+                return jsonify({"error":"invalid_grant","error_description":"PKCE verification failed"}), 400
     token = secrets.token_urlsafe(48)
     _mcp_tokens[token] = {"username": entry['username'], "exp": time.time() + 86400*30}
     return jsonify({"access_token": token, "token_type": "bearer", "expires_in": 86400*30})
