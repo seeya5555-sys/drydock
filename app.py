@@ -1715,7 +1715,9 @@ def _authenticate(username, password):
 
 
 # ── OAuth 2.0 Authorization Server 메타데이터 (RFC 8414) ────
+# ── OIDC Discovery 호환용으로 openid-configuration 도 동일 응답 ──
 @app.route('/.well-known/oauth-authorization-server', methods=['GET'])
+@app.route('/.well-known/openid-configuration',       methods=['GET'])
 def oauth_metadata():
     base = request.headers.get('X-Forwarded-Proto','https') + '://' + request.host
     return jsonify({
@@ -1727,7 +1729,10 @@ def oauth_metadata():
         "grant_types_supported":            ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
-        "scopes_supported":                 ["mcp"]
+        "scopes_supported":                 ["mcp"],
+        # OIDC discovery 최소 필드 (Claude 가 요구함)
+        "subject_types_supported":               ["public"],
+        "id_token_signing_alg_values_supported": ["none"]
     })
 
 
