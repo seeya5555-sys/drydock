@@ -25,15 +25,30 @@ def _mcp_debug_log():
     p = request.path
     if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
         auth = 'Y' if request.headers.get('Authorization') else 'N'
-        ua   = request.headers.get('User-Agent','')[:80]
-        ct   = request.headers.get('Content-Type','')
-        print(f"[MCP-IN ] {request.method:6s} {p:40s} auth={auth} ct={ct} ua={ua}", flush=True)
+        ua   = request.headers.get('User-Agent','')[:50]
+        ct   = request.headers.get('Content-Type','')[:30]
+        extras = []
+        try:
+            if request.method == 'POST' and 'json' in ct:
+                body = request.get_json(force=True, silent=True) or {}
+                if body.get('method'):      extras.append(f"rpc={body['method']}")
+                if body.get('grant_type'):  extras.append(f"gt={body['grant_type']}")
+                if 'code' in body:          extras.append("has_code")
+                if 'refresh_token' in body: extras.append("has_refresh")
+            elif request.method == 'POST' and 'form' in ct:
+                extras.append(f"form_keys={sorted(request.form.keys())}")
+        except Exception:
+            pass
+        extra = ' '.join(extras)
+        print(f"[MCP-IN ] {request.method:6s} {p:42s} auth={auth} ct={ct:25s} {extra} ua={ua}", flush=True)
 
 @app.after_request
 def _mcp_debug_log_out(resp):
     p = request.path
     if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
-        print(f"[MCP-OUT] {request.method:6s} {p:40s} -> {resp.status_code}", flush=True)
+        location = resp.headers.get('Location','')
+        loc = f"  →  Location: {location[:150]}" if location else ""
+        print(f"[MCP-OUT] {request.method:6s} {p:42s} -> {resp.status_code}{loc}", flush=True)
     return resp
 
 # ── Gzip 압축 ─────────────────────────────────────────────────
