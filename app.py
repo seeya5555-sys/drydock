@@ -1648,9 +1648,11 @@ def delete_document(did):
 
 
 # ══════════════════════════════════════════════════════════════
-# MCP CONNECTOR v2 (Claude 커넥터용 OAuth 2.0 + MCP 엔드포인트)
-# ── Streamable-HTTP 호환 개선판 ───────────────────────────────
-#   ✔ initialize / notifications/initialized / ping 처리 추가
+# MCP CONNECTOR v3 (Claude 커넥터용 OAuth 2.0 + MCP 엔드포인트)
+# ── Streamable-HTTP + RFC 7591 DCR 지원 ──────────────────────
+#   ✔ Dynamic Client Registration (/oauth/register) 추가
+#   ✔ registration_endpoint 메타데이터 광고
+#   ✔ initialize / notifications/initialized / ping 처리
 #   ✔ CORS preflight + 필수 헤더 노출
 #   ✔ GET / DELETE 메서드 표준 처리 (405 / 204)
 #   ✔ tools/call 예외 안전화 (isError 응답)
@@ -1675,8 +1677,9 @@ try:
 except ImportError:
     pass  # flask-cors 미설치여도 서버는 뜨도록
 
-_mcp_tokens  = {}   # token  -> {"username":…, "exp":…}
-_auth_codes  = {}   # code   -> {"username":…, "exp":…, "code_challenge":…, …}
+_mcp_tokens  = {}   # token     -> {"username":…, "exp":…, "client_id":…}
+_auth_codes  = {}   # code      -> {"username":…, "exp":…, "code_challenge":…, …}
+_oauth_clients = {} # client_id -> {redirect_uris, client_name, created_at, …}
 
 # MCP 최신 stable protocol version
 MCP_PROTOCOL_VERSION = "2025-06-18"
@@ -1685,7 +1688,7 @@ MCP_SERVER_VERSION   = "1.0.0"
 
 
 def _authenticate(username, password):
-    """기존 DB 인증 재사용 — hash_pw 는 init 단계에서 module-level 로 정의되어 있음"""
+    """기존 DB 인증 재사용 — hash_pw는 앱 init 단계에서 module-level로 정의되어 있음"""
     db = get_db()
     user = db.execute(
         "SELECT * FROM users WHERE username=? AND password_hash=?",
@@ -1694,17 +1697,20 @@ def _authenticate(username, password):
     return dict(user) if user else None
 
 
-# ── OAuth 2.0 메타데이터 ─────────────────────────────────────
+# ── OAuth 2.0 Authorization Server 메타데이터 (RFC 8414) ────
 @app.route('/.well-known/oauth-authorization-server', methods=['GET'])
 def oauth_metadata():
-    base = request.host_url.rstrip('/')
+    base = request.headers.get('X-Forwarded-Proto','https') + '://' + request.host
     return jsonify({
         "issuer": base,
-        "authorization_endpoint": f"{base}/oauth/authorize",
-        "token_endpoint":         f"{base}/oauth/token",
+        "authorization_endpoint":           f"{base}/oauth/authorize",
+        "token_endpoint":                   f"{base}/oauth/token",
+        "registration_endpoint":            f"{base}/oauth/register",   # ★ DCR
         "response_types_supported":         ["code"],
-        "grant_types_supported":            ["authorization_code"],
-        "code_challenge_methods_supported": ["S256"]
+        "grant_types_supported":            ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+        "scopes_supported":                 ["mcp"]
     })
 
 
@@ -1713,41 +1719,93 @@ def oauth_protected_resource():
     base = request.headers.get('X-Forwarded-Proto','https') + '://' + request.host
     return jsonify({
         "resource": f"{base}/mcp",
-        "authorization_servers": [base]
+        "authorization_servers": [base],
+        "scopes_supported": ["mcp"],
+        "bearer_methods_supported": ["header"]
     })
+
+
+# ── OAuth 2.0 Dynamic Client Registration (RFC 7591) ────────
+@app.route('/oauth/register', methods=['POST','OPTIONS'])
+def oauth_register():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    data = request.get_json(force=True, silent=True) or {}
+
+    client_id     = secrets.token_urlsafe(24)
+    client_secret = secrets.token_urlsafe(32)
+    now = int(time.time())
+
+    client_info = {
+        "client_id":     client_id,
+        "client_secret": client_secret,
+        "client_name":   data.get("client_name", "Unnamed MCP Client"),
+        "redirect_uris": data.get("redirect_uris", []),
+        "grant_types":   data.get("grant_types",    ["authorization_code"]),
+        "response_types":data.get("response_types", ["code"]),
+        "token_endpoint_auth_method":
+            data.get("token_endpoint_auth_method", "none"),
+        "scope":         data.get("scope", "mcp"),
+        "created_at":    now
+    }
+    _oauth_clients[client_id] = client_info
+
+    resp = jsonify({
+        "client_id":                client_id,
+        "client_secret":            client_secret,
+        "client_id_issued_at":      now,
+        "client_secret_expires_at": 0,        # 0 = never expires
+        "client_name":              client_info["client_name"],
+        "redirect_uris":            client_info["redirect_uris"],
+        "grant_types":              client_info["grant_types"],
+        "response_types":           client_info["response_types"],
+        "token_endpoint_auth_method": client_info["token_endpoint_auth_method"],
+        "scope":                    client_info["scope"]
+    })
+    resp.status_code = 201
+    return resp
 
 
 # ── OAuth 인가 엔드포인트 ────────────────────────────────────
 @app.route('/oauth/authorize', methods=['GET','POST'])
 def oauth_authorize():
     if request.method == 'GET':
+        client_id             = request.args.get('client_id','')
         redirect_uri          = request.args.get('redirect_uri','')
         state                 = request.args.get('state','')
         code_challenge        = request.args.get('code_challenge','')
         code_challenge_method = request.args.get('code_challenge_method','S256')
+        scope                 = request.args.get('scope','mcp')
         return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>DD Manager 로그인</title>
 <style>body{{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0d1b2a}}
-.box{{background:#1a2a3a;padding:2rem;border-radius:12px;width:320px;color:#fff}}
-h2{{margin-top:0}}input{{width:100%;padding:.6rem;margin:.4rem 0 1rem;box-sizing:border-box;border-radius:6px;border:1px solid #555;background:#0d1b2a;color:#fff}}
+.box{{background:#1a2a3a;padding:2rem;border-radius:12px;width:340px;color:#fff}}
+h2{{margin-top:0}}.client{{font-size:.85rem;opacity:.7;margin-bottom:1rem}}
+input{{width:100%;padding:.6rem;margin:.4rem 0 1rem;box-sizing:border-box;border-radius:6px;border:1px solid #555;background:#0d1b2a;color:#fff}}
 button{{width:100%;padding:.7rem;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1rem}}</style></head>
 <body><div class="box"><h2>🚢 DD Manager</h2>
+<div class="client">client: {client_id[:16] if client_id else '(none)'}…</div>
 <form method="POST">
-  <input type="hidden" name="redirect_uri"          value="{redirect_uri}">
-  <input type="hidden" name="state"                 value="{state}">
-  <input type="hidden" name="code_challenge"        value="{code_challenge}">
-  <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
+  <input type="hidden" name="client_id"              value="{client_id}">
+  <input type="hidden" name="redirect_uri"           value="{redirect_uri}">
+  <input type="hidden" name="state"                  value="{state}">
+  <input type="hidden" name="code_challenge"         value="{code_challenge}">
+  <input type="hidden" name="code_challenge_method"  value="{code_challenge_method}">
+  <input type="hidden" name="scope"                  value="{scope}">
   <label>아이디</label><input name="username" required>
   <label>비밀번호</label><input type="password" name="password" required>
   <button type="submit">로그인 &amp; 연결</button>
 </form></div></body></html>"""
 
+    client_id             = request.form.get('client_id','')
     username              = request.form.get('username','').strip()
     password              = request.form.get('password','').strip()
     redirect_uri          = request.form.get('redirect_uri','')
     state                 = request.form.get('state','')
     code_challenge        = request.form.get('code_challenge','')
     code_challenge_method = request.form.get('code_challenge_method','S256')
+    scope                 = request.form.get('scope','mcp')
 
     user = _authenticate(username, password)
     if not user:
@@ -1755,46 +1813,91 @@ button{{width:100%;padding:.7rem;background:#3b82f6;color:#fff;border:none;borde
 
     code = secrets.token_urlsafe(32)
     _auth_codes[code] = {
-        "username": username,
-        "exp": time.time() + 300,
-        "code_challenge": code_challenge,
+        "client_id":             client_id,
+        "username":              username,
+        "redirect_uri":          redirect_uri,
+        "scope":                 scope,
+        "exp":                   time.time() + 300,
+        "code_challenge":        code_challenge,
         "code_challenge_method": code_challenge_method,
     }
     sep = '&' if '?' in redirect_uri else '?'
     return redirect(f"{redirect_uri}{sep}code={code}&state={state}")
 
 
-@app.route('/oauth/token', methods=['POST'])
+@app.route('/oauth/token', methods=['POST','OPTIONS'])
 def oauth_token():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
     if request.is_json:
         data = request.get_json(force=True)
     else:
         data = request.form
-    code          = data.get('code','')
-    code_verifier = data.get('code_verifier','')
-    entry         = _auth_codes.pop(code, None)
-    if not entry or time.time() > entry['exp']:
+
+    grant_type    = data.get('grant_type','authorization_code')
+
+    if grant_type == 'authorization_code':
+        code          = data.get('code','')
+        code_verifier = data.get('code_verifier','')
+        client_id     = data.get('client_id','')
+        entry         = _auth_codes.pop(code, None)
+        if not entry or time.time() > entry['exp']:
+            return jsonify({"error":"invalid_grant"}), 400
+
+        # PKCE 검증
+        challenge = entry.get('code_challenge','')
+        method    = entry.get('code_challenge_method','S256')
+        if challenge:
+            if method == 'S256':
+                digest = base64.urlsafe_b64encode(
+                    hashlib.sha256(code_verifier.encode()).digest()
+                ).rstrip(b'=').decode()
+                if digest != challenge:
+                    return jsonify({
+                        "error":"invalid_grant",
+                        "error_description":"PKCE verification failed"
+                    }), 400
+
+        access_token  = secrets.token_urlsafe(48)
+        refresh_token = secrets.token_urlsafe(48)
+        _mcp_tokens[access_token] = {
+            "username":  entry['username'],
+            "client_id": entry.get('client_id') or client_id,
+            "exp":       time.time() + 86400*30,
+            "refresh":   refresh_token
+        }
+        return jsonify({
+            "access_token":  access_token,
+            "token_type":    "bearer",
+            "expires_in":    86400*30,
+            "refresh_token": refresh_token,
+            "scope":         entry.get('scope','mcp')
+        })
+
+    if grant_type == 'refresh_token':
+        refresh = data.get('refresh_token','')
+        # 기존 토큰 중 refresh_token 일치하는 것 찾기
+        for tok, info in list(_mcp_tokens.items()):
+            if info.get('refresh') == refresh:
+                _mcp_tokens.pop(tok, None)
+                new_tok = secrets.token_urlsafe(48)
+                new_ref = secrets.token_urlsafe(48)
+                _mcp_tokens[new_tok] = {
+                    "username":  info['username'],
+                    "client_id": info.get('client_id',''),
+                    "exp":       time.time() + 86400*30,
+                    "refresh":   new_ref
+                }
+                return jsonify({
+                    "access_token":  new_tok,
+                    "token_type":    "bearer",
+                    "expires_in":    86400*30,
+                    "refresh_token": new_ref
+                })
         return jsonify({"error":"invalid_grant"}), 400
 
-    # PKCE 검증
-    challenge = entry.get('code_challenge','')
-    method    = entry.get('code_challenge_method','S256')
-    if challenge:
-        if method == 'S256':
-            digest = base64.urlsafe_b64encode(
-                hashlib.sha256(code_verifier.encode()).digest()
-            ).rstrip(b'=').decode()
-            if digest != challenge:
-                return jsonify({"error":"invalid_grant",
-                                "error_description":"PKCE verification failed"}), 400
-
-    token = secrets.token_urlsafe(48)
-    _mcp_tokens[token] = {"username": entry['username'], "exp": time.time() + 86400*30}
-    return jsonify({
-        "access_token": token,
-        "token_type":   "bearer",
-        "expires_in":   86400*30
-    })
+    return jsonify({"error":"unsupported_grant_type"}), 400
 
 
 # ── MCP 엔드포인트 ──────────────────────────────────────────
@@ -1852,7 +1955,6 @@ def mcp_endpoint():
     # 1) initialize 핸드셰이크
     if method == 'initialize':
         params = body.get('params',{})
-        # 클라이언트가 요청한 프로토콜 버전을 그대로 echo (호환성)
         client_proto = params.get('protocolVersion', MCP_PROTOCOL_VERSION)
         return _rpc_ok(req_id, {
             "protocolVersion": client_proto,
@@ -1865,7 +1967,7 @@ def mcp_endpoint():
             }
         })
 
-    # 2) notifications/initialized (알림 → id 없음 → 204)
+    # 2) notifications/initialized (알림 → 204)
     if method == 'notifications/initialized':
         return ('', 204)
 
@@ -1928,7 +2030,6 @@ def mcp_endpoint():
             else:
                 return _rpc_err(req_id, -32601, f"Unknown tool: {tool}", 404)
         except Exception as e:
-            # tools/call 은 에러라도 result.isError 로 반환하는 게 표준에 더 가까움
             return _rpc_ok(req_id, {
                 "content":[{"type":"text","text":f"Error: {e}"}],
                 "isError": True
@@ -1941,7 +2042,6 @@ def mcp_endpoint():
 
     # 6) 알 수 없는 메서드
     if req_id is None:
-        # 알림인데 모르는 메서드 → 무시 (204)
         return ('', 204)
     return _rpc_err(req_id, -32601, f"Unknown method: {method}", 400)
 
