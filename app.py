@@ -19,6 +19,23 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7일
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # 캐시버스팅 있으니 0
 os.makedirs(app.instance_path, exist_ok=True)
 
+# ── MCP / OAuth 디버그 로거 ───────────────────────────────────
+@app.before_request
+def _mcp_debug_log():
+    p = request.path
+    if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
+        auth = 'Y' if request.headers.get('Authorization') else 'N'
+        ua   = request.headers.get('User-Agent','')[:80]
+        ct   = request.headers.get('Content-Type','')
+        print(f"[MCP-IN ] {request.method:6s} {p:40s} auth={auth} ct={ct} ua={ua}", flush=True)
+
+@app.after_request
+def _mcp_debug_log_out(resp):
+    p = request.path
+    if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
+        print(f"[MCP-OUT] {request.method:6s} {p:40s} -> {resp.status_code}", flush=True)
+    return resp
+
 # ── Gzip 압축 ─────────────────────────────────────────────────
 @app.after_request
 def compress_response(response):
