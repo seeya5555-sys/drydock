@@ -20,36 +20,40 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # 캐시버스팅 있으니 0
 os.makedirs(app.instance_path, exist_ok=True)
 
 # ── MCP / OAuth 디버그 로거 ───────────────────────────────────
-@app.before_request
-def _mcp_debug_log():
-    p = request.path
-    if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
-        auth = 'Y' if request.headers.get('Authorization') else 'N'
-        ua   = request.headers.get('User-Agent','')[:50]
-        ct   = request.headers.get('Content-Type','')[:30]
-        extras = []
-        try:
-            if request.method == 'POST' and 'json' in ct:
-                body = request.get_json(force=True, silent=True) or {}
-                if body.get('method'):      extras.append(f"rpc={body['method']}")
-                if body.get('grant_type'):  extras.append(f"gt={body['grant_type']}")
-                if 'code' in body:          extras.append("has_code")
-                if 'refresh_token' in body: extras.append("has_refresh")
-            elif request.method == 'POST' and 'form' in ct:
-                extras.append(f"form_keys={sorted(request.form.keys())}")
-        except Exception:
-            pass
-        extra = ' '.join(extras)
-        print(f"[MCP-IN ] {request.method:6s} {p:42s} auth={auth} ct={ct:25s} {extra} ua={ua}", flush=True)
+# 환경변수 MCP_DEBUG=1 일 때만 활성화 (기본 OFF, 운영용)
+# systemd drop-in 또는 /etc/systemd/system/drydock.service 의
+# [Service] 블록에 Environment="MCP_DEBUG=1" 추가하면 켜짐
+if os.environ.get('MCP_DEBUG', '') not in ('', '0', 'false', 'False'):
+    @app.before_request
+    def _mcp_debug_log():
+        p = request.path
+        if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
+            auth = 'Y' if request.headers.get('Authorization') else 'N'
+            ua   = request.headers.get('User-Agent','')[:50]
+            ct   = request.headers.get('Content-Type','')[:30]
+            extras = []
+            try:
+                if request.method == 'POST' and 'json' in ct:
+                    body = request.get_json(force=True, silent=True) or {}
+                    if body.get('method'):      extras.append(f"rpc={body['method']}")
+                    if body.get('grant_type'):  extras.append(f"gt={body['grant_type']}")
+                    if 'code' in body:          extras.append("has_code")
+                    if 'refresh_token' in body: extras.append("has_refresh")
+                elif request.method == 'POST' and 'form' in ct:
+                    extras.append(f"form_keys={sorted(request.form.keys())}")
+            except Exception:
+                pass
+            extra = ' '.join(extras)
+            print(f"[MCP-IN ] {request.method:6s} {p:42s} auth={auth} ct={ct:25s} {extra} ua={ua}", flush=True)
 
-@app.after_request
-def _mcp_debug_log_out(resp):
-    p = request.path
-    if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
-        location = resp.headers.get('Location','')
-        loc = f"  →  Location: {location[:150]}" if location else ""
-        print(f"[MCP-OUT] {request.method:6s} {p:42s} -> {resp.status_code}{loc}", flush=True)
-    return resp
+    @app.after_request
+    def _mcp_debug_log_out(resp):
+        p = request.path
+        if any(x in p for x in ('/mcp', '/oauth', '/.well-known')):
+            location = resp.headers.get('Location','')
+            loc = f"  →  Location: {location[:150]}" if location else ""
+            print(f"[MCP-OUT] {request.method:6s} {p:42s} -> {resp.status_code}{loc}", flush=True)
+        return resp
 
 # ── Gzip 압축 ─────────────────────────────────────────────────
 @app.after_request
@@ -1709,14 +1713,121 @@ try:
 except ImportError:
     pass  # flask-cors 미설치여도 서버는 뜨도록
 
-_mcp_tokens  = {}   # token     -> {"username":…, "exp":…, "client_id":…}
-_auth_codes  = {}   # code      -> {"username":…, "exp":…, "code_challenge":…, …}
-_oauth_clients = {} # client_id -> {redirect_uris, client_name, created_at, …}
+_mcp_tokens  = {}   # [DEPRECATED - SQLite 로 이전, 빈 dict 유지는 과거 호환용]
+_auth_codes  = {}   # [DEPRECATED - SQLite 로 이전]
+_oauth_clients = {} # [DEPRECATED - SQLite 로 이전]
 
 # MCP 최신 stable protocol version
 MCP_PROTOCOL_VERSION = "2025-06-18"
 MCP_SERVER_NAME      = "DD Manager"
 MCP_SERVER_VERSION   = "1.0.0"
+
+
+# ── OAuth 상태 영속화 (SQLite) ──────────────────────────────
+# in-memory dict 를 DB 로 이전하여 gunicorn 멀티워커 + 재시작 살아남음
+with app.app_context():
+    _d = get_db()
+    _d.executescript("""
+        CREATE TABLE IF NOT EXISTS oauth_clients (
+            client_id      TEXT PRIMARY KEY,
+            client_secret  TEXT,
+            client_name    TEXT,
+            redirect_uris  TEXT,
+            grant_types    TEXT,
+            response_types TEXT,
+            token_endpoint_auth_method TEXT,
+            scope          TEXT,
+            created_at     INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS oauth_auth_codes (
+            code                  TEXT PRIMARY KEY,
+            client_id             TEXT,
+            username              TEXT,
+            redirect_uri          TEXT,
+            scope                 TEXT,
+            code_challenge        TEXT,
+            code_challenge_method TEXT,
+            exp                   INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS oauth_tokens (
+            access_token  TEXT PRIMARY KEY,
+            refresh_token TEXT,
+            username      TEXT,
+            client_id     TEXT,
+            exp           INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_oauth_tokens_refresh ON oauth_tokens(refresh_token);
+    """)
+    # 시작 시 만료된 항목 청소
+    _now = int(time.time())
+    _d.execute("DELETE FROM oauth_auth_codes WHERE exp < ?", (_now,))
+    _d.execute("DELETE FROM oauth_tokens WHERE exp < ?", (_now,))
+    _d.commit()
+
+
+def _oauth_code_put(code, data):
+    db = get_db()
+    db.execute("INSERT OR REPLACE INTO oauth_auth_codes "
+               "(code, client_id, username, redirect_uri, scope, code_challenge, code_challenge_method, exp) "
+               "VALUES (?,?,?,?,?,?,?,?)",
+               (code, data.get('client_id',''), data.get('username',''),
+                data.get('redirect_uri',''), data.get('scope',''),
+                data.get('code_challenge',''), data.get('code_challenge_method',''),
+                int(data.get('exp', 0))))
+    db.commit()
+
+def _oauth_code_pop(code):
+    """1회용: SELECT 후 DELETE. 만료면 None."""
+    db = get_db()
+    r = db.execute("SELECT * FROM oauth_auth_codes WHERE code=?", (code,)).fetchone()
+    if not r:
+        return None
+    db.execute("DELETE FROM oauth_auth_codes WHERE code=?", (code,))
+    db.commit()
+    d = dict(r)
+    if time.time() > d.get('exp', 0):
+        return None
+    return d
+
+def _oauth_token_put(access_token, data):
+    db = get_db()
+    db.execute("INSERT OR REPLACE INTO oauth_tokens "
+               "(access_token, refresh_token, username, client_id, exp) VALUES (?,?,?,?,?)",
+               (access_token, data.get('refresh',''), data.get('username',''),
+                data.get('client_id',''), int(data.get('exp', 0))))
+    db.commit()
+
+def _oauth_token_get(access_token):
+    r = get_db().execute("SELECT * FROM oauth_tokens WHERE access_token=?",
+                         (access_token,)).fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    if time.time() > d.get('exp', 0):
+        return None
+    return d
+
+def _oauth_token_by_refresh(refresh_token):
+    r = get_db().execute("SELECT * FROM oauth_tokens WHERE refresh_token=?",
+                         (refresh_token,)).fetchone()
+    return dict(r) if r else None
+
+def _oauth_token_delete(access_token):
+    db = get_db()
+    db.execute("DELETE FROM oauth_tokens WHERE access_token=?", (access_token,))
+    db.commit()
+
+def _oauth_client_put(info):
+    db = get_db()
+    db.execute("INSERT OR REPLACE INTO oauth_clients "
+               "(client_id, client_secret, client_name, redirect_uris, grant_types, "
+               " response_types, token_endpoint_auth_method, scope, created_at) "
+               "VALUES (?,?,?,?,?,?,?,?,?)",
+               (info['client_id'], info['client_secret'], info['client_name'],
+                json.dumps(info['redirect_uris']), json.dumps(info['grant_types']),
+                json.dumps(info['response_types']), info['token_endpoint_auth_method'],
+                info['scope'], info['created_at']))
+    db.commit()
 
 
 def _authenticate(username, password):
@@ -1786,7 +1897,7 @@ def oauth_register():
         "scope":         data.get("scope", "mcp"),
         "created_at":    now
     }
-    _oauth_clients[client_id] = client_info
+    _oauth_client_put(client_info)
 
     resp = jsonify({
         "client_id":                client_id,
@@ -1849,7 +1960,7 @@ button{{width:100%;padding:.7rem;background:#3b82f6;color:#fff;border:none;borde
         return "인증 실패. 뒤로 가서 다시 시도하세요.", 401
 
     code = secrets.token_urlsafe(32)
-    _auth_codes[code] = {
+    _oauth_code_put(code, {
         "client_id":             client_id,
         "username":              username,
         "redirect_uri":          redirect_uri,
@@ -1857,7 +1968,7 @@ button{{width:100%;padding:.7rem;background:#3b82f6;color:#fff;border:none;borde
         "exp":                   time.time() + 300,
         "code_challenge":        code_challenge,
         "code_challenge_method": code_challenge_method,
-    }
+    })
     sep = '&' if '?' in redirect_uri else '?'
     return redirect(f"{redirect_uri}{sep}code={code}&state={state}")
 
@@ -1878,7 +1989,7 @@ def oauth_token():
         code          = data.get('code','')
         code_verifier = data.get('code_verifier','')
         client_id     = data.get('client_id','')
-        entry         = _auth_codes.pop(code, None)
+        entry         = _oauth_code_pop(code)
         if not entry or time.time() > entry['exp']:
             return jsonify({"error":"invalid_grant"}), 400
 
@@ -1898,12 +2009,12 @@ def oauth_token():
 
         access_token  = secrets.token_urlsafe(48)
         refresh_token = secrets.token_urlsafe(48)
-        _mcp_tokens[access_token] = {
+        _oauth_token_put(access_token, {
             "username":  entry['username'],
             "client_id": entry.get('client_id') or client_id,
             "exp":       time.time() + 86400*30,
             "refresh":   refresh_token
-        }
+        })
         return jsonify({
             "access_token":  access_token,
             "token_type":    "bearer",
@@ -1914,24 +2025,23 @@ def oauth_token():
 
     if grant_type == 'refresh_token':
         refresh = data.get('refresh_token','')
-        # 기존 토큰 중 refresh_token 일치하는 것 찾기
-        for tok, info in list(_mcp_tokens.items()):
-            if info.get('refresh') == refresh:
-                _mcp_tokens.pop(tok, None)
-                new_tok = secrets.token_urlsafe(48)
-                new_ref = secrets.token_urlsafe(48)
-                _mcp_tokens[new_tok] = {
-                    "username":  info['username'],
-                    "client_id": info.get('client_id',''),
-                    "exp":       time.time() + 86400*30,
-                    "refresh":   new_ref
-                }
-                return jsonify({
-                    "access_token":  new_tok,
-                    "token_type":    "bearer",
-                    "expires_in":    86400*30,
-                    "refresh_token": new_ref
-                })
+        info = _oauth_token_by_refresh(refresh)
+        if info:
+            _oauth_token_delete(info['access_token'])
+            new_tok = secrets.token_urlsafe(48)
+            new_ref = secrets.token_urlsafe(48)
+            _oauth_token_put(new_tok, {
+                "username":  info['username'],
+                "client_id": info.get('client_id',''),
+                "exp":       time.time() + 86400*30,
+                "refresh":   new_ref
+            })
+            return jsonify({
+                "access_token":  new_tok,
+                "token_type":    "bearer",
+                "expires_in":    86400*30,
+                "refresh_token": new_ref
+            })
         return jsonify({"error":"invalid_grant"}), 400
 
     return jsonify({"error":"unsupported_grant_type"}), 400
@@ -1941,8 +2051,8 @@ def oauth_token():
 def _check_mcp_auth():
     auth  = request.headers.get('Authorization','')
     token = auth.replace('Bearer ','').strip()
-    entry = _mcp_tokens.get(token)
-    if not entry or time.time() > entry['exp']:
+    entry = _oauth_token_get(token)
+    if not entry:
         return None
     return entry['username']
 
