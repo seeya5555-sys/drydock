@@ -1760,10 +1760,9 @@ def mcp_endpoint():
     if not username:
         return jsonify({"error":"unauthorized"}), 401
 
+    # GET → 초기화 응답 (SSE 대신 JSON)
     if request.method == 'GET':
-        def event_stream():
-            yield "data: " + json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n\n"
-        return Response(stream_with_context(event_stream()), content_type='text/event-stream')
+        return jsonify({"jsonrpc":"2.0","method":"notifications/initialized","params":{}})
 
     body   = request.get_json(force=True)
     method = body.get('method','')
