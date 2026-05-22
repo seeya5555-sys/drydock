@@ -8,7 +8,8 @@ Run:
 Open: http://localhost:5000
 """
 
-import sqlite3, os, io, json, hashlib, secrets, gzip
+import sqlite3, os, io, json, hashlib, secrets, gzip, re
+from datetime import datetime
 from flask import Flask, g, jsonify, request, render_template, abort, send_file, session, redirect, url_for
 
 app = Flask(__name__)
@@ -1094,6 +1095,179 @@ def bulk_pipe_repair(vid):
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (vid,) + _pipe_row(item))
     return _tracking_bulk("pipe_repair", vid, request.get_json(force=True), ins)
+
+
+# ── Steel / Pipe Repair — Excel Export ────────────────────────
+# 화면 표시 컬럼 기준으로 .xlsx 파일 생성하여 다운로드
+def _xlsx_response(wb, filename):
+    """openpyxl Workbook → Flask response (xlsx 다운로드)"""
+    import io as _io
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename
+    )
+
+def _xlsx_style_header(ws, ncols):
+    """1행 헤더 스타일 (진한 남색 배경 + 흰 글씨 + 가운데 정렬 + 굵게)"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    fill   = PatternFill("solid", fgColor="0F2744")
+    font   = Font(bold=True, color="FFFFFF", size=11)
+    align  = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    side   = Side(style="thin", color="C0C0C0")
+    border = Border(left=side, right=side, top=side, bottom=side)
+    for c in range(1, ncols + 1):
+        cell = ws.cell(row=1, column=c)
+        cell.fill = fill; cell.font = font
+        cell.alignment = align; cell.border = border
+    ws.row_dimensions[1].height = 32
+    ws.freeze_panes = "A2"
+
+def _xlsx_style_body(ws, ncols, nrows, priority_col=None, status_col=None):
+    """본문 스타일 + 줄무늬 + Priority/Status 색상"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    side   = Side(style="thin", color="E2E8F0")
+    border = Border(left=side, right=side, top=side, bottom=side)
+    align  = Alignment(vertical="center", wrap_text=True)
+    stripe = PatternFill("solid", fgColor="F8FAFC")
+    PRIO = {
+        "Critical": ("DC2626", "FFFFFF"),
+        "Urgent":   ("F59E0B", "FFFFFF"),
+        "On Hold":  ("6B7280", "FFFFFF"),
+        "Normal":   ("E5E7EB", "0F172A"),
+    }
+    STAT = {
+        "Not Started": ("E5E7EB", "0F172A"),
+        "In Progress":("3B82F6", "FFFFFF"),
+        "Open":       ("3B82F6", "FFFFFF"),
+        "Completed":  ("10B981", "FFFFFF"),
+        "Closed":     ("10B981", "FFFFFF"),
+        "On Hold":    ("6B7280", "FFFFFF"),
+    }
+    for r in range(2, nrows + 2):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.alignment = align; cell.border = border
+            if r % 2 == 0:
+                cell.fill = stripe
+        if priority_col:
+            cell = ws.cell(row=r, column=priority_col)
+            v = (cell.value or "").strip()
+            if v in PRIO:
+                bg, fg = PRIO[v]
+                cell.fill = PatternFill("solid", fgColor=bg)
+                cell.font = Font(bold=True, color=fg)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        if status_col:
+            cell = ws.cell(row=r, column=status_col)
+            v = (cell.value or "").strip()
+            if v in STAT:
+                bg, fg = STAT[v]
+                cell.fill = PatternFill("solid", fgColor=bg)
+                cell.font = Font(bold=True, color=fg)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+
+@app.route("/api/vessels/<vid>/steel_repair/export", methods=["GET"])
+@login_required
+def export_steel_repair(vid):
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+
+    db = get_db()
+    v  = db.execute("SELECT name FROM vessels WHERE id=?", (vid,)).fetchone()
+    if not v:
+        abort(404)
+    vname = v["name"]
+
+    rows = db.execute("""
+        SELECT no, position_tank, frame_no, location_detail, type,
+               length_l, width_w, thickness_t, steel_grade, new_weight,
+               space_type, shape, remark, priority, status,
+               start_date, completion_date
+          FROM steel_repair WHERE vessel_id=? ORDER BY id""", (vid,)).fetchall()
+
+    headers = ["No.","Position/Tank","Frame No.","Location","Type",
+               "L(mm)","W(mm)","T(mm)","Grade","New Wt(kg)",
+               "Space Type","Shape","Remark","Priority","Status",
+               "Start Date","Completion"]
+    widths  = [6, 16, 12, 18, 18, 10, 10, 10, 12, 14,
+               18, 14, 36, 12, 14, 14, 14]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Steel Repair"
+    ws.append(headers)
+    for r in rows:
+        ws.append([r[h] or "" for h in (
+            "no","position_tank","frame_no","location_detail","type",
+            "length_l","width_w","thickness_t","steel_grade","new_weight",
+            "space_type","shape","remark","priority","status",
+            "start_date","completion_date")])
+
+    _xlsx_style_header(ws, len(headers))
+    _xlsx_style_body(ws, len(headers), len(rows),
+                     priority_col=14, status_col=15)
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    safe_name = re.sub(r"[^\w\-]+", "_", vname).strip("_") or "vessel"
+    fname = f"{safe_name}_SteelRepair_{datetime.now():%Y%m%d}.xlsx"
+    return _xlsx_response(wb, fname)
+
+
+@app.route("/api/vessels/<vid>/pipe_repair/export", methods=["GET"])
+@login_required
+def export_pipe_repair(vid):
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+
+    db = get_db()
+    v  = db.execute("SELECT name FROM vessels WHERE id=?", (vid,)).fetchone()
+    if not v:
+        abort(404)
+    vname = v["name"]
+
+    rows = db.execute("""
+        SELECT no, system_line, position_tank, frame_no, location_detail,
+               description, pipe_od, schedule, material, length_m,
+               bend_qty, flange_qty, valve_type, valve_size, valve_qty,
+               remark, priority, status, start_date, completion_date
+          FROM pipe_repair WHERE vessel_id=? ORDER BY id""", (vid,)).fetchall()
+
+    headers = ["No.","System/Line","Position/Tank","Frame No.","Location",
+               "Description","OD(mm)","Schedule","Material","Length(mm)",
+               "Bend(pc)","Flange(pc)","Valve Type","V.Size(mm)","V.Qty",
+               "Remark","Priority","Status","Start Date","Completion"]
+    widths  = [6, 16, 16, 12, 18,
+               30, 10, 12, 16, 12,
+               10, 12, 14, 12, 10,
+               30, 12, 14, 14, 14]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Pipe Repair"
+    ws.append(headers)
+    for r in rows:
+        ws.append([r[h] or "" for h in (
+            "no","system_line","position_tank","frame_no","location_detail",
+            "description","pipe_od","schedule","material","length_m",
+            "bend_qty","flange_qty","valve_type","valve_size","valve_qty",
+            "remark","priority","status","start_date","completion_date")])
+
+    _xlsx_style_header(ws, len(headers))
+    _xlsx_style_body(ws, len(headers), len(rows),
+                     priority_col=17, status_col=18)
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    safe_name = re.sub(r"[^\w\-]+", "_", vname).strip("_") or "vessel"
+    fname = f"{safe_name}_PipeRepair_{datetime.now():%Y%m%d}.xlsx"
+    return _xlsx_response(wb, fname)
 
 
 # ── Outfitting ────────────────────────────────────────────────
