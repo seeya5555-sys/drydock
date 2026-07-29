@@ -566,6 +566,90 @@ def fleet_summary():
     return jsonify(result)
 
 
+def _fleet_allowed_ids(db):
+    u = get_current_user()
+    return None if (u and u['role'] == 'admin') else json.loads(u['vessels'] or '[]') if u else []
+
+
+def _web_card_metrics(jobs):
+    """Web Dashboard TOTAL/COMPLETED/IN PROGRESS rules, without sending detail rows."""
+    excluded = {'Spare', 'Store', 'Paint'}
+    count = []
+    for j in jobs:
+        category = j['category'] or 'Shipyard'
+        section = (j['section'] or 'GENERAL').upper()
+        if category in excluded or (category == 'Shipyard' and section == 'GENERAL') or section == 'CANCEL':
+            continue
+        count.append(j)
+    by_number = {j['number']: j for j in count if j['number']}
+    def parent(number):
+        value = (number or '').strip()
+        m = re.match(r'^([A-Za-z]*)(.*)$', value)
+        prefix, rest = m.groups()
+        if not rest: return None
+        m = re.match(r'^([\d.]+)[A-Za-z]+$', rest)
+        if m: return prefix + m.group(1)
+        m = re.match(r'^(.+)\.\d+[A-Za-z]*$', rest)
+        if m: return prefix + m.group(1)
+        return prefix if prefix and rest.isdigit() else None
+    def nearest(number):
+        candidate = parent(number)
+        while candidate:
+            if candidate in by_number: return candidate
+            candidate = parent(candidate)
+        return None
+    # Build the parent set once: the old list-comprehension compared every job
+    # against every other job (O(n²)) even though the selector needs only leaf counts.
+    parents_with_children = set()
+    for job in count:
+        ancestor = nearest(job['number'])
+        if ancestor:
+            parents_with_children.add(ancestor)
+    leaves = [j for j in count if j['number'] not in parents_with_children]
+    today = datetime.now().date()
+    def progress(job):
+        try:
+            start = datetime.strptime(job['start_date'], '%Y-%m-%d').date()
+            end = datetime.strptime(job['end_date'], '%Y-%m-%d').date()
+            if today <= start: return 100 if today == end else 0
+            if today >= end: return 100
+            return round((today - start).days / (end - start).days * 100)
+        except Exception:
+            return int(job['completion'] or 0)
+    values = [progress(j) for j in leaves]
+    return {'totalJobs': len(leaves), 'completed': sum(v >= 100 for v in values), 'inProgress': sum(0 < v < 100 for v in values)}
+
+
+@app.route('/api/fleet/cards')
+@login_required
+def fleet_cards():
+    db = get_db(); allowed = _fleet_allowed_ids(db)
+    jobs_by_vessel = {}
+    for r in db.execute('SELECT id,vessel_id,number,section,category,start_date,end_date,completion FROM jobs ORDER BY vessel_id,id').fetchall():
+        jobs_by_vessel.setdefault(r['vessel_id'], []).append(r)
+    result = []
+    for vessel in db.execute('SELECT * FROM vessels ORDER BY created_at').fetchall():
+        if allowed is not None and vessel['id'] not in allowed: continue
+        result.append(dict(info=to_vessel(vessel), **_web_card_metrics(jobs_by_vessel.get(vessel['id'], []))))
+    return jsonify(result)
+
+
+@app.route('/api/fleet/summary/<vid>')
+@login_required
+def fleet_summary_one(vid):
+    db = get_db(); allowed = _fleet_allowed_ids(db)
+    vessel = db.execute('SELECT * FROM vessels WHERE id=?', (vid,)).fetchone()
+    if not vessel or (allowed is not None and vid not in allowed): abort(404)
+    return jsonify({
+        'info': to_vessel(vessel),
+        'jobs': [to_job(r) for r in db.execute('SELECT * FROM jobs WHERE vessel_id=? ORDER BY id', (vid,)).fetchall()],
+        'classItems': [to_class(r) for r in db.execute('SELECT * FROM class_items WHERE vessel_id=? ORDER BY id', (vid,)).fetchall()],
+        'discussions': [to_disc(r) for r in db.execute('SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id', (vid,)).fetchall()],
+        'attachments': [dict(ref_type=r['ref_type'], ref_id=r['ref_id']) for r in db.execute('SELECT ref_type,ref_id FROM attachments WHERE vessel_id=? GROUP BY ref_type,ref_id', (vid,)).fetchall()],
+        'secBudget': [dict(category=r['category'], section=r['section'], budget=r['budget'], consumed=r['consumed']) for r in db.execute('SELECT category,section,budget,consumed FROM vessel_sec_budget WHERE vessel_id=?', (vid,)).fetchall()],
+    })
+
+
 # ══════════════════════════════════════════════════════════════
 # JOBS
 # ══════════════════════════════════════════════════════════════
