@@ -545,8 +545,8 @@ def fleet_summary():
         all_class.setdefault(r["vessel_id"], []).append(to_class(r))
     for r in db.execute("SELECT * FROM discussions ORDER BY vessel_id, date, id").fetchall():
         all_disc.setdefault(r["vessel_id"], []).append(to_disc(r))
-    for r in db.execute("SELECT vessel_id, ref_type, ref_id FROM attachments GROUP BY vessel_id, ref_type, ref_id").fetchall():
-        all_attach.setdefault(r["vessel_id"], []).append({"ref_type": r["ref_type"], "ref_id": r["ref_id"]})
+    for r in db.execute("SELECT vessel_id, ref_type, ref_id, COUNT(*) AS attachment_count FROM attachments GROUP BY vessel_id, ref_type, ref_id").fetchall():
+        all_attach.setdefault(r["vessel_id"], []).append({"ref_type": r["ref_type"], "ref_id": r["ref_id"], "attachment_count": r["attachment_count"]})
     for r in db.execute("SELECT vessel_id, category, section, budget, consumed FROM vessel_sec_budget").fetchall():
         all_secbudget.setdefault(r["vessel_id"], []).append({"category": r["category"], "section": r["section"], "budget": r["budget"], "consumed": r["consumed"]})
 
@@ -645,7 +645,7 @@ def fleet_summary_one(vid):
         'jobs': [to_job(r) for r in db.execute('SELECT * FROM jobs WHERE vessel_id=? ORDER BY id', (vid,)).fetchall()],
         'classItems': [to_class(r) for r in db.execute('SELECT * FROM class_items WHERE vessel_id=? ORDER BY id', (vid,)).fetchall()],
         'discussions': [to_disc(r) for r in db.execute('SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id', (vid,)).fetchall()],
-        'attachments': [dict(ref_type=r['ref_type'], ref_id=r['ref_id']) for r in db.execute('SELECT ref_type,ref_id FROM attachments WHERE vessel_id=? GROUP BY ref_type,ref_id', (vid,)).fetchall()],
+        'attachments': [dict(ref_type=r['ref_type'], ref_id=r['ref_id'], attachment_count=r['attachment_count']) for r in db.execute('SELECT ref_type,ref_id,COUNT(*) AS attachment_count FROM attachments WHERE vessel_id=? GROUP BY ref_type,ref_id', (vid,)).fetchall()],
         'secBudget': [dict(category=r['category'], section=r['section'], budget=r['budget'], consumed=r['consumed']) for r in db.execute('SELECT category,section,budget,consumed FROM vessel_sec_budget WHERE vessel_id=?', (vid,)).fetchall()],
     })
 
