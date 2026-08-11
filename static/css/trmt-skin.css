@@ -1,0 +1,133 @@
+/* ============================================================
+   trmt-skin.css — Dock Manager를 TRMT 톤앤매너(웜페이퍼)로 리스킨
+   원본 main.css 뒤에 로드해 :root 변수만 재정의(원본 무수정, 방식①).
+   TRMT 팔레트 기준: page-bg #F8F7F4 / blue #185FA5 / nav #1E293B / warm border.
+   ============================================================ */
+:root {
+  /* 코어: 쿨네이비 → TRMT 슬레이트+웜 */
+  --navy:       #1E293B;   /* 헤더바·다크 배경 (TRMT nav-bg) */
+  --navy-mid:   #2B3A4E;
+  --navy-light: #185FA5;
+  --blue:       #185FA5;   /* TRMT blue */
+  --blue-light: #E6F1FB;   /* TRMT blue-bg */
+  --sky:        #E6F1FB;
+
+  /* 배경: 쿨그레이 → 웜페이퍼 */
+  --bg:         #F8F7F4;
+  --bg-white:   #FFFFFF;
+  --bg-panel:   #F4F3EE;
+
+  /* 보더: 쿨 → 웜 */
+  --border:     #E5E4DD;
+  --border-dark:#D3D1C7;
+
+  /* 텍스트: TRMT 스케일 */
+  --txt-h:      #1F1F1D;
+  --txt-b:      #2B2A27;
+  --txt-s:      #5F5E5A;
+  --txt-m:      #888780;
+
+  /* 상태색: 선명 → TRMT muted */
+  --green:      #3B6D11;  --green-bg: #EAF3DE;
+  --amber:      #854F0B;  --amber-bg: #FAEEDA;
+  --red:        #A32D2D;  --red-bg:   #FCEBEB;
+  --gold:       #854F0B;  --gold-bg:  #FAEEDA;
+
+  /* 그림자: TRMT 부드러운 웜 */
+  --shadow:     0 1px 3px rgba(31,31,29,.06), 0 1px 2px rgba(31,31,29,.04);
+  --shadow-md:  0 18px 50px rgba(15,23,42,.14);
+}
+
+/* 본문 폰트를 TRMT 스택으로(로고 Bebas Neue는 브랜딩이라 유지) */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard",
+               "Noto Sans KR", sans-serif;
+}
+
+/* 하드코딩 쿨톤(변수 미사용 소수) → 웜톤 보정 */
+.header-r .save-pill.synced { color: var(--green); }
+/* 선명 블루/그린/앰버 직접색 몇 곳을 TRMT 톤으로 */
+[style*="#3b82f6"], .btn-primary { }  /* 필요 시 형 피드백으로 추가 */
+
+/* ============================================================
+   Class Items / Daily Log 카드형 (dd-cards.js와 세트) — TRMT 현안카드 스타일
+   drydock엔 TRMT 변수 없어 hex 직박음(자체완결).
+   ============================================================ */
+.dd-cards { display:flex; flex-direction:column; gap:0; }
+.dd-empty { padding:34px 0; text-align:center; color:#888780; font-size:13px; }
+.issue-card{ background:#FFFFFF; border:1px solid #E5E4DD; border-radius:10px;
+  padding:13px 14px; margin-bottom:10px; cursor:pointer; transition:border-color .12s, box-shadow .12s; }
+.issue-card:hover{ box-shadow:0 2px 10px rgba(31,31,29,.07); }
+.issue-card.is-expanded{ border-color:#85B7EB; box-shadow:0 2px 14px rgba(24,95,165,.08); cursor:default; }
+.issue-card-head{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.issue-card-no{ font-weight:800; color:#888780; font-size:11px; font-family:ui-monospace,"IBM Plex Mono",monospace; }
+.issue-card-head .card-caret{ color:#888780; font-size:10px; }
+.issue-card-head .card-date{ font-size:10.5px; color:#888780; font-weight:600; margin-left:auto; font-family:ui-monospace,monospace; }
+.issue-card-body{ margin-top:8px; }
+.issue-card-title{ font-size:14px; font-weight:650; line-height:1.42; color:#1F1F1D; }
+/* 배지 공통 */
+.issue-card .bd{ font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600;
+  display:inline-flex; align-items:center; gap:3px; white-space:nowrap; line-height:1.5; }
+.bd.pri-cocflag{ background:#FCEBEB; color:#A32D2D; } .bd.pri-cocflag::before{ content:"⚑"; font-size:10px; }
+.bd.pri-urgent{ background:#FAEEDA; color:#854F0B; } .bd.pri-urgent::before{ content:"◆"; font-size:9px; }
+.bd.pri-nextdd{ background:#E6F1FB; color:#0C447C; }
+.bd.pri-normal{ background:#EBEAE3; color:#5F5E5A; } .bd.pri-normal::before{ content:"○"; font-size:9px; color:#888780; }
+.bd.sess{ background:#EEEDFE; color:#3C3489; }
+.bd.status-open{ background:#FCEBEB; color:#A32D2D; border:1px solid #F09595; }
+.bd.status-done{ background:#EAF3DE; color:#3B6D11; border:1px solid #97C459; }
+/* 펼침 상세 */
+.issue-card-det{ margin-top:11px; border-top:1px solid #E5E4DD; padding-top:11px; cursor:default; }
+.issue-card-det .exp-label{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#888780; margin-bottom:5px; }
+.issue-card-det .exp-desc{ font-size:12.5px; line-height:1.6; white-space:pre-wrap; color:#1F1F1D; margin-bottom:13px; }
+.issue-card-det .exp-meta{ font-size:11px; color:#888780; margin:2px 0 12px; }
+.exp-acts-wrap{ margin-bottom:13px; }
+.exp-acts-wrap .act-entries{ border-left:2px solid #D3D1C7; margin-left:4px; padding-left:14px; display:flex; flex-direction:column; gap:9px; }
+.exp-acts-wrap .act-entry{ position:relative; display:flex; flex-direction:column; gap:1px; }
+.exp-acts-wrap .act-entry::before{ content:""; position:absolute; left:-18px; top:4px; width:8px; height:8px; border-radius:50%; background:#378ADD; }
+.exp-acts-wrap .act-date{ color:#888780; font-size:10.5px; font-weight:700; font-family:ui-monospace,"IBM Plex Mono",monospace; }
+.exp-acts-wrap .act-progress{ font-size:11.5px; color:#1F1F1D; white-space:pre-line; }
+.exp-acts-wrap .act-progress.act-imp{ color:#A32D2D; font-weight:700; }
+.exp-btns{ display:flex; gap:7px; flex-wrap:wrap; }
+.exp-btn{ font-size:11.5px; font-weight:600; border:1px solid #D3D1C7; border-radius:7px; padding:6px 12px; color:#5F5E5A; background:#FFFFFF; cursor:pointer; }
+.exp-btn:hover{ background:#F4F3EE; }
+.exp-btn.pri{ background:#185FA5; border-color:#185FA5; color:#fff; } .exp-btn.pri:hover{ background:#0F4C85; }
+/* 날짜 그룹 헤더 (Daily Log) */
+.dd-date-hdr{ display:flex; align-items:center; gap:8px; background:#F4F3EE; border:1px solid #E5E4DD;
+  border-radius:9px; padding:9px 13px; font-weight:700; font-size:13px; color:#5F5E5A;
+  margin:14px 0 9px; cursor:pointer; user-select:none; font-family:ui-monospace,"IBM Plex Mono",monospace; }
+.dd-date-hdr .dd-caret{ font-size:10px; color:#888780; }
+.dd-date-hdr .dd-date-cnt{ margin-left:auto; font-size:11.5px; font-weight:600; color:#888780; }
+.dd-date-body{ display:flex; flex-direction:column; }
+
+/* ============================================================
+   전반 UI/UX TRMT 통일 (2차) — 폰트·타이포·하드코딩 잔색
+   ============================================================ */
+/* 폰트 전면 통일: drydock IBM Plex Sans / Bebas Neue → TRMT 시스템 스택 */
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Noto Sans KR", system-ui, Roboto, sans-serif !important; font-size: 13px; }
+button, input, select, textarea { font-family: inherit !important; }
+.logo-name, .logo-sub, .sec-title, .kpi-value, .stat-val, .vb-name,
+.fleet-hero-title, .vc-name, .modal-title, h1, h2, h3 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Noto Sans KR", system-ui, sans-serif !important;
+}
+.logo-name { letter-spacing: .5px !important; font-weight: 800 !important; }
+.sec-title { letter-spacing: -.2px !important; font-weight: 800 !important; }
+.modal-title { letter-spacing: -.2px !important; font-weight: 700 !important; font-size: 17px !important; }
+/* 타이포 스케일 TRMT 근접 */
+.sec-title { font-size: 18px !important; }
+
+/* 헤더 pill 하드코딩색 → TRMT 톤 */
+.live-pill { background: #EAF3DE !important; color: #3B6D11 !important; }
+.save-pill.synced { color: #6FCf97 !important; }   /* 다크 헤더 위 가독 */
+.save-pill.saving { color: #FAC775 !important; }
+
+/* 인라인 편집 포커스 링 TRMT 블루 */
+.inline-input, .form-ctrl:focus, .fi:focus, .rm-date-inp:focus {
+  border-color: #185FA5 !important;
+  box-shadow: 0 0 0 3px rgba(24,95,165,.15) !important;
+}
+/* 모달 오버레이/그림자 TRMT */
+.modal-overlay { background: rgba(15,23,42,.42) !important; backdrop-filter: blur(2px); }
+.modal { box-shadow: 0 20px 60px rgba(0,0,0,.25) !important; }
+
+/* 버튼 radius TRMT(6px) 근접 — 주요 버튼류 */
+.btn-add, .btn-pri, .btn-sec, .btn-edit, .btn-del, .edit-btn, .qf-btn, .exp-btn { border-radius: 6px !important; }

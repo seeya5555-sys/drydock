@@ -1,0 +1,39 @@
+/* TRMT × Dock Manager unified operational UI
+   Additive override: original Drydock logic/DOM remains untouched. */
+:root{
+  --navy:#26241E; --navy-mid:#333028; --navy-light:#1D5B94;
+  --blue:#1D5B94; --blue-light:#EDF2F7; --sky:#EDF2F7;
+  --bg:#F8F7F4; --bg-white:#FFFFFF; --bg-panel:#F4F3EE;
+  --border:#E5E4DD; --border-dark:#D3D1C7;
+  --txt-h:#1F1F1D; --txt-b:#2B2A27; --txt-s:#5F5E5A; --txt-m:#888780;
+  --green:#3B6D11; --green-bg:#EAF3DE; --amber:#854F0B; --amber-bg:#FAEEDA;
+  --red:#A32D2D; --red-bg:#FCEBEB; --gold:#854F0B; --gold-bg:#FAEEDA;
+  --radius:6px; --radius-lg:10px; --shadow:none; --shadow-md:0 12px 32px rgba(38,36,30,.14);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Noto Sans KR",system-ui,sans-serif!important;background:var(--bg);color:var(--txt-b)}
+button,input,select,textarea{font-family:inherit!important}
+header{height:54px;padding:0 20px;background:var(--navy);border-bottom:1px solid #3A372F;box-shadow:none}
+.logo{gap:10px}.logo-icon{width:30px;height:30px;border-radius:6px;background:#3A372E;border-color:#4A473E;font-size:0}.logo-icon::after{content:"DM";font:700 10px/1 ui-monospace,monospace;color:#fff;letter-spacing:.04em}
+.logo-name,.fleet-hero-title,.vb-name,.vc-name,.kpi-value,.stat-val,.sec-title,.modal-title,h1,h2,h3{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Noto Sans KR",system-ui,sans-serif!important;letter-spacing:-.25px!important}
+.logo-name{font-size:16px!important;font-weight:750!important}.logo-sub{font-family:ui-monospace,monospace!important;letter-spacing:.08em}
+.live-pill{background:rgba(59,109,17,.24);border-color:rgba(151,196,89,.4);border-radius:999px}.live-dot{background:#97C459}.save-pill.synced{color:#C4E7A6}
+main{max-width:1600px;padding:20px}.page{animation:none}
+/* page titles / sections */
+.sec-hdr{padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--border);align-items:center}.sec-title{font-size:20px!important;font-weight:700!important;color:var(--txt-h)}.sec-title::before{width:3px;height:19px;background:var(--blue);border-radius:0}
+/* vessel navigation */
+.vessel-nav{top:54px;padding:0 20px;background:var(--bg-white);border-bottom:1px solid var(--border);box-shadow:none;overflow-x:auto}.vnav-btn{padding:12px 13px;font-size:12.5px;color:var(--txt-s);border-bottom-width:2px}.vnav-btn:hover{color:var(--txt-h);border-bottom-color:var(--border-dark)}.vnav-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+/* all cards / panels / tables */
+.fleet-hero,.vessel-banner{background:var(--navy);border:1px solid #3A372F;border-radius:10px;box-shadow:none;padding:22px 24px}.fleet-hero::after,.vessel-banner::after{content:none}.fleet-hero-title,.vb-name{font-size:28px!important;letter-spacing:-.35px!important}.fleet-hero-sub,.fleet-hero-date,.vb-meta-item{font-family:ui-monospace,monospace!important;letter-spacing:0}
+.kpi-card,.vessel-card,.stat-card,.job-card,.table-wrap,.modal,.tracking-card,.cal-side,.doc-card,.tank-card,.pipe-card{border-color:var(--border)!important;border-radius:10px!important;box-shadow:none!important;background:var(--bg-white)!important}
+.kpi-card,.stat-card{padding:15px 16px}.kpi-card::before{height:2px;background:var(--blue)}.kpi-value,.stat-val{font-size:28px!important}.kpi-label,.stat-label{font-size:10.5px!important;letter-spacing:.06em}
+.vessel-card:hover,.job-card:hover{transform:none;box-shadow:0 2px 10px rgba(38,36,30,.06)!important;border-color:var(--border-dark)!important}.vc-stripe{height:3px;background:var(--blue)!important}.vc-top,.vc-body{padding:14px 16px}.vc-name{font-size:18px!important}.status-badge,.bd{border-radius:999px!important}
+.table-wrap{overflow-x:auto!important}.table-wrap table thead th,table thead th{background:var(--bg-panel)!important;color:var(--txt-s)!important;border-color:var(--border)!important;font-size:10.5px!important;letter-spacing:.05em;text-transform:uppercase}.table-wrap table td,table tbody td{border-color:var(--border)!important}.table-wrap table tbody tr:hover{background:#FCFBF8!important}
+/* Inputs/buttons */
+.btn-add,.btn-pri,.btn-sec,.btn-edit,.btn-del,.edit-btn,.qf-btn,.exp-btn,.btn-primary,.btn-secondary{border-radius:6px!important;box-shadow:none!important}.btn-pri,.btn-primary{background:var(--blue)!important;border-color:var(--blue)!important}.btn-pri:hover,.btn-primary:hover{background:#174C7D!important}.btn-sec,.btn-secondary{background:var(--bg-white)!important;border-color:var(--border)!important;color:var(--txt-h)!important}.btn-del{background:var(--red-bg)!important;border-color:#F09595!important;color:var(--red)!important}
+.inline-input,.form-ctrl,input:not([type=checkbox]):not([type=radio]),select,textarea{border-color:var(--border-dark)!important;border-radius:6px!important;background:var(--bg-white)!important;color:var(--txt-h)!important}.inline-input:focus,.form-ctrl:focus,input:focus,select:focus,textarea:focus{outline:none!important;border-color:var(--blue)!important;box-shadow:0 0 0 3px rgba(29,91,148,.14)!important}
+/* Modal and activity density */
+.modal-overlay{background:rgba(38,36,30,.42)!important;backdrop-filter:blur(2px)}.modal{box-shadow:var(--shadow-md)!important}.modal-head,.modal-header{background:var(--bg-panel)!important;border-bottom-color:var(--border)!important}.modal-title{font-size:17px!important;font-weight:700!important}
+/* No decorative colour emoji remains in CSS pseudo-elements. */
+.dd-ui-icon{display:inline-flex;width:1em;height:1em;vertical-align:-.14em;margin-right:.32em;color:currentColor;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.dd-ui-icon svg{width:100%;height:100%;display:block}.dd-ui-icon:last-child{margin-right:0}
+@media(max-width:768px){header{padding:0 12px}.breadcrumb,.today-label{display:none}.header-r{gap:8px}.live-pill{padding:3px 7px}.vessel-nav{padding:0 8px}.vnav-btn{padding:11px 10px;font-size:12px}main{padding:14px 12px}.fleet-kpis,.stats-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fleet-hero,.vessel-banner{padding:17px}.fleet-hero-title,.vb-name{font-size:23px!important}.vessels-grid{grid-template-columns:1fr;gap:10px}.sec-hdr{align-items:flex-start;gap:8px;flex-wrap:wrap}.table-wrap{border-radius:8px!important}}

@@ -57,7 +57,7 @@ const DEF_JOBS = [
 ];
 
 // ══ FLASK REST API ════════════════════════════════════
-const API = '/api';
+const API = '/drydock/api';
 
 function setSS(s){const el=document.getElementById('savePill');el.className='save-pill '+s;el.textContent=s==='saving'?'● SAVING…':s==='synced'?'● SYNCED':'● ERROR';}
 
@@ -426,7 +426,7 @@ const _userNameCache = {};
 
 async function loadUserList() {
   try {
-    const users = await apiFetch('/api/auth/users');
+    const users = await apiFetch('/drydock/api/auth/users');
     const el = document.getElementById('user-list');
     const roleLabel = {'admin':'관리자','editor':'편집자','viewer':'읽기전용'};
     const roleColor = {'admin':'var(--blue)','editor':'var(--green)','viewer':'var(--amber)'};
@@ -467,7 +467,7 @@ async function addUserMgmt() {
   document.querySelectorAll('#new-vessel-checks input:checked').forEach(cb => vessels.push(cb.value));
 
   try {
-    await apiFetch('/api/auth/users','POST',{username, password, role, vessels});
+    await apiFetch('/drydock/api/auth/users','POST',{username, password, role, vessels});
     document.getElementById('new-username').value = '';
     document.getElementById('new-password').value = '';
     await loadUserList();
@@ -523,7 +523,7 @@ async function saveUserEdit(uid) {
   const vessels = [];
   document.querySelectorAll('#edit-vessel-checks input:checked').forEach(cb => vessels.push(cb.value));
   try {
-    await apiFetch(`/api/auth/users/${uid}`,'PUT',{role, vessels});
+    await apiFetch(`/drydock/api/auth/users/${uid}`,'PUT',{role, vessels});
     closeM('m-edit-user');
     await loadUserList();
     toast('설정이 저장됐습니다');
@@ -533,7 +533,7 @@ async function saveUserEdit(uid) {
 async function deleteUserMgmt(uid, username) {
   if(!confirm(`'${username}' 계정을 삭제하시겠습니까?`)) return;
   try {
-    await apiFetch(`/api/auth/users/${uid}`,'DELETE');
+    await apiFetch(`/drydock/api/auth/users/${uid}`,'DELETE');
     await loadUserList();
     toast('사용자가 삭제됐습니다');
   } catch(e) { toast('삭제 실패: '+e.message, true); }
@@ -546,7 +546,7 @@ async function changePw() {
   msgEl.style.display = 'none';
   if(!oldPw||!newPw) { msgEl.textContent='비밀번호를 입력하세요'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; return; }
   try {
-    await apiFetch('/api/auth/password','PUT',{old_password:oldPw,new_password:newPw});
+    await apiFetch('/drydock/api/auth/password','PUT',{old_password:oldPw,new_password:newPw});
     document.getElementById('old-pw').value = '';
     document.getElementById('new-pw').value = '';
     msgEl.textContent = '비밀번호가 변경됐습니다';
@@ -2766,7 +2766,7 @@ function _renderJobAttachUI(files) {
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/drydock/api/attachments/${file.id}'">⬇</button>
           ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>`}
         </div>
       </div>
@@ -2808,15 +2808,15 @@ async function deleteJobAttach(aid, jobId) {
 function previewJobAttach(aid, mimetype, filename) {
   const isImg = mimetype && mimetype.startsWith('image/');
   const isPdf = mimetype === 'application/pdf';
-  if(isImg || isPdf) window.open(`/api/attachments/${aid}/preview`, '_blank');
-  else window.location = `/api/attachments/${aid}`;
+  if(isImg || isPdf) window.open(`/drydock/api/attachments/${aid}/preview`, '_blank');
+  else window.location = `/drydock/api/attachments/${aid}`;
 }
 
 function previewDoc(did, mimetype) {
   const isImg = mimetype && mimetype.startsWith('image/');
   const isPdf = mimetype === 'application/pdf';
-  if(isImg || isPdf) window.open(`/api/documents/${did}/preview`, '_blank');
-  else window.location = `/api/documents/${did}`;
+  if(isImg || isPdf) window.open(`/drydock/api/documents/${did}/preview`, '_blank');
+  else window.location = `/drydock/api/documents/${did}`;
 }
 
 function _updateJobAttachBtn(jobId, cnt) {
@@ -2877,7 +2877,7 @@ function _renderGenAttachUI(files) {
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/api/attachments/${file.id}'">⬇</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/drydock/api/attachments/${file.id}'">⬇</button>
           ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteGenAttach(${file.id})">✕</button>`}
         </div>
       </div>
@@ -5108,7 +5108,7 @@ function _renderPlanDocList(files) {
         ${canPreview ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px"
           onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>` : ''}
         <a class="btn-sec" style="font-size:11px;padding:4px 10px;text-decoration:none"
-           href="/api/attachments/${f.id}">⬇ 다운로드</a>
+           href="/drydock/api/attachments/${f.id}">⬇ 다운로드</a>
         ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px;color:var(--red)"
           onclick="deletePlanDoc(${f.id})">✕</button>` : ''}
       </div>
@@ -5844,7 +5844,7 @@ async function _loadWpsFiles() {
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div><div style="font-size:11px;color:var(--txt-m)">${size}</div></div>
       <div style="display:flex;gap:5px">
         ${canPrev?`<button class="btn-sec" style="font-size:11px;padding:3px 8px" onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>`:''}
-        <a class="btn-sec" style="font-size:11px;padding:3px 8px;text-decoration:none" href="/api/attachments/${f.id}">⬇</a>
+        <a class="btn-sec" style="font-size:11px;padding:3px 8px;text-decoration:none" href="/drydock/api/attachments/${f.id}">⬇</a>
         ${!isViewer()?`<button class="btn-sec" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="deleteWpsFile(${f.id})">✕</button>`:''}
       </div></div>`;
   }).join('');
@@ -6656,7 +6656,7 @@ function _docFileItem(f) {
     </div>
     <div class="docs-file-actions">
       <button class="btn-sec" onclick="window._docFilename='${f.filename}';previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
-      <button class="btn-sec" onclick="window.location='/api/documents/${f.id}'">⬇</button>
+      <button class="btn-sec" onclick="window.location='/drydock/api/documents/${f.id}'">⬇</button>
       ${isViewer()?'':` <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>`}
     </div>
   </div>`;
