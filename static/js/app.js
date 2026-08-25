@@ -1694,7 +1694,7 @@ function renderJobs(){
     const catConsCol = catConsOver ? 'var(--red)' : 'var(--green)';
     const catConsBarCol = catConsOver ? 'var(--red)' : 'var(--green)';
 
-    html += `<tr style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');renderJobs()">
+    html += `<tr class="job-group-row job-category-row" style="background:var(--navy);cursor:pointer" onclick="toggleCatGroup('${cat.replace(/'/g,"\\'")}');renderJobs()">
       <td colspan="2" style="padding:10px 14px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:10px;color:#fff;user-select:none">${isCollapsed?'▶':'▼'}</span>
@@ -1829,7 +1829,7 @@ function renderJobs(){
         const dispConsumed = sec === 'STORE' && storeData.consumed > 0 ? storeData.consumed : sConsumed;
 
         // Section 헤더 행 (파란색 계열)
-        html += `<tr style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');renderJobs()">
+        html += `<tr class="job-group-row job-section-row" style="background:#1e3a5f;cursor:pointer" onclick="toggleSecGroup('${secKey.replace(/'/g,"\\'")}');renderJobs()">
           <td colspan="2" style="padding:8px 14px 8px 28px">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:9px;color:rgba(255,255,255,.7);user-select:none">${isSecCollapsed?'▶':'▼'}</span>
