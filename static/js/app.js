@@ -2,6 +2,7 @@
 let FLEET = {}, IDX = [];
 let VID = null;          // current vessel id
 let eJobIdx=null, eClsIdx=null, eDscIdx=null, eVesselNew=true;
+let _trmtRosterVessels = [];
 let sKey='number', sDir=1;
 let _budCatExpanded = new Set();    // Dashboard: Budget 카테고리 펼침 상태 (기본 접힘)
 let _clsDateExpanded = new Set();   // Dashboard: Class Items 날짜그룹 펼침 상태 (기본 접힘)
@@ -3319,17 +3320,49 @@ function deleteDisc(){
 }
 
 // ══ VESSEL ADD/EDIT ═══════════════════════════════════
-function openAddVesselModal(){
+function setVesselMasterFields(readonly){
+  ['mv-type','mv-imo','mv-class','mv-grt'].forEach(id=>{
+    const input=document.getElementById(id);
+    if(input) input.readOnly=readonly;
+  });
+}
+function applySelectedRosterVessel(){
+  const selected=Number(document.getElementById('mv-name').value);
+  const vessel=_trmtRosterVessels.find(item=>Number(item.id)===selected);
+  document.getElementById('mv-type').value=vessel?.type||'';
+  document.getElementById('mv-imo').value=vessel?.imo||'';
+  document.getElementById('mv-class').value=vessel?.classSociety||'';
+  document.getElementById('mv-grt').value=vessel?.grtDwt||'';
+}
+async function loadRosterVesselOptions(){
+  const select=document.getElementById('mv-name');
+  select.disabled=true;
+  select.innerHTML='<option value="">내 TRMT 담당선박 불러오는 중…</option>';
+  try{
+    _trmtRosterVessels=await apiFetch(`${API}/integration/roster-vessels`);
+    select.replaceChildren(new Option('선박을 선택하세요',''));
+    _trmtRosterVessels.forEach(v=>select.add(new Option(v.name,String(v.id))));
+    select.disabled=false;
+  }catch(error){
+    _trmtRosterVessels=[];
+    select.innerHTML='<option value="">담당선박을 불러오지 못했습니다</option>';
+    toast('TRMT 담당선박 조회 실패: '+error.message,true);
+  }
+}
+async function openAddVesselModal(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
   eVesselNew=true;
   document.getElementById('mv-title').textContent='ADD NEW VESSEL';
   document.getElementById('mv-del').style.display='none';
-  ['name','type','imo','yard','class','dur','grt'].forEach(k=>document.getElementById('mv-'+k).value='');
+  ['type','imo','yard','class','dur','grt'].forEach(k=>document.getElementById('mv-'+k).value='');
   ['mv-berthing','mv-in','mv-out','mv-departure',
    'mv-berthing-txt','mv-in-txt','mv-out-txt','mv-departure-txt'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
+  setVesselMasterFields(true);
+  document.getElementById('mv-name').onchange=applySelectedRosterVessel;
   openM('m-vessel');
+  await loadRosterVesselOptions();
 }
 function openVesselEditModal(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
@@ -3337,7 +3370,12 @@ function openVesselEditModal(){
   const info=FLEET[VID].info;
   document.getElementById('mv-title').textContent='EDIT VESSEL INFO';
   document.getElementById('mv-del').style.display='block';
-  document.getElementById('mv-name').value=info.name||'';
+  const nameSelect=document.getElementById('mv-name');
+  nameSelect.replaceChildren(new Option(info.name||'',info.name||''));
+  nameSelect.value=info.name||'';
+  nameSelect.disabled=false;
+  nameSelect.onchange=null;
+  setVesselMasterFields(false);
   document.getElementById('mv-type').value=info.type||'';
   document.getElementById('mv-imo').value=info.imo||'';
   document.getElementById('mv-yard').value=info.shipyard||'';
@@ -3356,7 +3394,9 @@ function openVesselEditModal(){
   openM('m-vessel');
 }
 async function saveVessel(){
-  const name=document.getElementById('mv-name').value.trim();
+  const selectedName=document.getElementById('mv-name').value;
+  const rosterVessel=eVesselNew?_trmtRosterVessels.find(item=>String(item.id)===selectedName):null;
+  const name=eVesselNew?(rosterVessel?.name||''):selectedName.trim();
   if(!name){toast('Vessel name is required',true);return;}
   const gv=id=>(document.getElementById(id)||{}).value||'';
   const payload={
@@ -3381,7 +3421,15 @@ async function saveVessel(){
       setBreadcrumb([{label:'FLEET OVERVIEW',fn:'goFleet()'},{label:payload.name}]);
       toast('Vessel info updated');
     } else {
-      const created=await apiFetch(`${API}/vessels`,'POST',payload);
+      const created=await apiFetch(`${API}/integration/roster-vessels`,'POST',{
+        trmtVesselId: rosterVessel.id,
+        shipyard: payload.shipyard,
+        berthingDate: payload.berthingDate,
+        dockIn: payload.dockIn,
+        dockOut: payload.dockOut,
+        departureDate: payload.departureDate,
+        duration: payload.duration
+      });
       const id=created.id;
       FLEET[id]={info:dbI(created),jobs:[],classItems:[],discussions:[]};
       IDX.push(id);
