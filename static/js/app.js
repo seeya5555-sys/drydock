@@ -60,6 +60,36 @@ const DEF_JOBS = [
 // ══ FLASK REST API ════════════════════════════════════
 const API = '/drydock/api';
 
+function uploadFiles(source) { return Array.from(source?.files || source || []); }
+function clearUploadSource(source) { if(source && 'value' in source) source.value = ''; }
+function htmlSafe(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+const DROP_UPLOADS = {
+  csv: files => uploadJobsCSV(files),
+  tracking: files => uploadTrackingXlsx(files),
+  job: files => uploadJobAttach(files),
+  generic: files => uploadGenAttach(files),
+  plan: files => uploadPlanDoc(files),
+  wps: files => uploadWpsFile(files),
+  document: (files, zone) => uploadDocument(files, zone.dataset.docType)
+};
+
+document.addEventListener('dragover', event => {
+  if(!event.dataTransfer?.types?.includes('Files')) return;
+  event.preventDefault(); // 브라우저가 파일로 이동하는 것을 방지
+  const zone = event.target.closest('[data-drop-upload]');
+  if(zone && !isViewer()) zone.classList.add('is-dragover');
+});
+document.addEventListener('dragleave', event => event.target.closest('[data-drop-upload]')?.classList.remove('is-dragover'));
+document.addEventListener('drop', event => {
+  if(!event.dataTransfer?.files?.length) return;
+  event.preventDefault();
+  document.querySelectorAll('.is-dragover').forEach(el => el.classList.remove('is-dragover'));
+  const zone = event.target.closest('[data-drop-upload]');
+  if(!zone || isViewer()) return;
+  DROP_UPLOADS[zone.dataset.dropUpload]?.(event.dataTransfer.files, zone);
+});
+
 function setSS(s){const el=document.getElementById('savePill');el.className='save-pill '+s;el.textContent=s==='saving'?'● SAVING…':s==='synced'?'● SYNCED':'● ERROR';}
 
 async function apiFetch(url, method='GET', body=null){
@@ -1257,9 +1287,10 @@ function downloadCSVTemplate() {
 
 async function uploadJobsCSV(input) {
   if (!VID) { toast('선박을 먼저 선택하세요', true); return; }
-  if (!input.files.length) return;
+  const files = uploadFiles(input);
+  if (!files.length) return;
 
-  const file = input.files[0];
+  const file = files[0];
   if (!file.name.endsWith('.csv')) { toast('CSV 파일(.csv)만 업로드 가능합니다', true); return; }
 
   const formData = new FormData();
@@ -1288,7 +1319,7 @@ async function uploadJobsCSV(input) {
   } catch(e) {
     setSS('error'); toast('업로드 실패: ' + e.message, true);
   }
-  input.value = '';
+  clearUploadSource(input);
 }
 
 function buildJFilters(){
@@ -2762,12 +2793,11 @@ function _renderJobAttachUI(files) {
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:24px">${isImg?'🖼️':isPdf?'📄':'📁'}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.filename}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${htmlSafe(file.filename)}</div>
           <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${sizeMB}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/drydock/api/attachments/${file.id}'">⬇</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id})">👁 미리보기</button>
           ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteJobAttach(${file.id},${document.getElementById('ja-jobid').value})">✕</button>`}
         </div>
       </div>
@@ -2776,10 +2806,11 @@ function _renderJobAttachUI(files) {
 }
 
 async function uploadJobAttach(input) {
-  if(!VID || !input.files.length) return;
+  const files = uploadFiles(input);
+  if(!VID || !files.length) return;
   const jobId = +document.getElementById('ja-jobid').value;
   const formData = new FormData();
-  for(const f of input.files) formData.append('files', f);
+  for(const f of files) formData.append('files', f);
   setSS('saving');
   try {
     await fetch(`${API}/vessels/${VID}/attachments/job/${jobId}`, {method:'POST', body:formData});
@@ -2787,9 +2818,9 @@ async function uploadJobAttach(input) {
     _renderJobAttachUI(list||[]);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`job:${jobId}`);
     _updateJobAttachBtn(jobId, list?list.length:0);
-    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
-  input.value='';
+  clearUploadSource(input);
 }
 
 async function deleteJobAttach(aid, jobId) {
@@ -2807,17 +2838,11 @@ async function deleteJobAttach(aid, jobId) {
 }
 
 function previewJobAttach(aid, mimetype, filename) {
-  const isImg = mimetype && mimetype.startsWith('image/');
-  const isPdf = mimetype === 'application/pdf';
-  if(isImg || isPdf) window.open(`/drydock/api/attachments/${aid}/preview`, '_blank');
-  else window.location = `/drydock/api/attachments/${aid}`;
+  window.open(`/drydock/api/attachments/${aid}/preview`, '_blank', 'noopener');
 }
 
 function previewDoc(did, mimetype) {
-  const isImg = mimetype && mimetype.startsWith('image/');
-  const isPdf = mimetype === 'application/pdf';
-  if(isImg || isPdf) window.open(`/drydock/api/documents/${did}/preview`, '_blank');
-  else window.location = `/drydock/api/documents/${did}`;
+  window.open(`/drydock/api/documents/${did}/preview`, '_blank', 'noopener');
 }
 
 function _updateJobAttachBtn(jobId, cnt) {
@@ -2873,12 +2898,11 @@ function _renderGenAttachUI(files) {
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:24px">${icon}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.filename}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${htmlSafe(file.filename)}</div>
           <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${sizeMB}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id},'${file.mimetype}','${file.filename}')">👁</button>
-          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="window.location='/drydock/api/attachments/${file.id}'">⬇</button>
+          <button class="btn-sec" style="padding:4px 8px;font-size:11px" onclick="previewJobAttach(${file.id})">👁 미리보기</button>
           ${isViewer()?'':` <button class="btn-sec" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteGenAttach(${file.id})">✕</button>`}
         </div>
       </div>
@@ -2887,11 +2911,12 @@ function _renderGenAttachUI(files) {
 }
 
 async function uploadGenAttach(input) {
-  if(!VID || !input.files.length) return;
+  const files = uploadFiles(input);
+  if(!VID || !files.length) return;
   const refType = document.getElementById('ga-reftype').value;
   const refId = document.getElementById('ga-refid').value;
   const formData = new FormData();
-  for(const f of input.files) formData.append('files', f);
+  for(const f of files) formData.append('files', f);
   setSS('saving');
   try {
     await fetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`, {method:'POST', body:formData});
@@ -2899,9 +2924,9 @@ async function uploadGenAttach(input) {
     _renderGenAttachUI(list || []);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`${refType}:${refId}`);
     _updateGenAttachBtn(refType, +refId, list ? list.length : 0);
-    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
-  input.value = '';
+  clearUploadSource(input);
 }
 
 async function deleteGenAttach(aid) {
@@ -3920,9 +3945,11 @@ async function uploadTrackingXlsx(input){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
 
   if(!VID){ toast('선박을 먼저 선택하세요', true); return; }
-  if(!input.files.length) return;
+  const files = uploadFiles(input);
+  if(!files.length) return;
 
-  const file = input.files[0];
+  const file = files[0];
+  if(!/\.(xlsx|xlsm)$/i.test(file.name)){ toast('XLSX 파일(.xlsx, .xlsm)만 업로드 가능합니다', true); return; }
   const formData = new FormData();
   formData.append('file', file);
 
@@ -3959,7 +3986,7 @@ async function uploadTrackingXlsx(input){
   } catch(e){
     setSS('error'); toast('업로드 실패: '+e.message, true);
   }
-  input.value='';
+  clearUploadSource(input);
 }
 
 
@@ -5132,7 +5159,7 @@ function _renderPlanDocList(files) {
     body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--txt-m)">
       <div style="font-size:36px;margin-bottom:10px">📂</div>
       <div style="font-size:13px">업로드된 문서가 없습니다.</div>
-      <div style="font-size:12px;color:var(--txt-s);margin-top:4px">하단 버튼으로 파일을 업로드하세요.</div>
+      <div style="font-size:12px;color:var(--txt-s);margin-top:4px">여기로 파일을 끌어놓거나 하단 버튼을 누르세요.</div>
     </div>`;
     return;
   }
@@ -5145,18 +5172,15 @@ function _renderPlanDocList(files) {
     const size = f.filesize ? (f.filesize >= 1024*1024
       ? (f.filesize/1024/1024).toFixed(1)+' MB'
       : (f.filesize/1024).toFixed(0)+' KB') : '';
-    const canPreview = f.mimetype?.startsWith('image/') || f.mimetype==='application/pdf';
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border)">
       <span style="font-size:28px;flex-shrink:0">${icon}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--txt-h);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt-h);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${htmlSafe(f.filename)}</div>
         <div style="font-size:11px;color:var(--txt-m);margin-top:2px">${size}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        ${canPreview ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px"
-          onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>` : ''}
-        <a class="btn-sec" style="font-size:11px;padding:4px 10px;text-decoration:none"
-           href="/drydock/api/attachments/${f.id}">⬇ 다운로드</a>
+        <button class="btn-sec" style="font-size:11px;padding:4px 10px"
+          onclick="previewJobAttach(${f.id})">👁 미리보기</button>
         ${!isViewer() ? `<button class="btn-sec" style="font-size:11px;padding:4px 10px;color:var(--red)"
           onclick="deletePlanDoc(${f.id})">✕</button>` : ''}
       </div>
@@ -5179,18 +5203,19 @@ function _updatePlanDocBtn(docKey, count) {
 }
 
 async function uploadPlanDoc(input) {
-  if(!VID || !input.files.length || !_curPlanDocKey) return;
+  const files = uploadFiles(input);
+  if(!VID || !files.length || !_curPlanDocKey) return;
   const cfg = PLAN_DOC_CFG[_curPlanDocKey];
   const formData = new FormData();
-  for(const f of input.files) formData.append('files', f);
+  for(const f of files) formData.append('files', f);
   setSS('saving');
   try {
     await fetch(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`,
       {method:'POST', body:formData});
     await _loadPlanDocList();
-    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
   } catch(e) { setSS('error'); toast('업로드 실패: '+e.message, true); }
-  input.value = '';
+  clearUploadSource(input);
 }
 
 async function deletePlanDoc(aid) {
@@ -5886,18 +5911,16 @@ async function _loadWpsFiles() {
     const ext=(f.filename||'').split('.').pop().toLowerCase();
     const icon=f.mimetype?.startsWith('image/')?'🖼️':f.mimetype==='application/pdf'?'📄':['xlsx','xls'].includes(ext)?'📊':['docx','doc'].includes(ext)?'📝':'📁';
     const size=f.filesize?(f.filesize>=1024*1024?(f.filesize/1024/1024).toFixed(1)+' MB':(f.filesize/1024).toFixed(0)+' KB'):'';
-    const canPrev=f.mimetype?.startsWith('image/')||f.mimetype==='application/pdf';
     return`<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
       <span style="font-size:24px">${icon}</span>
-      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.filename}</div><div style="font-size:11px;color:var(--txt-m)">${size}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${htmlSafe(f.filename)}</div><div style="font-size:11px;color:var(--txt-m)">${size}</div></div>
       <div style="display:flex;gap:5px">
-        ${canPrev?`<button class="btn-sec" style="font-size:11px;padding:3px 8px" onclick="previewJobAttach(${f.id},'${f.mimetype}','${f.filename}')">👁 미리보기</button>`:''}
-        <a class="btn-sec" style="font-size:11px;padding:3px 8px;text-decoration:none" href="/drydock/api/attachments/${f.id}">⬇</a>
+        <button class="btn-sec" style="font-size:11px;padding:3px 8px" onclick="previewJobAttach(${f.id})">👁 미리보기</button>
         ${!isViewer()?`<button class="btn-sec" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="deleteWpsFile(${f.id})">✕</button>`:''}
       </div></div>`;
   }).join('');
 }
-async function uploadWpsFile(input){if(!VID||!input.files.length)return;const fd=new FormData();for(const f of input.files)fd.append('files',f);setSS('saving');try{await fetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`,{method:'POST',body:fd});await _loadWpsFiles();setSS('synced');toast(`${input.files.length}개 업로드 완료`);}catch(e){setSS('error');toast('업로드 실패: '+e.message,true);}input.value='';}
+async function uploadWpsFile(input){const files=uploadFiles(input);if(!VID||!files.length)return;const fd=new FormData();for(const f of files)fd.append('files',f);setSS('saving');try{await fetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`,{method:'POST',body:fd});await _loadWpsFiles();setSS('synced');toast(`${files.length}개 업로드 완료`);}catch(e){setSS('error');toast('업로드 실패: '+e.message,true);}clearUploadSource(input);}
 async function deleteWpsFile(aid){if(!confirm('파일을 삭제하시겠습니까?'))return;setSS('saving');try{await apiFetch(`${API}/attachments/${aid}`,'DELETE');await _loadWpsFiles();setSS('synced');toast('삭제됐습니다');}catch(e){setSS('error');toast('삭제 실패: '+e.message,true);}}
 
 
@@ -6589,15 +6612,15 @@ async function renderDocuments() {
       const fileHtml = files.length
         ? files.map(f => _docFileItem(f)).join('')
         : `<div class="docs-empty">📂 업로드된 파일이 없습니다</div>`;
-      return `<div class="docs-section">
+      return `<div class="docs-section" ${isViewer()?'':`data-drop-upload="document" data-doc-type="${htmlSafe(t.key)}"`}>
         <div class="docs-section-hdr" style="background:${t.color};cursor:pointer" onclick="toggleDocSection('${safeKey}')">
           <div class="docs-section-title" style="display:flex;align-items:center;gap:8px">
             <span style="font-size:11px;display:inline-block;transform:rotate(${collapsed?'0':'90'}deg);transition:transform .2s">▶</span>
             ${t.icon} ${t.key}
             <span style="font-size:11px;font-weight:400;opacity:.7">(${files.length})</span>
           </div>
-          ${isViewer() ? '' : `<label class="docs-upload-btn" title="파일 업로드" onclick="event.stopPropagation()">
-            ＋ 업로드
+          ${isViewer() ? '' : `<label class="docs-upload-btn file-drop-zone compact" data-drop-upload="document" data-doc-type="${htmlSafe(t.key)}" title="클릭하거나 파일을 끌어놓으세요" onclick="event.stopPropagation()">
+            ＋ 업로드 · 드롭
             <input type="file" multiple style="display:none"
               onchange="uploadDocument(this,'${safeKey}')">
           </label>`}
@@ -6699,26 +6722,26 @@ function _docFileItem(f) {
   return `<div class="docs-file-item">
     <div class="docs-file-icon">${icon}</div>
     <div class="docs-file-info">
-      <div class="docs-file-name" title="${f.filename}">${f.filename}</div>
+      <div class="docs-file-name" title="${htmlSafe(f.filename)}">${htmlSafe(f.filename)}</div>
       <div class="docs-file-meta">${size}${size&&date?' · ':''}${date}</div>
     </div>
     <div class="docs-file-actions">
-      <button class="btn-sec" onclick="window._docFilename='${f.filename}';previewDoc(${f.id},'${f.mimetype||''}')">👁</button>
-      <button class="btn-sec" onclick="window.location='/drydock/api/documents/${f.id}'">⬇</button>
+      <button class="btn-sec" onclick="previewDoc(${f.id})">👁 미리보기</button>
       ${isViewer()?'':` <button class="btn-sec" style="color:var(--red)" onclick="deleteDoc(${f.id},'${_docTypeId(f.doc_type)}')">✕</button>`}
     </div>
   </div>`;
 }
 
 async function uploadDocument(input, docType) {
-  if(!VID || !input.files.length) return;
+  const files = uploadFiles(input);
+  if(!VID || !files.length) return;
   const formData = new FormData();
   formData.append('doc_type', docType);
-  for(const f of input.files) formData.append('file', f);
+  for(const f of files) formData.append('file', f);
   setSS('saving');
   try {
     await fetch(`${API}/vessels/${VID}/documents`, {method:'POST', body:formData});
-    setSS('synced'); toast(`${input.files.length}개 파일 업로드 완료`);
+    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
     // 해당 섹션만 갱신
     const listId = 'docs-list-'+_docTypeId(docType);
     const el = document.getElementById(listId);
@@ -6728,7 +6751,7 @@ async function uploadDocument(input, docType) {
         : '<div class="docs-empty">📂 업로드된 파일이 없습니다</div>';
     }
   } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
-  input.value='';
+  clearUploadSource(input);
 }
 
 async function deleteDoc(did, typeId) {

@@ -8,9 +8,11 @@ Run:
 Open: http://localhost:5000
 """
 
-import sqlite3, os, io, json, hashlib, secrets, gzip, re
+import sqlite3, os, io, json, hashlib, secrets, gzip, re, html, zipfile
+from xml.etree import ElementTree
+from urllib.parse import quote as url_quote
 from datetime import datetime
-from flask import Flask, g, jsonify, request, render_template, abort, send_file, session, redirect, url_for
+from flask import Flask, g, jsonify, request, render_template, abort, send_file, session, redirect, url_for, Response
 
 app = Flask(__name__)
 app.config["DATABASE"] = os.path.join(app.instance_path, "fleet.db")
@@ -963,6 +965,97 @@ def bulk_discussions(vid):
 # FILE ATTACHMENTS
 # ══════════════════════════════════════════════════════════════
 
+_PREVIEW_TEXT_EXTS = {'.txt', '.csv', '.log', '.md', '.json', '.xml'}
+_PREVIEW_OFFICE_EXTS = {'.docx', '.xlsx', '.xlsm', '.pptx'}
+
+def _preview_page(title, body, status=200):
+    page = f"""<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{html.escape(title)}</title>
+<style>body{{font:14px system-ui,sans-serif;margin:24px;color:#17233c}}h1{{font-size:17px}}
+table{{border-collapse:collapse;max-width:100%}}th,td{{border:1px solid #cbd5e1;padding:5px 8px;vertical-align:top}}
+pre{{white-space:pre-wrap;word-break:break-word;background:#f8fafc;padding:16px;border:1px solid #e2e8f0}}
+.note{{padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}}</style></head>
+<body><h1>{html.escape(title)}</h1>{body}</body></html>"""
+    resp = Response(page, status=status, content_type='text/html; charset=utf-8')
+    resp.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'"
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['Content-Disposition'] = 'inline'
+    return resp
+
+def _safe_zip(data):
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    infos = zf.infolist()
+    if len(infos) > 2000 or sum(i.file_size for i in infos) > 100 * 1024 * 1024:
+        zf.close()
+        raise ValueError('압축 문서가 너무 큽니다')
+    return zf
+
+def _office_preview(filename, data):
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in ('.xlsx', '.xlsm'):
+        with _safe_zip(data):
+            pass
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        chunks = []
+        for ws in wb.worksheets[:10]:
+            rows_html = []
+            for row_values in ws.iter_rows(max_row=500, max_col=50, values_only=True):
+                cells = ''.join(f'<td>{html.escape(str(v)) if v is not None else ""}</td>' for v in row_values)
+                rows_html.append(f'<tr>{cells}</tr>')
+            chunks.append(f'<h2>{html.escape(ws.title)}</h2><div style="overflow:auto"><table>{"".join(rows_html)}</table></div>')
+        wb.close()
+        return ''.join(chunks) or '<div class="note">표시할 셀이 없습니다.</div>'
+
+    with _safe_zip(data) as zf:
+        if ext == '.docx':
+            names = ['word/document.xml']
+        else:
+            names = sorted((n for n in zf.namelist() if re.fullmatch(r'ppt/slides/slide\d+\.xml', n)),
+                           key=lambda n: int(re.search(r'\d+', n).group()))[:200]
+        sections = []
+        for idx, name in enumerate(names, 1):
+            root = ElementTree.fromstring(zf.read(name))
+            texts = [node.text or '' for node in root.iter() if node.tag.endswith('}t')]
+            content = html.escape(' '.join(texts))
+            heading = f'<h2>Slide {idx}</h2>' if ext == '.pptx' else ''
+            sections.append(f'{heading}<p>{content}</p>')
+        return ''.join(sections) or '<div class="note">표시할 텍스트가 없습니다.</div>'
+
+def _decode_preview_text(data):
+    for encoding in ('utf-8-sig', 'cp949'):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            pass
+    return data.decode('utf-8', errors='replace')
+
+def _unsupported_preview(filename, message, download_url, status):
+    link = ''
+    if download_url:
+        link = (f'<p><a href="{html.escape(download_url, quote=True)}" download>'
+                '미리보기가 불가능한 형식입니다. 필요한 경우 원본 다운로드</a></p>')
+    return _preview_page(filename, f'<div class="note">{html.escape(message)}{link}</div>', status)
+
+def _file_preview(filename, mimetype, data, download_url=None):
+    ext = os.path.splitext(filename or '')[1].lower()
+    safe_images = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'}
+    if mimetype in safe_images or mimetype == 'application/pdf':
+        resp = send_file(io.BytesIO(data), mimetype=mimetype, as_attachment=False, download_name=filename)
+        resp.headers['Content-Disposition'] = f"inline; filename*=UTF-8''{url_quote(filename)}"
+        resp.headers['X-Content-Type-Options'] = 'nosniff'
+        resp.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
+        return resp
+    try:
+        if ext in _PREVIEW_TEXT_EXTS:
+            if len(data) > 2 * 1024 * 1024: raise ValueError('텍스트 파일이 너무 큽니다')
+            return _preview_page(filename, f'<pre>{html.escape(_decode_preview_text(data))}</pre>')
+        if ext in _PREVIEW_OFFICE_EXTS:
+            return _preview_page(filename, _office_preview(filename, data))
+    except (ValueError, KeyError, OSError, ImportError, zipfile.BadZipFile, ElementTree.ParseError):
+        return _unsupported_preview(filename, '이 문서의 미리보기를 만들 수 없습니다.', download_url, 422)
+    return _unsupported_preview(filename, '이 파일 형식은 브라우저 미리보기를 지원하지 않습니다.', download_url, 415)
+
 @app.route("/api/vessels/<vid>/attachments/<ref_type>/<int:ref_id>", methods=["GET"])
 def get_attachments(vid, ref_type, ref_id):
     return jsonify(rows(
@@ -1002,9 +1095,8 @@ def preview_attachment(aid):
     r = get_db().execute(
         "SELECT filename,mimetype,data FROM attachments WHERE id=?", (aid,)).fetchone()
     if not r: abort(404)
-    return send_file(io.BytesIO(r["data"]),
-                     mimetype=r["mimetype"] or "application/octet-stream",
-                     as_attachment=False, download_name=r["filename"])
+    return _file_preview(r["filename"], r["mimetype"] or "application/octet-stream", r["data"],
+                         url_for('download_attachment', aid=aid))
 
 @app.route("/api/attachments/<int:aid>", methods=["DELETE"])
 def delete_attachment(aid):
@@ -1927,8 +2019,8 @@ def download_document(did):
 def preview_document(did):
     r = get_db().execute("SELECT filename,mimetype,data FROM vessel_documents WHERE id=?", (did,)).fetchone()
     if not r: abort(404)
-    return send_file(io.BytesIO(r["data"]), mimetype=r["mimetype"] or "application/octet-stream",
-                     as_attachment=False, download_name=r["filename"])
+    return _file_preview(r["filename"], r["mimetype"] or "application/octet-stream", r["data"],
+                         url_for('download_document', did=did))
 
 
 @app.route("/api/documents/<int:did>", methods=["DELETE"])

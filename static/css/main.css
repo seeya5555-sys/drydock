@@ -1045,3 +1045,19 @@ textarea.form-ctrl { min-height:80px; resize:vertical; line-height:1.5; }
 }
 .tank-item-row:last-child { border-bottom: none; }
 .tank-item-row:hover { background: var(--bg-panel); }
+.file-drop-zone {
+  border: 2px dashed var(--border-dark) !important;
+  border-radius: 8px;
+  background: var(--blue-light);
+  color: var(--navy);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.file-drop-zone.compact { border-width: 1.5px !important; }
+[data-drop-upload].is-dragover {
+  border-color: var(--blue) !important;
+  background: #dbeafe !important;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(29,111,219,.12);
+}

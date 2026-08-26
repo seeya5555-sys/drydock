@@ -146,7 +146,7 @@
     <div class="sec-hdr">
       <div class="sec-title">Job Progress</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn-sec" onclick="document.getElementById('csv-upload-input').click()" title="CSV로 Job 일괄 등록">📂 CSV 업로드</button>
+        <button class="btn-sec file-drop-zone compact" data-drop-upload="csv" onclick="document.getElementById('csv-upload-input').click()" title="클릭하거나 CSV 파일을 끌어놓으세요">📂 CSV 업로드 · 드롭</button>
         <input type="file" id="csv-upload-input" accept=".csv" style="display:none" onchange="uploadJobsCSV(this)">
         <a id="csv-template-download" style="display:none"></a>
         <button class="btn-sec" onclick="downloadCSVTemplate()" title="CSV 양식 다운로드">⬇ 양식 다운로드</button>
@@ -471,7 +471,7 @@
                 onclick="switchWpsTab('crit')">⚙ WPS 기준 설정</button>
       </div>
       <!-- 파일 패널 -->
-      <div id="wps-panel-files" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
+      <div id="wps-panel-files" data-drop-upload="wps" style="display:none;overflow-y:auto;flex:1;padding:18px 22px">
         <div id="wps-file-list"></div>
       </div>
       <!-- 계산기 패널 -->
@@ -564,8 +564,8 @@
       </div>
             <!-- 푸터 -->
       <div class="modal-footer" style="gap:8px">
-        <label id="wps-upload-lbl" class="btn-sec" style="cursor:pointer;font-size:12px;display:none">
-          📎 WPS 파일 업로드
+        <label id="wps-upload-lbl" class="btn-sec file-drop-zone compact" data-drop-upload="wps" style="cursor:pointer;font-size:12px;display:none">
+          📎 WPS 파일 업로드 · 드롭
           <input type="file" id="wps-file-input" multiple style="display:none" onchange="uploadWpsFile(this)">
         </label>
         <button class="btn-sec" onclick="closeM('m-wps')">닫기</button>
@@ -580,11 +580,11 @@
         <div class="modal-title" id="m-plan-doc-title">문서</div>
         <button class="modal-x" onclick="closeM('m-plan-doc')">✕</button>
       </div>
-      <div id="m-plan-doc-body" style="overflow-y:auto;flex:1;padding:16px 20px"></div>
+      <div id="m-plan-doc-body" class="file-drop-zone" data-drop-upload="plan" style="overflow-y:auto;flex:1;padding:16px 20px"></div>
       <!-- 업로드 푸터 (뷰어는 숨김) -->
       <div class="modal-footer" id="m-plan-doc-footer" style="gap:8px;flex-wrap:wrap">
-        <label class="btn-sec" style="cursor:pointer;font-size:12px">
-          📎 파일 업로드
+        <label class="btn-sec file-drop-zone compact" data-drop-upload="plan" style="cursor:pointer;font-size:12px">
+          📎 파일 업로드 · 드롭
           <input type="file" id="m-plan-doc-input" multiple style="display:none"
                  onchange="uploadPlanDoc(this)">
         </label>
@@ -1003,9 +1003,9 @@
     <div class="modal-body">
       <input type="hidden" id="ga-reftype">
       <input type="hidden" id="ga-refid">
-      <label style="display:block;cursor:pointer;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:8px;padding:12px;font-size:13px;font-weight:600">
-          <span>📂</span> 파일 선택 / 업로드
+      <label class="file-drop-zone" data-drop-upload="generic" style="display:block;cursor:pointer;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;font-size:13px;font-weight:600">
+          <span>📂</span> 파일을 끌어놓거나 클릭해 업로드
         </div>
         <input type="file" multiple style="display:none" onchange="uploadGenAttach(this)">
       </label>
@@ -1032,9 +1032,9 @@
     <div class="modal-body">
       <input type="hidden" id="ja-jobid">
       <!-- 업로드 버튼 -->
-      <label style="display:block;cursor:pointer;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:8px;padding:12px;font-size:13px;font-weight:600">
-          <span>📂</span> 파일 선택 / 업로드
+      <label class="file-drop-zone" data-drop-upload="job" style="display:block;cursor:pointer;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;font-size:13px;font-weight:600">
+          <span>📂</span> 파일을 끌어놓거나 클릭해 업로드
         </div>
         <input type="file" multiple style="display:none" onchange="uploadJobAttach(this)">
       </label>
@@ -1077,7 +1077,7 @@
       <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#713f12">
         ⚠ <b>Steel Repair / Pipe Repair</b> 시트는 템플릿에 포함되어 있으나 자동 업로드 대상에서 제외됩니다. 해당 항목은 Tracking 탭에서 직접 입력하세요.
       </div>
-      <div id="xlsx-dropzone" style="border:2px dashed var(--border-dark);border-radius:8px;padding:32px;text-align:center;cursor:pointer" onclick="document.getElementById('xlsx-file-input').click()">
+      <div id="xlsx-dropzone" class="file-drop-zone" data-drop-upload="tracking" style="padding:32px" onclick="document.getElementById('xlsx-file-input').click()">
         <div style="font-size:32px;margin-bottom:8px">📄</div>
         <div style="font-size:13px;color:var(--txt-s)"><span style="color:var(--blue);font-weight:600">파일 선택</span> 또는 드래그</div>
         <div style="font-size:11px;color:var(--txt-m);margin-top:4px">.xlsx 파일만 지원</div>
