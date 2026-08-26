@@ -20,10 +20,11 @@ class TankLayoutSaveRegressionTest(unittest.TestCase):
         self.assertNotIn('_pipePlanCol)', self.body)
 
     def test_redraw_rebuilds_current_tank_and_pipe_color_functions(self):
-        self.assertIn("_makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8')", self.body)
-        self.assertIn("_makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46')", self.body)
-        self.assertIn("_svgFromLayout(_tankLayout, 'openTankModal', tankColFn)", self.body)
-        self.assertIn("_svgFromLayout(_tankLayout, 'openPipeModal', pipeColFn)", self.body)
+        self.assertIn('_renderPlanLayoutViews();', self.body)
+        self.assertIn('_makeColFn(_tankPlanData, ...TANK_PLAN_PALETTE)', self.source)
+        self.assertIn('_makeColFn(_pipePlanData, ...PIPE_PLAN_PALETTE)', self.source)
+        self.assertIn("_svgFromLayout(layout, 'openTankModal', colorFn", self.source)
+        self.assertIn("_svgFromLayout(layout, 'openPipeModal', colorFn", self.source)
 
     def test_post_save_redraw_failure_is_not_reported_as_save_failure(self):
         save_failure = self.body.index("toast('저장 실패:")

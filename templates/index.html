@@ -334,8 +334,14 @@
         <button class="btn-sec" id="btn-ga-tank" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
         <button class="btn-sec" id="btn-rp-tank" style="font-size:12px" onclick="openPlanDoc('tank_repair')">📋 Repair Plan</button>
         <button class="btn-sec" id="btn-wps-tank" style="font-size:12px" onclick="openWpsModal()">🔥 WPS</button>
-        <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
+        <button class="btn-sec" id="btn-layout-edit-tank" style="font-size:12px" onclick="startVisualLayoutEdit('tank')">↔ 레이아웃 편집</button>
       </div>
+    </div>
+    <div id="tank-layout-visual-toolbar" class="layout-visual-toolbar" style="display:none">
+      <span>파란 경계선을 마우스 또는 손가락으로 드래그하세요.</span>
+      <button class="btn-pri" onclick="saveTankLayoutToDb()">💾 저장</button>
+      <button class="btn-sec" onclick="cancelVisualLayoutEdit()">취소</button>
+      <button class="btn-sec" onclick="openDetailedLayoutFromVisual()">⚙ 명칭·구성 상세편집</button>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow-x:auto;margin-top:4px">
       <div id="tank-svg-wrap"></div>
@@ -354,8 +360,14 @@
         <div id="pipe-plan-stats" style="font-size:12px;color:var(--txt-s)"></div>
         <button class="btn-sec" id="btn-ga-pipe" style="font-size:12px" onclick="openPlanDoc('ga')">📐 GA</button>
         <button class="btn-sec" id="btn-rp-pipe" style="font-size:12px" onclick="openPlanDoc('pipe_repair')">📋 Repair Plan</button>
-        <button class="btn-sec" style="font-size:12px" onclick="openTankLayoutEditor()">⚙ 레이아웃 설정</button>
+        <button class="btn-sec" id="btn-layout-edit-pipe" style="font-size:12px" onclick="startVisualLayoutEdit('pipe')">↔ 레이아웃 편집</button>
       </div>
+    </div>
+    <div id="pipe-layout-visual-toolbar" class="layout-visual-toolbar" style="display:none">
+      <span>파란 경계선을 마우스 또는 손가락으로 드래그하세요.</span>
+      <button class="btn-pri" onclick="saveTankLayoutToDb()">💾 저장</button>
+      <button class="btn-sec" onclick="cancelVisualLayoutEdit()">취소</button>
+      <button class="btn-sec" onclick="openDetailedLayoutFromVisual()">⚙ 명칭·구성 상세편집</button>
     </div>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow-x:auto;margin-top:4px">
       <div id="pipe-svg-wrap"></div>

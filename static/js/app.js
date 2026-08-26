@@ -3997,6 +3997,16 @@ let _tankLayout    = null;
 let _layoutEditing = null;
 let _curTankId     = null;
 let _curTankName   = null;
+let _visualLayoutEditing = false;
+let _visualLayoutOriginal = null;
+let _layoutResizeDrag = null;
+let _layoutResizeFrame = null;
+
+const TANK_ROW_DEFAULT = 76;
+const TANK_ROW_MIN = 38;
+const TANK_COL_MIN = 40;
+const TANK_PLAN_PALETTE = ['#dbeafe', '#3b82f6', '#1d4ed8'];
+const PIPE_PLAN_PALETTE = ['#d1fae5', '#10b981', '#065f46'];
 
 // ── Type color map ────────────────────────────────────────────
 const TANK_BASE_COLORS = {
@@ -4036,6 +4046,7 @@ function _defaultVLCCLayout() {
     sections: [
       {
         id:'s_cargo', label:'CARGO TANK ARRANGEMENT', sublabel:'',
+        rowHeights: [TANK_ROW_DEFAULT, TANK_ROW_DEFAULT, TANK_ROW_DEFAULT],
         columns: [
           {id:'cER',   w:55,  p:mk('ER',    'E/R',          'ER',  true), c:null, s:null},
           mkps('cHFO2','No.2 HFO BT P','No.2 HFO BT S','FOT', 90),
@@ -4046,6 +4057,7 @@ function _defaultVLCCLayout() {
       },
       {
         id:'s_dbt', label:'WATER BALLAST TANK ARRANGEMENT', sublabel:'',
+        rowHeights: [TANK_ROW_DEFAULT, TANK_ROW_DEFAULT],
         columns: [
           {id:'dAPT', w:75,  p:mk('APT',   'APT',       'APT',true), c:null, s:null},
           {id:'dPR',  w:197, p:mk('PR',    'Pump Room', 'ER', true), c:null, s:null},
@@ -4090,22 +4102,32 @@ function _makeColFn(data, hasItemsFill, hasItemsStroke, hasItemsText) {
 }
 
 // ── SVG Generator ────────────────────────────────────────────
-function _svgFromLayout(layout, clickFn, colFn) {
+function _layoutRowCount(sec) {
+  if(!sec.columns||!sec.columns.length) return 2;
+  return sec.columns.some(col => col.c && typeof col.c === 'object' && !col.c.empty) ? 3 : 2;
+}
+
+function _layoutRowHeights(sec) {
+  const count = _layoutRowCount(sec);
+  const saved = Array.isArray(sec.rowHeights) ? sec.rowHeights : [];
+  return Array.from({length:count}, (_, index) => {
+    const value = Number(saved[index]);
+    return Number.isFinite(value) ? Math.max(TANK_ROW_MIN, Math.min(240, value)) : TANK_ROW_DEFAULT;
+  });
+}
+
+function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
   const dir  = layout.direction || 'aft-fwd';
   const lLbl = dir==='aft-fwd' ? '◄  AFT' : '◄  FWD';
   const rLbl = dir==='aft-fwd' ? 'FWD  ►' : 'AFT  ►';
-  const LM=14, RM=14, ROWH=76, GAP=2, SECHDR=22, SECGAP=32, LGND=92;
+  const LM=14, RM=14, GAP=2, SECHDR=22, SECGAP=32, LGND=92;
+  const editable = !!editOptions.editable;
 
   const esc = s => (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 
-  // 각 섹션의 행 수: Center(c) 있는 컬럼이 하나라도 있으면 3행 (empty 마커 제외)
-  const secRowCount = (sec) => {
-    if(!sec.columns||!sec.columns.length) return 2;
-    return sec.columns.some(col => col.c && typeof col.c === 'object' && !col.c.empty) ? 3 : 2;
-  };
   const secBodyH = (sec) => {
-    const n = secRowCount(sec);
-    return n * ROWH + (n-1) * GAP;
+    const heights = _layoutRowHeights(sec);
+    return heights.reduce((sum, height) => sum + height, 0) + (heights.length-1) * GAP;
   };
   const secTotalH = (sec) => SECHDR + secBodyH(sec);
 
@@ -4122,7 +4144,12 @@ function _svgFromLayout(layout, clickFn, colFn) {
 
   let sv = `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" xmlns="http://www.w3.org/2000/svg"
     style="width:100%;min-width:700px;display:block;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
-  <style>.tk rect{transition:filter .1s;} .tk:hover rect{filter:brightness(.9);}</style>
+  <style>
+    .tk rect{transition:filter .1s}.tk:hover rect{filter:brightness(.9)}
+    .layout-handle-hit{stroke:transparent;stroke-width:14;touch-action:none}
+    .layout-handle-line{stroke:#2563eb;stroke-width:2;stroke-dasharray:5,3;opacity:.75;pointer-events:none}
+    .layout-handle:hover .layout-handle-line{stroke:#dc2626;stroke-width:3;opacity:1}
+  </style>
   <text x="${LM}" y="13" font-family="IBM Plex Mono" font-size="10" fill="#94a3b8">${lLbl}</text>
   <text x="${LM+maxCW}" y="13" font-family="IBM Plex Mono" font-size="10" fill="#94a3b8" text-anchor="end">${rLbl}</text>`;
 
@@ -4130,8 +4157,8 @@ function _svgFromLayout(layout, clickFn, colFn) {
   const drawCell = (t, cx, ry, w, h) => {
     if(!t || t.empty) return '';  // empty 마커 = 빈 공간
     const c = colFn(t.name, t.type, t.cl);
-    const oc = t.cl ? `onclick="${clickFn||'openTankModal'}('${esc(t.id)}','${esc(t.name)}')"` : '';
-    const cursor = t.cl ? 'pointer' : 'default';
+    const oc = t.cl && !editable ? `onclick="${clickFn||'openTankModal'}('${esc(t.id)}','${esc(t.name)}')"` : '';
+    const cursor = editable ? 'default' : t.cl ? 'pointer' : 'default';
     const badge = c.count > 0
       ? (() => {
           const allDone = c.done === c.count;
@@ -4172,12 +4199,15 @@ function _svgFromLayout(layout, clickFn, colFn) {
 
   // 섹션 그리기
   let secY = 17;
-  layout.sections.forEach(sec => {
-    const nRows   = secRowCount(sec);
+  layout.sections.forEach((sec, si) => {
+    const nRows   = _layoutRowCount(sec);
+    const rowHeights = _layoutRowHeights(sec);
     const bodyH   = secBodyH(sec);
     const totalH  = secTotalH(sec);
     const topY    = secY + SECHDR;          // 첫 행 시작 y
-    const rowYs   = Array.from({length:nRows}, (_,i) => topY + i*(ROWH+GAP));
+    const rowYs   = [];
+    let nextRowY = topY;
+    rowHeights.forEach(height => { rowYs.push(nextRowY); nextRowY += height + GAP; });
 
     // 섹션 레이블
     const labelText = sec.label||'';
@@ -4189,7 +4219,7 @@ function _svgFromLayout(layout, clickFn, colFn) {
     // 행 레이블 (P/C/S 또는 P/S)
     const rowLabels = nRows===3 ? ['P','C','S'] : ['P','S'];
     rowLabels.forEach((lbl, i) => {
-      const midY = rowYs[i] + ROWH/2;
+      const midY = rowYs[i] + rowHeights[i]/2;
       sv += `<text x="7" y="${midY}" font-family="IBM Plex Sans" font-size="9" fill="#94a3b8"
         text-anchor="middle" dominant-baseline="central"
         transform="rotate(-90,7,${midY})">${lbl}</text>`;
@@ -4201,14 +4231,14 @@ function _svgFromLayout(layout, clickFn, colFn) {
 
     // 행 구분선
     for(let i=0; i<nRows-1; i++) {
-      const lineY = rowYs[i] + ROWH + GAP/2;
+      const lineY = rowYs[i] + rowHeights[i] + GAP/2;
       sv += `<line x1="${LM}" y1="${lineY}" x2="${LM+maxCW}" y2="${lineY}"
         stroke="#e2e8f0" stroke-width=".8" stroke-dasharray="6,3"/>`;
     }
 
     // 컬럼 그리기
     let cx = LM;
-    (sec.columns||[]).forEach(col => {
+    (sec.columns||[]).forEach((col, ci) => {
       const w = col.w || 100;
       const hasCenter = col.c && typeof col.c === 'object' && !col.c.empty;
       const isSpan    = !col.s && !hasCenter && !(col.s?.empty);  // p만 있고 s/c 없음 → 전체 SPAN
@@ -4219,15 +4249,38 @@ function _svgFromLayout(layout, clickFn, colFn) {
       } else if(hasCenter) {
         // 3행: P/C/S
         [[col.p,0],[col.c,1],[col.s,2]].forEach(([t,ri]) => {
-          sv += drawCell(t, cx, rowYs[ri], w, ROWH);
+          sv += drawCell(t, cx, rowYs[ri], w, rowHeights[ri]);
         });
       } else {
         // 2행: P/S — P는 최상단, S는 최하단 (3행 섹션이어도 STBD 위치 유지)
-        if(col.p) sv += drawCell(col.p, cx, rowYs[0],          w, ROWH);
-        if(col.s) sv += drawCell(col.s, cx, rowYs[nRows-1],    w, ROWH);
+        if(col.p) sv += drawCell(col.p, cx, rowYs[0],          w, rowHeights[0]);
+        if(col.s) sv += drawCell(col.s, cx, rowYs[nRows-1],    w, rowHeights[nRows-1]);
       }
       cx += w + GAP;
     });
+
+    if(editable) {
+      let boundaryX = LM;
+      (sec.columns||[]).forEach((col, ci) => {
+        boundaryX += (col.w||100);
+        if(ci < sec.columns.length-1) {
+          sv += `<g class="layout-handle" style="cursor:col-resize">
+            <line class="layout-handle-hit" x1="${boundaryX+GAP/2}" y1="${topY}" x2="${boundaryX+GAP/2}" y2="${topY+bodyH}"
+              onpointerdown="_startLayoutResize(event,'col',${si},${ci})"/>
+            <line class="layout-handle-line" x1="${boundaryX+GAP/2}" y1="${topY}" x2="${boundaryX+GAP/2}" y2="${topY+bodyH}"/>
+          </g>`;
+        }
+        boundaryX += GAP;
+      });
+      for(let ri=0; ri<nRows-1; ri++) {
+        const boundaryY = rowYs[ri] + rowHeights[ri] + GAP/2;
+        sv += `<g class="layout-handle" style="cursor:row-resize">
+          <line class="layout-handle-hit" x1="${LM}" y1="${boundaryY}" x2="${LM+maxCW}" y2="${boundaryY}"
+            onpointerdown="_startLayoutResize(event,'row',${si},${ri})"/>
+          <line class="layout-handle-line" x1="${LM}" y1="${boundaryY}" x2="${LM+maxCW}" y2="${boundaryY}"/>
+        </g>`;
+      }
+    }
 
     secY += totalH + SECGAP;
   });
@@ -4243,6 +4296,144 @@ function _svgFromLayout(layout, clickFn, colFn) {
   });
   return sv + '</svg>';
 }
+
+function _renderPlanLayoutViews() {
+  const layout = _visualLayoutEditing ? _layoutEditing : _tankLayout;
+  if(!layout) return;
+  const tankWrap = document.getElementById('tank-svg-wrap');
+  if(tankWrap) {
+    const colorFn = _makeColFn(_tankPlanData, ...TANK_PLAN_PALETTE);
+    tankWrap.innerHTML = _svgFromLayout(layout, 'openTankModal', colorFn,
+      {editable:_visualLayoutEditing});
+  }
+  const pipeWrap = document.getElementById('pipe-svg-wrap');
+  if(pipeWrap) {
+    const colorFn = _makeColFn(_pipePlanData, ...PIPE_PLAN_PALETTE);
+    pipeWrap.innerHTML = _svgFromLayout(layout, 'openPipeModal', colorFn,
+      {editable:_visualLayoutEditing});
+  }
+}
+
+function _setVisualLayoutControls(activeSource=null) {
+  for(const source of ['tank','pipe']) {
+    const toolbar = document.getElementById(`${source}-layout-visual-toolbar`);
+    const button = document.getElementById(`btn-layout-edit-${source}`);
+    const active = activeSource !== null;
+    if(toolbar) toolbar.style.display = active ? 'flex' : 'none';
+    if(button) button.style.display = active ? 'none' : '';
+  }
+}
+
+function startVisualLayoutEdit(source='tank') {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
+  if(!_tankLayout) _tankLayout = _defaultVLCCLayout();
+  _visualLayoutOriginal = JSON.parse(JSON.stringify(_tankLayout));
+  _layoutEditing = JSON.parse(JSON.stringify(_tankLayout));
+  _visualLayoutEditing = true;
+  _setVisualLayoutControls(source === 'pipe' ? 'pipe' : 'tank');
+  _renderPlanLayoutViews();
+  toast('파란 경계선을 드래그해 크기를 조정하세요');
+}
+
+function cancelVisualLayoutEdit() {
+  if(!_visualLayoutEditing) return;
+  _tankLayout = JSON.parse(JSON.stringify(_visualLayoutOriginal || _tankLayout));
+  _layoutEditing = null;
+  _visualLayoutEditing = false;
+  _visualLayoutOriginal = null;
+  _layoutResizeDrag = null;
+  _setVisualLayoutControls(null);
+  document.documentElement.classList.remove('layout-resizing');
+  _renderPlanLayoutViews();
+  toast('레이아웃 크기 변경을 취소했습니다');
+}
+
+function openDetailedLayoutFromVisual() {
+  if(!_visualLayoutEditing) { openTankLayoutEditor(); return; }
+  _visualLayoutEditing = false;
+  _visualLayoutOriginal = null;
+  _layoutResizeDrag = null;
+  _setVisualLayoutControls(null);
+  document.documentElement.classList.remove('layout-resizing');
+  _renderPlanLayoutViews();
+  _renderLayoutEditor();
+  openM('m-tank-layout');
+}
+
+function _startLayoutResize(event, kind, sectionIndex, boundaryIndex) {
+  if(!_visualLayoutEditing || !_layoutEditing) return;
+  const section = _layoutEditing.sections?.[sectionIndex];
+  const svg = event.currentTarget?.ownerSVGElement;
+  if(!section || !svg) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = svg.getBoundingClientRect();
+  const viewBox = svg.viewBox?.baseVal;
+  if(!rect.width || !rect.height || !viewBox) return;
+
+  const drag = {
+    pointerId:event.pointerId,
+    kind, sectionIndex, boundaryIndex,
+    startX:event.clientX, startY:event.clientY,
+    scaleX:viewBox.width/rect.width,
+    scaleY:viewBox.height/rect.height,
+  };
+  if(kind === 'col') {
+    const left = section.columns?.[boundaryIndex];
+    const right = section.columns?.[boundaryIndex+1];
+    if(!left || !right) return;
+    drag.before = Math.max(TANK_COL_MIN, Number(left.w)||100);
+    drag.after = Math.max(TANK_COL_MIN, Number(right.w)||100);
+  } else {
+    const heights = _layoutRowHeights(section);
+    if(boundaryIndex < 0 || boundaryIndex >= heights.length-1) return;
+    drag.heights = heights;
+    drag.before = heights[boundaryIndex];
+    drag.after = heights[boundaryIndex+1];
+  }
+  _layoutResizeDrag = drag;
+  document.documentElement.classList.add('layout-resizing');
+}
+
+function _onLayoutResizeMove(event) {
+  const drag = _layoutResizeDrag;
+  if(!drag || event.pointerId !== drag.pointerId) return;
+  event.preventDefault();
+  const section = _layoutEditing?.sections?.[drag.sectionIndex];
+  if(!section) return;
+  const rawDelta = drag.kind === 'col'
+    ? (event.clientX-drag.startX)*drag.scaleX
+    : (event.clientY-drag.startY)*drag.scaleY;
+  const minimum = drag.kind === 'col' ? TANK_COL_MIN : TANK_ROW_MIN;
+  const delta = Math.max(minimum-drag.before, Math.min(drag.after-minimum, rawDelta));
+
+  if(drag.kind === 'col') {
+    section.columns[drag.boundaryIndex].w = Math.round(drag.before + delta);
+    section.columns[drag.boundaryIndex+1].w = Math.round(drag.after - delta);
+  } else {
+    const heights = [...drag.heights];
+    heights[drag.boundaryIndex] = Math.round(drag.before + delta);
+    heights[drag.boundaryIndex+1] = Math.round(drag.after - delta);
+    section.rowHeights = heights;
+  }
+  if(!_layoutResizeFrame) {
+    _layoutResizeFrame = requestAnimationFrame(() => {
+      _layoutResizeFrame = null;
+      _renderPlanLayoutViews();
+    });
+  }
+}
+
+function _finishLayoutResize(event) {
+  if(!_layoutResizeDrag || (event.pointerId != null && event.pointerId !== _layoutResizeDrag.pointerId)) return;
+  _layoutResizeDrag = null;
+  document.documentElement.classList.remove('layout-resizing');
+}
+
+document.addEventListener('pointermove', _onLayoutResizeMove, {passive:false});
+document.addEventListener('pointerup', _finishLayoutResize);
+document.addEventListener('pointercancel', _finishLayoutResize);
+window.addEventListener('blur', () => _finishLayoutResize({pointerId:null}));
 
 // ── Render ───────────────────────────────────────────────────
 async function renderTankPlan() {
@@ -4268,8 +4459,7 @@ async function renderTankPlan() {
   _tankLayout = layout || _defaultVLCCLayout();
 
   // Steel Plan 색상: 파란색 — 렌더 시점 데이터 캡처
-  const _tankColFn = _makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8');
-  if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', _tankColFn);
+  _renderPlanLayoutViews();
 
   _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
 
@@ -4951,7 +5141,7 @@ function _renderLayoutEditor() {
                 </td>
                 <td style="padding:4px 6px;text-align:center">
                   <input type="number" class="fi" style="width:54px;text-align:center;font-size:11px"
-                         value="${col.w||100}" min="20" max="600"
+                         value="${col.w||100}" min="${TANK_COL_MIN}" max="600"
                          onchange="updateColField(${si},${ci},'w',+this.value)">
                 </td>
                 <td style="padding:4px 6px;text-align:center">
@@ -5000,7 +5190,7 @@ function updateColField(si, ci, field, value) {
   if(field==='p'){if(!col.p)col.p={id:'',name:'',type:'MISC',cl:true};col.p.name=value;col.p.id=value.replace(/\s+/g,'').toUpperCase();}
   else if(field==='c'){if(!col.c)col.c={id:'',name:'',type:'MISC',cl:true};col.c.name=value;col.c.id=value.replace(/\s+/g,'').toUpperCase();}
   else if(field==='s'){if(!col.s)col.s={id:'',name:'',type:'MISC',cl:true};col.s.name=value;col.s.id=value.replace(/\s+/g,'').toUpperCase();}
-  else if(field==='w'){col.w=value||100;}
+  else if(field==='w'){col.w=Math.max(TANK_COL_MIN,Math.min(600,Number(value)||100));}
   else if(field==='type'){if(col.p)col.p.type=value;if(col.c)col.c.type=value;if(col.s)col.s.type=value;}
   else if(field==='cl'){if(col.p)col.p.cl=value;if(col.c)col.c.cl=value;if(col.s)col.s.cl=value;}
 }
@@ -5073,6 +5263,7 @@ function _flattenTankNames(layout) {
 }
 
 async function saveTankLayoutToDb() {
+  const visualSave = _visualLayoutEditing;
   setSS('saving');
   try {
     // ── 탱크명 변경 감지 ──────────────────────────────────────
@@ -5110,7 +5301,15 @@ async function saveTankLayoutToDb() {
     }
 
     setSS('synced');
-    closeM('m-tank-layout');
+    if(visualSave) {
+      _visualLayoutEditing = false;
+      _visualLayoutOriginal = null;
+      _layoutResizeDrag = null;
+      _setVisualLayoutControls(null);
+      document.documentElement.classList.remove('layout-resizing');
+    } else {
+      closeM('m-tank-layout');
+    }
   } catch(e) {
     setSS('error');
     toast('저장 실패: '+e.message, true);
@@ -5119,16 +5318,7 @@ async function saveTankLayoutToDb() {
 
   // 저장은 이미 완료된 상태이므로 화면 재렌더 오류를 저장 실패로 오보하지 않는다.
   try {
-    const tw = document.getElementById('tank-svg-wrap');
-    if(tw) {
-      const tankColFn = _makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8');
-      tw.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', tankColFn);
-    }
-    const pw = document.getElementById('pipe-svg-wrap');
-    if(pw) {
-      const pipeColFn = _makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46');
-      pw.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', pipeColFn);
-    }
+    _renderPlanLayoutViews();
   } catch(e) {
     console.error('Tank layout saved, but plan redraw failed', e);
     toast('레이아웃은 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.', true);
@@ -5973,8 +6163,7 @@ async function renderPipePlan() {
   }
 
   // Pipe Plan 색상: 초록색 — 렌더 시점 데이터 캡처
-  const _pipeColFn = _makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46');
-  if(wrap) wrap.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', _pipeColFn);
+  _renderPlanLayoutViews();
 
   _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
 
