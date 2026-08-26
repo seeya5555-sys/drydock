@@ -5111,12 +5111,28 @@ async function saveTankLayoutToDb() {
 
     setSS('synced');
     closeM('m-tank-layout');
-    const tw = document.getElementById('tank-svg-wrap');
-    if(tw) tw.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', _tankCol);
-    const pw = document.getElementById('pipe-svg-wrap');
-    if(pw) pw.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', _pipePlanCol);
+  } catch(e) {
+    setSS('error');
+    toast('저장 실패: '+e.message, true);
+    return;
+  }
 
-  } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
+  // 저장은 이미 완료된 상태이므로 화면 재렌더 오류를 저장 실패로 오보하지 않는다.
+  try {
+    const tw = document.getElementById('tank-svg-wrap');
+    if(tw) {
+      const tankColFn = _makeColFn(_tankPlanData, '#dbeafe', '#3b82f6', '#1d4ed8');
+      tw.innerHTML = _svgFromLayout(_tankLayout, 'openTankModal', tankColFn);
+    }
+    const pw = document.getElementById('pipe-svg-wrap');
+    if(pw) {
+      const pipeColFn = _makeColFn(_pipePlanData, '#d1fae5', '#10b981', '#065f46');
+      pw.innerHTML = _svgFromLayout(_tankLayout, 'openPipeModal', pipeColFn);
+    }
+  } catch(e) {
+    console.error('Tank layout saved, but plan redraw failed', e);
+    toast('레이아웃은 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.', true);
+  }
 }
 
 // ══ PLAN DOCUMENTS (GA / Repair Plan) ════════════════════════
