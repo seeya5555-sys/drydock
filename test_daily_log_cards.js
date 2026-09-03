@@ -125,6 +125,12 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   window._ddSelectedDate = '';
   window._ddPreferredDate = '';
   cardRender();
+  assert.equal(window._ddSelectedDate, '2026-09-02', 'earliest date should be selected by default');
+  const earlyDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-02');
+  const laterDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-03');
+  assert.ok(earlyDateIndex >= 0, 'earliest sidebar date should be rendered');
+  assert.ok(laterDateIndex >= 0, 'later sidebar date should be rendered');
+  assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the sidebar');
   assert.match(host.innerHTML, /dd-date-sidebar/);
   assert.match(host.innerHTML, /2026-09-03/);
   assert.match(host.innerHTML, /남음 1/);

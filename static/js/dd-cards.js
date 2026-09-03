@@ -202,7 +202,7 @@
     var dates=Object.keys(groups).sort(function(a,b){
       if(a==='(날짜 없음)') return 1;
       if(b==='(날짜 없음)') return -1;
-      return b.localeCompare(a);
+      return a.localeCompare(b);
     });
     // 필터로 선호 날짜가 잠시 사라져도 사용자 선택은 보존하고, 표시 날짜만 임시 fallback.
     window._ddSelectedDate = groups[window._ddPreferredDate] ? window._ddPreferredDate : (dates[0]||'');
