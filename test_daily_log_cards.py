@@ -23,6 +23,18 @@ class DailyLogCardContractTests(unittest.TestCase):
         self.assertIn("+ Add Log</button>", js)
         self.assertIn("decodeURIComponent", js)
 
+    def test_daily_status_uses_tabs_and_title_is_expand_trigger(self):
+        html = (ROOT / "templates/index.html").read_text()
+        js = (ROOT / "static/js/dd-cards.js").read_text()
+        self.assertIn('id="d-tab-open"', html)
+        self.assertIn('id="d-tab-close"', html)
+        self.assertIn('id="d-sf" hidden', html)
+        self.assertNotIn('>All Status</option><option value="Open">Open</option>', html)
+        self.assertIn("window._ddSetDailyStatusTab = function(status)", js)
+        self.assertIn("window._ddToggleDailyStatus = function(event, id)", js)
+        self.assertIn('class="issue-card-title dd-title-toggle"', js)
+        self.assertNotIn("this,\\'item\\'", js)
+
     def test_expand_toggle_controls_dates_and_cards_together(self):
         js = (ROOT / "static/js/dd-cards.js").read_text()
         self.assertIn("window._ddToggleDailyAll = function()", js)

@@ -106,6 +106,59 @@ test('sidebar date selection survives the hidden legacy date filter', () => {
   assert.equal(df.value, '');
 });
 
+test('Open and Close tabs drive the hidden compatibility status value', () => {
+  const sf = { value: 'Open' };
+  global.document = { getElementById: id => id === 'd-sf' ? sf : null };
+  let renders = 0;
+  global.renderDisc = () => { renders += 1; };
+  _ddSetDailyStatusTab('Close');
+  assert.equal(window._ddDailyStatusTab, 'Close');
+  assert.equal(sf.value, 'Close');
+  assert.equal(renders, 1);
+});
+
+test('status badge toggles one item with PUT and stops card expansion', async () => {
+  global.VID = 'v_1';
+  const item = { _id: 7, item: 'topic', status: 'Open' };
+  global.FLEET = { v_1: { discussions: [item] } };
+  global.isViewer = () => false;
+  global.API = '/api';
+  let request = null, stopped = false, prevented = false;
+  global.apiFetch = async (url, method, body) => {
+    request = { url, method, body: { ...body } };
+    return { ...body, _id: 7 };
+  };
+  global.buildDDF = () => {};
+  global.renderDisc = () => {};
+  global.toast = () => {};
+  _ddToggleDailyStatus({
+    preventDefault: () => { prevented = true; },
+    stopPropagation: () => { stopped = true; }
+  }, '7');
+  assert.equal(item.status, 'Close', 'UI should update optimistically');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(request, { url: '/api/discussions/7', method: 'PUT', body: { _id: 7, item: 'topic', status: 'Close' } });
+  assert.equal(stopped, true);
+  assert.equal(prevented, true);
+});
+
+test('failed status PUT rolls back and unlocks the item for retry', async () => {
+  global.VID = 'v_1';
+  const item = { _id: 8, item: 'topic', status: 'Open' };
+  global.FLEET = { v_1: { discussions: [item] } };
+  global.isViewer = () => false;
+  global.API = '/api';
+  global.apiFetch = async () => { throw new Error('offline'); };
+  global.renderDisc = () => {};
+  global.toast = () => {};
+  global.setSS = () => {};
+  _ddToggleDailyStatus({ preventDefault: () => {}, stopPropagation: () => {} }, '8');
+  assert.equal(item.status, 'Close');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(item.status, 'Open');
+  assert.equal(window._ddStatusSaving.has('8'), false);
+});
+
 test('daily render builds a date sidebar with remaining and completed counts', () => {
   global.VID = 'v_1';
   global.FLEET = { v_1: { discussions: [
@@ -117,7 +170,7 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
   const body = { closest: () => wrap };
   const elements = {
-    'd-q': { value: '' }, 'd-df': { value: '' }, 'd-sf': { value: '' }, 'd-pf': { value: '' },
+    'd-q': { value: '' }, 'd-df': { value: '' }, 'd-sf': { value: 'Open' }, 'd-pf': { value: '' },
     'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
     'd-body': body, 'd-cards': host
   };
@@ -134,9 +187,8 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   assert.match(host.innerHTML, /dd-date-sidebar/);
   assert.match(host.innerHTML, /2026-09-03/);
   assert.match(host.innerHTML, /남음 1/);
-  assert.match(host.innerHTML, /완료 1/);
   assert.match(host.innerHTML, /긴급 1/);
-  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 3');
+  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 2');
 });
 
 test('Today is consumed once and preferred date returns after a temporary filter fallback', () => {
@@ -148,7 +200,7 @@ test('Today is consumed once and preferred date returns after a temporary filter
   const host = { innerHTML: '' };
   const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
   const elements = {
-    'd-q': { value: '' }, 'd-df': { value: '2026-09-02' }, 'd-sf': { value: '' }, 'd-pf': { value: '' },
+    'd-q': { value: '' }, 'd-df': { value: '2026-09-02' }, 'd-sf': { value: 'Open' }, 'd-pf': { value: '' },
     'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
     'd-body': { closest: () => wrap }, 'd-cards': host
   };

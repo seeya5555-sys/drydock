@@ -81,6 +81,11 @@ body {
 .bd.sess{ background:#EEEDFE; color:#3C3489; }
 .bd.status-open{ background:#FCEBEB; color:#A32D2D; border:1px solid #F09595; }
 .bd.status-done{ background:#EAF3DE; color:#3B6D11; border:1px solid #97C459; }
+.dd-status-toggle{ appearance:none; font:inherit; cursor:pointer; }
+.dd-status-toggle:hover{ filter:brightness(.96); box-shadow:0 0 0 2px rgba(24,95,165,.12); }
+.dd-status-toggle[aria-busy="true"]{ cursor:wait; opacity:.6; }
+.dd-title-toggle{ appearance:none; display:block; width:100%; padding:0; border:0; background:none; font:inherit; text-align:left; cursor:pointer; }
+.dd-title-toggle:hover{ color:#185FA5; text-decoration:underline; text-underline-offset:3px; }
 /* 펼침 상세 */
 .issue-card-det{ margin-top:11px; border-top:1px solid #E5E4DD; padding-top:11px; cursor:default; }
 .issue-card-det .exp-label{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#888780; margin-bottom:5px; }
@@ -122,6 +127,9 @@ body {
 .dd-date-add{ appearance:none; border:1px solid #DFC500; border-radius:6px; background:#F5D90A; color:#3F3500; padding:7px 11px; font:700 11px/1.2 inherit; cursor:pointer; white-space:nowrap; }
 .dd-date-add:hover{ background:#FFE84A; box-shadow:0 1px 3px rgba(0,0,0,.14); }
 .daily-log-actions{ display:flex; align-items:center; gap:8px; }
+.dd-status-tabs{ display:inline-flex; align-items:center; padding:2px; border:1px solid #D3D1C7; border-radius:8px; background:#EBEAE3; }
+.dd-status-tabs button{ appearance:none; border:0; border-radius:6px; background:transparent; color:#5F5E5A; padding:6px 13px; font-size:12px; font-weight:700; cursor:pointer; }
+.dd-status-tabs button.is-active{ background:#17243B; color:#FFF; box-shadow:0 1px 3px rgba(0,0,0,.16); }
 @media(max-width:760px){
   .dd-daily-layout{ display:block; }
   .dd-date-sidebar{ position:static; max-height:none; flex-direction:row; overflow-x:auto; overflow-y:hidden; padding:0 0 7px; margin-bottom:12px; scroll-snap-type:x proximity; }

@@ -11,6 +11,8 @@
   window._ddDscExp = window._ddDscExp || new Set();  // Daily 카드 펼침
   window._ddSelectedDate = window._ddSelectedDate || '';
   window._ddPreferredDate = window._ddPreferredDate || '';
+  window._ddDailyStatusTab = window._ddDailyStatusTab || 'Open';
+  window._ddStatusSaving = window._ddStatusSaving || new Set();
   // 안전망: 원본 렌더 보존 → 카드 렌더가 에러나면 원본 테이블로 폴백(탭 안 깨짐)
   var _origCls = window.renderClass, _origDsc = window.renderDisc;
 
@@ -125,6 +127,45 @@
     window.renderDisc();
   };
 
+  window._ddSetDailyStatusTab = function(status){
+    if(status!=='Open' && status!=='Close') return;
+    window._ddDailyStatusTab = status;
+    var sf = document.getElementById('d-sf');
+    if(sf) sf.value = status;
+    window.renderDisc();
+  };
+
+  // 카드에서 상태를 즉시 전환한다. 1건 PUT 실패 시 낙관적 UI를 원복한다.
+  window._ddToggleDailyStatus = function(event, id){
+    event.preventDefault();
+    event.stopPropagation();
+    if(typeof isViewer==='function' && isViewer()){ toast('읽기 전용 계정입니다', true); return; }
+    id = String(id);
+    if(window._ddStatusSaving.has(id)) return;
+    var items=(FLEET[VID].discussions)||[];
+    var item=items.find(function(d){ return String(d._id)===id; });
+    if(!item) return;
+    var previous=(item.status==='Close'||item.status==='Closed')?'Close':'Open';
+    var next=previous==='Open'?'Close':'Open';
+    window._ddStatusSaving.add(id);
+    item.status=next;
+    window.renderDisc();
+    Promise.resolve(apiFetch(API+'/discussions/'+encodeURIComponent(id),'PUT',item)).then(function(saved){
+      var current=items.find(function(d){ return String(d._id)===id; });
+      if(current && saved) Object.assign(current, typeof dbD==='function' ? dbD(saved) : saved);
+      window._ddStatusSaving.delete(id);
+      buildDDF(); window.renderDisc();
+      toast('상태가 '+(next==='Open'?'Open':'Closed')+'로 변경됐습니다');
+    }).catch(function(err){
+      var current=items.find(function(d){ return String(d._id)===id; });
+      if(current) current.status=previous;
+      window._ddStatusSaving.delete(id);
+      if(typeof setSS==='function') setSS('error');
+      toast('상태 변경 실패: '+err.message, true);
+      window.renderDisc();
+    });
+  };
+
   // 현재 선택 날짜의 카드만 한 버튼으로 함께 펼치거나 접는다.
   window._ddToggleDailyAll = function(){
     if(typeof VID==='undefined' || !VID) return;
@@ -185,7 +226,18 @@
     if(typeof VID==='undefined' || !VID) return;
     var items = (FLEET[VID].discussions)||[];
     var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
-    var q=g('d-q').toLowerCase(), requestedDate=g('d-df'), sf=g('d-sf'), pf=g('d-pf');
+    var q=g('d-q').toLowerCase(), requestedDate=g('d-df'), sf=g('d-sf')||window._ddDailyStatusTab, pf=g('d-pf');
+    if(sf!=='Open' && sf!=='Close') sf=window._ddDailyStatusTab;
+    window._ddDailyStatusTab=sf;
+    ['Open','Close'].forEach(function(status){
+      var tab=document.getElementById(status==='Open'?'d-tab-open':'d-tab-close');
+      if(tab){
+        var active=sf===status;
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', active?'true':'false');
+        tab.setAttribute('tabindex', active?'0':'-1');
+      }
+    });
     if(requestedDate){
       window._ddPreferredDate = requestedDate;
       var dateFilter=document.getElementById('d-df');
@@ -223,10 +275,14 @@
     function card(d){
       var exp = window._ddDscExp.has(String(d._id));
       var idArg = attrArg(d._id);
+      var closed=d.status==='Close'||d.status==='Closed';
+      var saving=window._ddStatusSaving.has(String(d._id));
       var head = '<span class="issue-card-no">'+esc(d.no||'')+'</span>'+
                  '<span class="card-caret">'+(exp?'▾':'▸')+'</span>'+
                  (d.time_of_day?'<span class="bd sess">'+esc(d.time_of_day)+'</span>':'')+
-                 priBadge(d.priority)+ statBadge(d.status,'Close');
+                 priBadge(d.priority)+'<button type="button" class="bd dd-status-toggle '+(closed?'status-done':'status-open')+'" '+
+                 'aria-label="상태 변경: 현재 '+(closed?'Closed':'Open')+'" aria-busy="'+(saving?'true':'false')+'" '+
+                 (saving?'disabled ':'')+'onclick="_ddToggleDailyStatus(event,decodeURIComponent(\''+idArg+'\'))">'+(closed?'Closed':'Open')+'</button>';
       var det='';
       if(exp){
         det = '<div class="issue-card-det" onclick="event.stopPropagation()">'+
@@ -237,7 +293,7 @@
       }
       return '<div class="issue-card'+(exp?' is-expanded':'')+'" onclick="_ddTgl(\'dsc\',\''+d._id+'\')">'+
              '<div class="issue-card-head">'+head+'</div>'+
-             '<div class="issue-card-body"><div class="issue-card-title dd-inline-edit" title="클릭하여 바로 편집" onclick="_ddEditDaily(event,decodeURIComponent(\''+idArg+'\'),this,\'item\')">'+esc(d.item||'—')+'</div></div>'+det+'</div>';
+             '<div class="issue-card-body"><button type="button" class="issue-card-title dd-title-toggle" aria-expanded="'+(exp?'true':'false')+'">'+esc(d.item||'—')+'</button></div>'+det+'</div>';
     }
 
     function isOpen(d){ return d.status!=='Close' && d.status!=='Closed'; }
@@ -251,7 +307,7 @@
     }).join('');
     var selectedOpen=fil.filter(isOpen).length, selectedDone=fil.length-selectedOpen;
     var selectedArg=attrArg(window._ddSelectedDate);
-    var summaryLabel=(q||sf||pf)?'필터 진행현황':'전체 진행현황';
+    var summaryLabel=(sf==='Open'?'Open':'Close')+' 탭 현황';
     var html = '<div class="dd-daily-layout"><aside class="dd-date-sidebar">'+
       '<div class="dd-date-summary"><span>'+summaryLabel+'</span><strong>'+matchedOpen+'<small> 남음</small></strong><p>완료 '+(matched.length-matchedOpen)+' · 전체 '+matched.length+'</p></div>'+nav+'</aside>'+
       '<section class="dd-date-content"><div class="dd-date-content-head"><div><span>선택 날짜</span><h3>'+esc(window._ddSelectedDate)+'</h3><p>남음 '+selectedOpen+' · 완료 '+selectedDone+' · 전체 '+fil.length+'</p></div>'+

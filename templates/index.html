@@ -248,7 +248,11 @@
       <button class="qf-btn" id="qf-d-today" onclick="jumpToToday()" style="margin-right:4px">📅 Today</button>
       <input type="text" class="fi" id="d-q" placeholder="Search items…" oninput="renderDisc()">
       <select class="fi" id="d-df" onchange="renderDisc()" hidden aria-hidden="true"><option value="">All Dates</option></select>
-      <select class="fi" id="d-sf" onchange="renderDisc()"><option value="">All Status</option><option value="Open">Open</option><option value="Close">Closed</option></select>
+      <div class="dd-status-tabs" role="tablist" aria-label="Daily Log 상태">
+        <button type="button" id="d-tab-open" role="tab" onclick="_ddSetDailyStatusTab('Open')">Open</button>
+        <button type="button" id="d-tab-close" role="tab" onclick="_ddSetDailyStatusTab('Close')">Close</button>
+      </div>
+      <select id="d-sf" hidden aria-hidden="true"><option value="Open" selected>Open</option><option value="Close">Close</option></select>
       <select class="fi" id="d-pf" onchange="renderDisc()"><option value="">All Priority</option><option>Normal</option><option>Urgent</option><option>Critical</option><option>On Hold</option></select>
       <span class="filter-count" id="d-cnt"></span>
     </div>
