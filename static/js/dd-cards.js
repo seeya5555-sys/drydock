@@ -9,6 +9,8 @@
   window._ddCardsLoaded = true;
   window._ddClsExp = window._ddClsExp || new Set();  // Class 카드 펼침
   window._ddDscExp = window._ddDscExp || new Set();  // Daily 카드 펼침
+  window._ddSelectedDate = window._ddSelectedDate || '';
+  window._ddPreferredDate = window._ddPreferredDate || '';
   // 안전망: 원본 렌더 보존 → 카드 렌더가 에러나면 원본 테이블로 폴백(탭 안 깨짐)
   var _origCls = window.renderClass, _origDsc = window.renderDisc;
 
@@ -115,18 +117,23 @@
     });
   };
 
-  // 날짜 그룹과 개별 카드를 한 버튼으로 함께 펼치거나 접는다.
+  window._ddSelectDailyDate = function(date){
+    window._ddPreferredDate = date;
+    window._ddSelectedDate = date;
+    var df = document.getElementById('d-df');
+    if(df) df.value = '';
+    window.renderDisc();
+  };
+
+  // 현재 선택 날짜의 카드만 한 버튼으로 함께 펼치거나 접는다.
   window._ddToggleDailyAll = function(){
     if(typeof VID==='undefined' || !VID) return;
-    var items = (FLEET[VID].discussions)||[];
-    var dates = Array.from(new Set(items.map(function(d){ return d.date||'(날짜 없음)'; })));
-    var allExpanded = dates.every(function(d){ return !discCollapsed.has(d); }) &&
-      items.every(function(d){ return window._ddDscExp.has(String(d._id)); });
+    var items = window._ddVisibleDailyItems || [];
+    if(!items.length) return;
+    var allExpanded = items.every(function(d){ return window._ddDscExp.has(String(d._id)); });
     if(allExpanded){
-      dates.forEach(function(d){ discCollapsed.add(d); });
-      window._ddDscExp.clear();
+      items.forEach(function(d){ window._ddDscExp.delete(String(d._id)); });
     }else{
-      dates.forEach(function(d){ discCollapsed.delete(d); });
       items.forEach(function(d){ window._ddDscExp.add(String(d._id)); });
     }
     window.renderDisc();
@@ -178,29 +185,40 @@
     if(typeof VID==='undefined' || !VID) return;
     var items = (FLEET[VID].discussions)||[];
     var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
-    var q=g('d-q').toLowerCase(), df=g('d-df'), sf=g('d-sf'), pf=g('d-pf');
-    var fil = items.filter(function(d){
+    var q=g('d-q').toLowerCase(), requestedDate=g('d-df'), sf=g('d-sf'), pf=g('d-pf');
+    if(requestedDate){
+      window._ddPreferredDate = requestedDate;
+      var dateFilter=document.getElementById('d-df');
+      if(dateFilter) dateFilter.value=''; // Today/legacy dropdown 값을 1회만 소비
+    }
+    var matched = items.filter(function(d){
       if(q && !(d.item||'').toLowerCase().includes(q) && !(d.description||'').toLowerCase().includes(q)) return false;
-      if(df && d.date!==df) return false;
       if(sf && d.status!==sf) return false;
       if(pf && (d.priority||'Normal')!==pf) return false;
       return true;
     });
-    // 최초 1회만 전체 접기(플래그) — 매 렌더 재접힘 방지(마지막 날짜 펼쳐도 유지)
-    if(!window._ddDiscInit && (typeof _calNavExpandDisc==='undefined' || !_calNavExpandDisc) && discCollapsed.size===0 && fil.length>0){
-      [...new Set(fil.map(function(d){return d.date||'(날짜 없음)';}))].forEach(function(d){ discCollapsed.add(d); });
-    }
-    window._ddDiscInit = true;
-    var allDates = Array.from(new Set(items.map(function(d){return d.date||'(날짜 없음)';})));
-    var allExpanded = allDates.every(function(d){return !discCollapsed.has(d);}) &&
-      items.every(function(d){return window._ddDscExp.has(String(d._id));});
+    var groups={};
+    matched.forEach(function(d){ var k=d.date||'(날짜 없음)'; if(!groups[k]) groups[k]=[]; groups[k].push(d); });
+    var dates=Object.keys(groups).sort(function(a,b){
+      if(a==='(날짜 없음)') return 1;
+      if(b==='(날짜 없음)') return -1;
+      return b.localeCompare(a);
+    });
+    // 필터로 선호 날짜가 잠시 사라져도 사용자 선택은 보존하고, 표시 날짜만 임시 fallback.
+    window._ddSelectedDate = groups[window._ddPreferredDate] ? window._ddPreferredDate : (dates[0]||'');
+    var fil = window._ddSelectedDate ? (groups[window._ddSelectedDate]||[]) : [];
+    window._ddVisibleDailyItems = fil;
+    var allExpanded = fil.length>0 && fil.every(function(d){return window._ddDscExp.has(String(d._id));});
     var allBtn=document.getElementById('btn-daily-expand-all');
     if(allBtn){
-      allBtn.textContent = allExpanded ? '▶ 전체 접기' : '▼ 전체 펼치기';
+      allBtn.textContent = allExpanded ? '▶ 카드 전체 접기' : '▼ 카드 전체 펼치기';
       allBtn.setAttribute('aria-pressed', allExpanded ? 'true' : 'false');
+      allBtn.disabled = !fil.length;
     }
-    var cnt=document.getElementById('d-cnt'); if(cnt) cnt.textContent = fil.length+' items';
-    if(!fil.length){ mount('d-body','d-cards','<div class="dd-empty">No discussion items found</div>'); return; }
+    var matchedOpen=matched.filter(function(d){return d.status!=='Close' && d.status!=='Closed';}).length;
+    var cnt=document.getElementById('d-cnt');
+    if(cnt) cnt.textContent = '남음 '+matchedOpen+' · 전체 '+matched.length;
+    if(!matched.length){ mount('d-body','d-cards','<div class="dd-empty">조건에 맞는 Daily Log가 없습니다</div>'); return; }
 
     function card(d){
       var exp = window._ddDscExp.has(String(d._id));
@@ -222,20 +240,22 @@
              '<div class="issue-card-body"><div class="issue-card-title dd-inline-edit" title="클릭하여 바로 편집" onclick="_ddEditDaily(event,decodeURIComponent(\''+idArg+'\'),this,\'item\')">'+esc(d.item||'—')+'</div></div>'+det+'</div>';
     }
 
-    var isFiltering = q||df||sf||pf;
-    if(isFiltering){ mount('d-body','d-cards', fil.map(card).join('')); return; }
-    // 날짜 그룹
-    var groups={}, order=[];
-    fil.forEach(function(d){ var k=d.date||'(날짜 없음)'; if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
-    var html = order.map(function(k){
-      var col = discCollapsed.has(k), n=groups[k].length;
-      var dateArg = attrArg(k);
-      var hdr = '<div class="dd-date-hdr" onclick="toggleDiscDate(decodeURIComponent(\''+dateArg+'\'))">'+
-                '<span class="dd-caret">'+(col?'▶':'▼')+'</span>'+esc(k)+
-                '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+dateArg+'\'))">+ Add Log</button>'+
-                '<span class="dd-date-cnt">'+n+' item'+(n>1?'s':'')+'</span></div>';
-      return hdr + (col?'':'<div class="dd-date-body">'+groups[k].map(card).join('')+'</div>');
+    function isOpen(d){ return d.status!=='Close' && d.status!=='Closed'; }
+    var nav = dates.map(function(k){
+      var list=groups[k], open=list.filter(isOpen).length, done=list.length-open;
+      var urgent=list.filter(function(d){return d.priority==='Urgent'||d.priority==='Critical';}).length;
+      var dateArg=attrArg(k), active=k===window._ddSelectedDate;
+      return '<button type="button" class="dd-date-nav'+(active?' is-active':'')+'" aria-pressed="'+(active?'true':'false')+'" onclick="_ddSelectDailyDate(decodeURIComponent(\''+dateArg+'\'))">'+
+        '<span class="dd-date-nav-top"><span class="dd-date-nav-date">'+esc(k)+'</span><span class="dd-date-nav-total">'+list.length+'</span></span>'+
+        '<span class="dd-date-nav-stats"><b>남음 '+open+'</b><span>완료 '+done+'</span>'+(urgent?'<em>긴급 '+urgent+'</em>':'')+'</span></button>';
     }).join('');
+    var selectedOpen=fil.filter(isOpen).length, selectedDone=fil.length-selectedOpen;
+    var selectedArg=attrArg(window._ddSelectedDate);
+    var summaryLabel=(q||sf||pf)?'필터 진행현황':'전체 진행현황';
+    var html = '<div class="dd-daily-layout"><aside class="dd-date-sidebar">'+
+      '<div class="dd-date-summary"><span>'+summaryLabel+'</span><strong>'+matchedOpen+'<small> 남음</small></strong><p>완료 '+(matched.length-matchedOpen)+' · 전체 '+matched.length+'</p></div>'+nav+'</aside>'+
+      '<section class="dd-date-content"><div class="dd-date-content-head"><div><span>선택 날짜</span><h3>'+esc(window._ddSelectedDate)+'</h3><p>남음 '+selectedOpen+' · 완료 '+selectedDone+' · 전체 '+fil.length+'</p></div>'+
+      '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+selectedArg+'\'))">+ Add Log</button></div>'+fil.map(card).join('')+'</section></div>';
     mount('d-body','d-cards', html);
   };
 

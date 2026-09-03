@@ -7,6 +7,7 @@ global.renderClass = () => {};
 global.renderDisc = () => {};
 global.document = { getElementById: () => null };
 require('./static/js/dd-cards.js');
+const cardRender = global.renderDisc;
 
 test('date Add Log opens a new modal with that date selected', () => {
   const fields = { 'md-date': { value: '' }, 'md-date-pick': { value: '' } };
@@ -82,17 +83,79 @@ test('daily toggle expands and collapses date groups and cards together', () => 
   global.FLEET = { v_1: { discussions: [
     { _id: 10, date: '2026-09-02' }, { _id: 11, date: '2026-09-03' }
   ] } };
-  global.discCollapsed = new Set(['2026-09-02', '2026-09-03']);
   let renders = 0;
   global.renderDisc = () => { renders += 1; };
   window._ddDscExp.clear();
+  window._ddVisibleDailyItems = global.FLEET.v_1.discussions;
 
   _ddToggleDailyAll();
-  assert.deepEqual([...discCollapsed], []);
   assert.deepEqual([...window._ddDscExp], ['10', '11']);
 
   _ddToggleDailyAll();
-  assert.deepEqual([...discCollapsed], ['2026-09-02', '2026-09-03']);
   assert.deepEqual([...window._ddDscExp], []);
   assert.equal(renders, 2);
+});
+
+test('sidebar date selection survives the hidden legacy date filter', () => {
+  const df = { value: '2026-09-02' };
+  global.document = { getElementById: id => id === 'd-df' ? df : null };
+  global.renderDisc = () => {};
+  _ddSelectDailyDate('2026-09-03');
+  assert.equal(window._ddSelectedDate, '2026-09-03');
+  assert.equal(window._ddPreferredDate, '2026-09-03');
+  assert.equal(df.value, '');
+});
+
+test('daily render builds a date sidebar with remaining and completed counts', () => {
+  global.VID = 'v_1';
+  global.FLEET = { v_1: { discussions: [
+    { _id: 1, date: '2026-09-03', item: 'open item', status: 'Open', priority: 'Urgent' },
+    { _id: 2, date: '2026-09-03', item: 'done item', status: 'Close', priority: 'Normal' },
+    { _id: 3, date: '2026-09-02', item: 'older', status: 'Open', priority: 'Normal' }
+  ] } };
+  const host = { innerHTML: '' };
+  const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
+  const body = { closest: () => wrap };
+  const elements = {
+    'd-q': { value: '' }, 'd-df': { value: '' }, 'd-sf': { value: '' }, 'd-pf': { value: '' },
+    'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
+    'd-body': body, 'd-cards': host
+  };
+  global.document = { getElementById: id => elements[id] || null };
+  window._ddSelectedDate = '';
+  window._ddPreferredDate = '';
+  cardRender();
+  assert.match(host.innerHTML, /dd-date-sidebar/);
+  assert.match(host.innerHTML, /2026-09-03/);
+  assert.match(host.innerHTML, /남음 1/);
+  assert.match(host.innerHTML, /완료 1/);
+  assert.match(host.innerHTML, /긴급 1/);
+  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 3');
+});
+
+test('Today is consumed once and preferred date returns after a temporary filter fallback', () => {
+  global.VID = 'v_1';
+  global.FLEET = { v_1: { discussions: [
+    { _id: 1, date: '2026-09-03', item: 'urgent', status: 'Open', priority: 'Urgent' },
+    { _id: 2, date: '2026-09-02', item: 'normal', status: 'Open', priority: 'Normal' }
+  ] } };
+  const host = { innerHTML: '' };
+  const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
+  const elements = {
+    'd-q': { value: '' }, 'd-df': { value: '2026-09-02' }, 'd-sf': { value: '' }, 'd-pf': { value: '' },
+    'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
+    'd-body': { closest: () => wrap }, 'd-cards': host
+  };
+  global.document = { getElementById: id => elements[id] || null };
+  cardRender();
+  assert.equal(window._ddSelectedDate, '2026-09-02');
+  assert.equal(window._ddPreferredDate, '2026-09-02');
+  assert.equal(elements['d-df'].value, '', 'legacy/Today date filter must be consumed once');
+  elements['d-pf'].value = 'Urgent';
+  cardRender();
+  assert.equal(window._ddSelectedDate, '2026-09-03', 'filtered view may temporarily fall back');
+  assert.equal(window._ddPreferredDate, '2026-09-02', 'user preference must not be overwritten');
+  elements['d-pf'].value = '';
+  cardRender();
+  assert.equal(window._ddSelectedDate, '2026-09-02');
 });

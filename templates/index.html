@@ -243,11 +243,11 @@
 
   <!-- Daily -->
   <div id="vt-daily" class="page"><main>
-    <div class="sec-hdr"><div class="sec-title">Daily Log</div><div class="daily-log-actions"><button class="btn-sec" id="btn-daily-expand-all" type="button" onclick="_ddToggleDailyAll()">▼ 전체 펼치기</button><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div></div>
+    <div class="sec-hdr"><div class="sec-title">Daily Log</div><div class="daily-log-actions"><button class="btn-sec" id="btn-daily-expand-all" type="button" onclick="_ddToggleDailyAll()">▼ 카드 전체 펼치기</button><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div></div>
     <div class="filter-bar">
       <button class="qf-btn" id="qf-d-today" onclick="jumpToToday()" style="margin-right:4px">📅 Today</button>
       <input type="text" class="fi" id="d-q" placeholder="Search items…" oninput="renderDisc()">
-      <select class="fi" id="d-df" onchange="renderDisc()"><option value="">All Dates</option></select>
+      <select class="fi" id="d-df" onchange="renderDisc()" hidden aria-hidden="true"><option value="">All Dates</option></select>
       <select class="fi" id="d-sf" onchange="renderDisc()"><option value="">All Status</option><option value="Open">Open</option><option value="Close">Closed</option></select>
       <select class="fi" id="d-pf" onchange="renderDisc()"><option value="">All Priority</option><option>Normal</option><option>Urgent</option><option>Critical</option><option>On Hold</option></select>
       <span class="filter-count" id="d-cnt"></span>
