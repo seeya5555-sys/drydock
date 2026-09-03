@@ -36,19 +36,24 @@ test('inline handler arguments also escape apostrophes', () => {
   assert.equal(_ddAttrArg("day's log"), 'day%27s%20log');
 });
 
-test('card inline edit keeps the id and persists only once on Enter then blur', async () => {
+test('card inline edit matches content height and saves only from an explicit action', async () => {
   global.VID = 'v_1';
   const item = { _id: 10, item: 'old', description: 'detail' };
   global.FLEET = { v_1: { discussions: [item] } };
   global.isViewer = () => false;
-  const listeners = {};
-  const editor = {
-    className: '', value: '', focus: () => {}, select: () => {},
-    addEventListener: (name, fn) => { listeners[name] = fn; }
-  };
-  global.document = { createElement: tag => { editor.tag = tag; return editor; } };
+  const made = [];
+  function element(tag){
+    const el = { tag, className: '', value: '', textContent: '', type: '', rows: 0,
+      children: [], listeners: {}, style: {}, scrollHeight: tag==='textarea' ? 140 : 0,
+      focus: () => {}, select: () => {},
+      append: function(...nodes){ this.children.push(...nodes); },
+      addEventListener: function(name, fn){ this.listeners[name] = fn; }
+    };
+    made.push(el); return el;
+  }
+  global.document = { createElement: element };
   let replacement = null, saves = 0;
-  const node = { replaceWith: value => { replacement = value; } };
+  const node = { offsetHeight: 96, replaceWith: value => { replacement = value; } };
   global.persist = async (kind, items) => {
     assert.equal(kind, 'disc');
     assert.equal(items[0]._id, 10);
@@ -56,14 +61,19 @@ test('card inline edit keeps the id and persists only once on Enter then blur', 
   };
   global.buildDDF = () => {};
   global.renderDisc = () => {};
-  _ddEditDaily({ stopPropagation: () => {} }, '10', node, 'item');
-  assert.equal(replacement, editor);
-  assert.equal(editor.tag, 'input');
-  editor.value = 'new topic';
-  listeners.keydown({ key: 'Enter', preventDefault: () => {} });
-  listeners.blur();
+  _ddEditDaily({ stopPropagation: () => {} }, '10', node, 'description');
+  const editor = made.find(el => el.tag === 'textarea');
+  const saveBtn = made.find(el => el.textContent === '저장');
+  const cancelBtn = made.find(el => el.textContent === '취소');
+  assert.equal(replacement.className, 'dd-card-edit-wrap');
+  assert.equal(editor.style.height, '140px');
+  assert.ok(saveBtn); assert.ok(cancelBtn);
+  editor.value = 'new detail';
+  assert.equal(saves, 0, 'blur/입력만으로 자동 저장하면 안 됨');
+  saveBtn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
+  saveBtn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(item.item, 'new topic');
+  assert.equal(item.description, 'new detail');
   assert.equal(saves, 1);
 });
 

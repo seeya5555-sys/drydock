@@ -17,6 +17,9 @@ class DailyLogCardContractTests(unittest.TestCase):
         self.assertIn("window._ddEditDaily = function(event, id, node, field)", js)
         self.assertIn("field==='description' ? 'textarea' : 'input'", js)
         self.assertIn("persist('disc', items)", js)
+        self.assertIn("saveBtn.textContent = '저장'", js)
+        self.assertIn("cancelBtn.textContent = '취소'", js)
+        self.assertIn("Math.max(originalHeight, editor.scrollHeight||0)", js)
         self.assertIn("+ Add Log</button>", js)
         self.assertIn("decodeURIComponent", js)
 

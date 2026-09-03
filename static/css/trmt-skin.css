@@ -67,7 +67,10 @@ body {
 .issue-card-title{ font-size:14px; font-weight:650; line-height:1.42; color:#1F1F1D; }
 .dd-inline-edit{ cursor:text; border-radius:5px; padding:2px 4px; margin:-2px -4px; }
 .dd-inline-edit:hover{ background:#FFF4B8; }
-.dd-card-editor{ box-sizing:border-box; width:100%!important; min-height:34px; resize:vertical; }
+.dd-card-edit-wrap{ display:flex; flex-direction:column; gap:8px; width:100%; }
+.dd-card-editor{ box-sizing:border-box; display:block; width:100%!important; min-height:34px; resize:none;
+  overflow-y:hidden; white-space:pre-wrap; line-height:1.6; }
+.dd-card-edit-actions{ display:flex; justify-content:flex-end; gap:7px; }
 /* 배지 공통 */
 .issue-card .bd{ font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600;
   display:inline-flex; align-items:center; gap:3px; white-space:nowrap; line-height:1.5; }

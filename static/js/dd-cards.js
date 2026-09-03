@@ -76,12 +76,28 @@
     var items = (FLEET[VID].discussions)||[];
     var item = items.find(function(d){ return String(d._id)===String(id); });
     if(!item) return;
+    var originalHeight = Math.max(34, node.offsetHeight||0);
+    var wrap = document.createElement('div');
+    wrap.className = 'dd-card-edit-wrap';
     var editor = document.createElement(field==='description' ? 'textarea' : 'input');
     editor.className = 'inline-input dd-card-editor';
     editor.value = item[field]||'';
-    node.replaceWith(editor); editor.focus(); editor.select();
+    if(field==='description') editor.rows = 1;
+    var actions = document.createElement('div');
+    actions.className = 'dd-card-edit-actions';
+    var saveBtn = document.createElement('button');
+    saveBtn.type = 'button'; saveBtn.className = 'exp-btn pri'; saveBtn.textContent = '저장';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button'; cancelBtn.className = 'exp-btn'; cancelBtn.textContent = '취소';
+    actions.append(saveBtn, cancelBtn); wrap.append(editor, actions);
+    node.replaceWith(wrap); editor.focus(); editor.select();
     var done = false;
     function cancel(){ if(done) return; done=true; window.renderDisc(); }
+    function fit(){
+      if(field!=='description') return;
+      editor.style.height='auto';
+      editor.style.height=Math.max(originalHeight, editor.scrollHeight||0)+'px';
+    }
     function save(){
       if(done) return;
       var value=editor.value.trim();
@@ -89,7 +105,9 @@
       done=true; item[field]=value;
       Promise.resolve(persist('disc', items)).then(function(){ buildDDF(); window.renderDisc(); });
     }
-    editor.addEventListener('blur', save);
+    fit(); editor.addEventListener('input', fit);
+    saveBtn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); save(); });
+    cancelBtn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); cancel(); });
     editor.addEventListener('keydown', function(e){
       if(e.key==='Escape'){ e.preventDefault(); cancel(); }
       else if(field!=='description' && e.key==='Enter'){ e.preventDefault(); save(); }
