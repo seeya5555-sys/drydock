@@ -243,7 +243,7 @@
 
   <!-- Daily -->
   <div id="vt-daily" class="page"><main>
-    <div class="sec-hdr"><div class="sec-title">Daily Log</div><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div>
+    <div class="sec-hdr"><div class="sec-title">Daily Log</div><div class="daily-log-actions"><button class="btn-sec" id="btn-daily-expand-all" type="button" onclick="_ddToggleDailyAll()">▼ 전체 펼치기</button><button class="btn-add" onclick="openDiscModal(null)">+ Add Log</button></div></div>
     <div class="filter-bar">
       <button class="qf-btn" id="qf-d-today" onclick="jumpToToday()" style="margin-right:4px">📅 Today</button>
       <input type="text" class="fi" id="d-q" placeholder="Search items…" oninput="renderDisc()">

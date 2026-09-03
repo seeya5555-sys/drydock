@@ -13,6 +13,8 @@
   var _origCls = window.renderClass, _origDsc = window.renderDisc;
 
   function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function attrArg(s){ return encodeURIComponent(String(s)).replace(/'/g,'%27'); }
+  window._ddAttrArg = attrArg;
 
   // 우선순위 → TRMT .bd .pri-* 매핑 (drydock: Normal/Urgent/Critical/On Hold)
   function priBadge(pri){
@@ -53,6 +55,63 @@
     var set = kind==='cls' ? window._ddClsExp : window._ddDscExp;
     if(set.has(id)) set.delete(id); else set.add(id);
     (kind==='cls' ? window.renderClass : window.renderDisc)();
+  };
+
+  // 날짜 헤더의 Add Log: 모달을 연 뒤 그 그룹 날짜를 바로 넣는다.
+  window._ddAddLog = function(event, date){
+    event.preventDefault();
+    event.stopPropagation();
+    if(typeof isViewer==='function' && isViewer()){ toast('읽기 전용 계정입니다', true); return; }
+    openDiscModal(null);
+    var text = date === '(날짜 없음)' ? '' : date;
+    var input = document.getElementById('md-date'), picker = document.getElementById('md-date-pick');
+    if(input) input.value = text;
+    if(picker) picker.value = text;
+  };
+
+  // 카드 제목·상세를 카드 안에서 직접 편집하고 기존 bulk 저장 경로로 보낸다.
+  window._ddEditDaily = function(event, id, node, field){
+    event.stopPropagation();
+    if(typeof isViewer==='function' && isViewer()){ toast('읽기 전용 계정입니다', true); return; }
+    var items = (FLEET[VID].discussions)||[];
+    var item = items.find(function(d){ return String(d._id)===String(id); });
+    if(!item) return;
+    var editor = document.createElement(field==='description' ? 'textarea' : 'input');
+    editor.className = 'inline-input dd-card-editor';
+    editor.value = item[field]||'';
+    node.replaceWith(editor); editor.focus(); editor.select();
+    var done = false;
+    function cancel(){ if(done) return; done=true; window.renderDisc(); }
+    function save(){
+      if(done) return;
+      var value=editor.value.trim();
+      if(field==='item' && !value){ toast('Topic is required', true); cancel(); return; }
+      done=true; item[field]=value;
+      Promise.resolve(persist('disc', items)).then(function(){ buildDDF(); window.renderDisc(); });
+    }
+    editor.addEventListener('blur', save);
+    editor.addEventListener('keydown', function(e){
+      if(e.key==='Escape'){ e.preventDefault(); cancel(); }
+      else if(field!=='description' && e.key==='Enter'){ e.preventDefault(); save(); }
+      else if(field==='description' && e.key==='Enter' && (e.metaKey||e.ctrlKey)){ e.preventDefault(); save(); }
+    });
+  };
+
+  // 날짜 그룹과 개별 카드를 한 버튼으로 함께 펼치거나 접는다.
+  window._ddToggleDailyAll = function(){
+    if(typeof VID==='undefined' || !VID) return;
+    var items = (FLEET[VID].discussions)||[];
+    var dates = Array.from(new Set(items.map(function(d){ return d.date||'(날짜 없음)'; })));
+    var allExpanded = dates.every(function(d){ return !discCollapsed.has(d); }) &&
+      items.every(function(d){ return window._ddDscExp.has(String(d._id)); });
+    if(allExpanded){
+      dates.forEach(function(d){ discCollapsed.add(d); });
+      window._ddDscExp.clear();
+    }else{
+      dates.forEach(function(d){ discCollapsed.delete(d); });
+      items.forEach(function(d){ window._ddDscExp.add(String(d._id)); });
+    }
+    window.renderDisc();
   };
 
   // ── Class Items 카드 렌더 ────────────────────────────────
@@ -114,11 +173,20 @@
       [...new Set(fil.map(function(d){return d.date||'(날짜 없음)';}))].forEach(function(d){ discCollapsed.add(d); });
     }
     window._ddDiscInit = true;
+    var allDates = Array.from(new Set(items.map(function(d){return d.date||'(날짜 없음)';})));
+    var allExpanded = allDates.every(function(d){return !discCollapsed.has(d);}) &&
+      items.every(function(d){return window._ddDscExp.has(String(d._id));});
+    var allBtn=document.getElementById('btn-daily-expand-all');
+    if(allBtn){
+      allBtn.textContent = allExpanded ? '▶ 전체 접기' : '▼ 전체 펼치기';
+      allBtn.setAttribute('aria-pressed', allExpanded ? 'true' : 'false');
+    }
     var cnt=document.getElementById('d-cnt'); if(cnt) cnt.textContent = fil.length+' items';
     if(!fil.length){ mount('d-body','d-cards','<div class="dd-empty">No discussion items found</div>'); return; }
 
     function card(d){
       var exp = window._ddDscExp.has(String(d._id));
+      var idArg = attrArg(d._id);
       var head = '<span class="issue-card-no">'+esc(d.no||'')+'</span>'+
                  '<span class="card-caret">'+(exp?'▾':'▸')+'</span>'+
                  (d.time_of_day?'<span class="bd sess">'+esc(d.time_of_day)+'</span>':'')+
@@ -126,14 +194,14 @@
       var det='';
       if(exp){
         det = '<div class="issue-card-det" onclick="event.stopPropagation()">'+
-          (d.description?'<div class="exp-label">상세 내용</div><div class="exp-desc">'+esc(d.description)+'</div>':'')+
+          '<div class="exp-label">상세 내용</div><div class="exp-desc dd-inline-edit" title="클릭하여 바로 편집" onclick="_ddEditDaily(event,decodeURIComponent(\''+idArg+'\'),this,\'description\')">'+esc(d.description||'—')+'</div>'+
           timeline(d.actions, d.action)+
           '<div class="exp-btns"><button class="exp-btn pri" onclick="openDiscModalById(\''+d._id+'\')">상세 / 편집</button>'+
           '<button class="exp-btn" onclick="openGenAttach(\'disc\','+d._id+')">📎 첨부</button></div></div>';
       }
       return '<div class="issue-card'+(exp?' is-expanded':'')+'" onclick="_ddTgl(\'dsc\',\''+d._id+'\')">'+
              '<div class="issue-card-head">'+head+'</div>'+
-             '<div class="issue-card-body"><div class="issue-card-title">'+esc(d.item||'—')+'</div></div>'+det+'</div>';
+             '<div class="issue-card-body"><div class="issue-card-title dd-inline-edit" title="클릭하여 바로 편집" onclick="_ddEditDaily(event,decodeURIComponent(\''+idArg+'\'),this,\'item\')">'+esc(d.item||'—')+'</div></div>'+det+'</div>';
     }
 
     var isFiltering = q||df||sf||pf;
@@ -143,8 +211,10 @@
     fil.forEach(function(d){ var k=d.date||'(날짜 없음)'; if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(d); });
     var html = order.map(function(k){
       var col = discCollapsed.has(k), n=groups[k].length;
-      var hdr = '<div class="dd-date-hdr" onclick="toggleDiscDate(\''+k.replace(/'/g,"\\'")+'\')">'+
+      var dateArg = attrArg(k);
+      var hdr = '<div class="dd-date-hdr" onclick="toggleDiscDate(decodeURIComponent(\''+dateArg+'\'))">'+
                 '<span class="dd-caret">'+(col?'▶':'▼')+'</span>'+esc(k)+
+                '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+dateArg+'\'))">+ Add Log</button>'+
                 '<span class="dd-date-cnt">'+n+' item'+(n>1?'s':'')+'</span></div>';
       return hdr + (col?'':'<div class="dd-date-body">'+groups[k].map(card).join('')+'</div>');
     }).join('');
