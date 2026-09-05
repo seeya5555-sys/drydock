@@ -35,6 +35,12 @@ class DailyLogCardContractTests(unittest.TestCase):
         self.assertIn('class="issue-card-title dd-title-toggle"', js)
         self.assertNotIn("this,\\'item\\'", js)
 
+    def test_daily_log_title_is_bold(self):
+        css = (ROOT / "static/css/trmt-skin.css").read_text()
+        rule = css.split('.dd-title-toggle{', 1)[1].split('}', 1)[0]
+        self.assertIn('font-weight:700', rule)
+        self.assertLess(rule.index('font:inherit'), rule.index('font-weight:700'))
+
     def test_expand_toggle_controls_dates_and_cards_together(self):
         js = (ROOT / "static/js/dd-cards.js").read_text()
         self.assertIn("window._ddToggleDailyAll = function()", js)

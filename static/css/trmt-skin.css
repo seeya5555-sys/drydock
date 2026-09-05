@@ -84,7 +84,7 @@ body {
 .dd-status-toggle{ appearance:none; font:inherit; cursor:pointer; }
 .dd-status-toggle:hover{ filter:brightness(.96); box-shadow:0 0 0 2px rgba(24,95,165,.12); }
 .dd-status-toggle[aria-busy="true"]{ cursor:wait; opacity:.6; }
-.dd-title-toggle{ appearance:none; display:block; width:100%; padding:0; border:0; background:none; font:inherit; text-align:left; cursor:pointer; }
+.dd-title-toggle{ appearance:none; display:block; width:100%; padding:0; border:0; background:none; font:inherit; font-weight:700; text-align:left; cursor:pointer; }
 .dd-title-toggle:hover{ color:#185FA5; text-decoration:underline; text-underline-offset:3px; }
 /* 펼침 상세 */
 .issue-card-det{ margin-top:11px; border-top:1px solid #E5E4DD; padding-top:11px; cursor:default; }
