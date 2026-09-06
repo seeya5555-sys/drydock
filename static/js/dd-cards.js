@@ -106,8 +106,18 @@
       if(done) return;
       var value=editor.value.trim();
       if(field==='item' && !value){ toast('Topic is required', true); cancel(); return; }
-      done=true; item[field]=value;
-      Promise.resolve(persist('disc', items)).then(function(){ buildDDF(); window.renderDisc(); });
+      var vid=VID, payload=Object.assign({}, item); payload[field]=value;
+      saveBtn.disabled=true;
+      Promise.resolve(mutateRow('disc:'+vid+':'+item._id,
+        function(){ return apiFetch(API+'/discussions/'+item._id,'PUT',payload); }))
+        .then(function(saved){
+          if(!saved){ saveBtn.disabled=false; return; }
+          done=true;
+          var target=(FLEET[vid].discussions||[]).findIndex(function(d){return String(d._id)===String(item._id);});
+          if(target>=0)FLEET[vid].discussions[target]=dbD(saved);
+          if(VID===vid){buildDDF();window.renderDisc();}
+        })
+        .catch(function(){ saveBtn.disabled=false; editor.focus(); });
     }
     fit(); editor.addEventListener('input', fit);
     saveBtn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); save(); });

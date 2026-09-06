@@ -170,3 +170,8 @@ button, input, select, textarea { font-family: inherit !important; }
 
 /* 버튼 radius TRMT(6px) 근접 — 주요 버튼류 */
 .btn-add, .btn-pri, .btn-sec, .btn-edit, .btn-del, .edit-btn, .qf-btn, .exp-btn { border-radius: 6px !important; }
+
+.is-embedded > header .logo,
+.is-embedded > header .dd-back-trmt,
+.is-embedded > header .avatar-wrap { display:none !important; }
+.is-embedded > header { min-height:48px; }

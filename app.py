@@ -22,6 +22,26 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7일
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # 캐시버스팅 있으니 0
 os.makedirs(app.instance_path, exist_ok=True)
 
+def _asset_version():
+    h = hashlib.sha256()
+    for rel in ("static/css/main.css", "static/css/trmt-dock-ui.css", "static/css/trmt-skin.css",
+                "static/js/app.js", "static/js/dd-cards.js", "static/js/trmt-dock-icons.js"):
+        with open(os.path.join(app.root_path, rel), "rb") as f:
+            h.update(f.read())
+    return h.hexdigest()[:12]
+
+ASSET_VERSION = _asset_version()
+
+@app.after_request
+def cache_versioned_assets(response):
+    versioned = {
+        '/static/css/main.css', '/static/css/trmt-dock-ui.css', '/static/css/trmt-skin.css',
+        '/static/js/app.js', '/static/js/dd-cards.js', '/static/js/trmt-dock-icons.js',
+    }
+    if request.path in versioned and request.args.get('v') == ASSET_VERSION:
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return response
+
 # ── MCP / OAuth 디버그 로거 ───────────────────────────────────
 # 환경변수 MCP_DEBUG=1 일 때만 활성화 (기본 OFF, 운영용)
 # systemd drop-in 또는 /etc/systemd/system/drydock.service 의
@@ -440,8 +460,8 @@ def change_password():
 @app.route("/")
 @login_required
 def index():
-    import time
-    return render_template("index.html", version=int(time.time()))
+    return render_template("index.html", version=ASSET_VERSION,
+                           embedded=request.args.get('embedded') == '1')
 
 
 # ══════════════════════════════════════════════════════════════
@@ -851,7 +871,10 @@ def update_class_item(cid):
          d.get("open_date") or None, d.get("close_date") or None,
          d.get("status","Open"), d.get("priority","Normal"), cid))
     db.commit()
-    return jsonify(to_class(row("SELECT * FROM class_items WHERE id=?", cid)))
+    saved = row("SELECT * FROM class_items WHERE id=?", cid)
+    if not saved:
+        abort(404)
+    return jsonify(to_class(saved))
 
 @app.route("/api/class_items/<int:cid>", methods=["DELETE"])
 def delete_class_item(cid):
@@ -910,7 +933,10 @@ def update_discussion(did):
          d.get("item",""), d.get("description",""),
          je(d.get("actions",[])), d.get("status","Open"), d.get("priority","Normal"), did))
     db.commit()
-    return jsonify(to_disc(row("SELECT * FROM discussions WHERE id=?", did)))
+    saved = row("SELECT * FROM discussions WHERE id=?", did)
+    if not saved:
+        abort(404)
+    return jsonify(to_disc(saved))
 
 @app.route("/api/discussions/<int:did>", methods=["DELETE"])
 def delete_discussion(did):

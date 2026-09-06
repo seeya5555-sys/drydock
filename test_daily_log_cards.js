@@ -55,11 +55,18 @@ test('card inline edit matches content height and saves only from an explicit ac
   global.document = { createElement: element };
   let replacement = null, saves = 0;
   const node = { offsetHeight: 96, replaceWith: value => { replacement = value; } };
-  global.persist = async (kind, items) => {
-    assert.equal(kind, 'disc');
-    assert.equal(items[0]._id, 10);
-    saves += 1;
+  const locked = new Set();
+  global.mutateRow = async (key, operation) => {
+    if(locked.has(key)) return null;
+    locked.add(key);
+    try { return await operation(); } finally { locked.delete(key); }
   };
+  global.API = '/api';
+  global.apiFetch = async (url, method, payload) => {
+    assert.equal(url, '/api/discussions/10'); assert.equal(method, 'PUT');
+    saves += 1; return { ...payload, _id: 10 };
+  };
+  global.dbD = value => value;
   global.buildDDF = () => {};
   global.renderDisc = () => {};
   _ddEditDaily({ stopPropagation: () => {} }, '10', node, 'description');
@@ -74,7 +81,7 @@ test('card inline edit matches content height and saves only from an explicit ac
   saveBtn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
   saveBtn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(item.description, 'new detail');
+  assert.equal(global.FLEET.v_1.discussions[0].description, 'new detail');
   assert.equal(saves, 1);
 });
 

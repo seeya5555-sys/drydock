@@ -119,6 +119,15 @@ async function persist(key, data){
   }catch(e){setSS('error');toast('저장 실패: '+e.message,true);}
 }
 
+const ROW_MUTATIONS = new Set();
+async function mutateRow(key, operation){
+  if(ROW_MUTATIONS.has(key)) return null;
+  ROW_MUTATIONS.add(key); setSS('saving');
+  try { const result=await operation(); setSS('synced'); return result; }
+  catch(e){ setSS('error'); toast('저장 실패: '+e.message,true); throw e; }
+  finally { ROW_MUTATIONS.delete(key); }
+}
+
 function isViewer() { return CURRENT_USER.role === 'viewer'; }
 
 function applyRoleUI() {
@@ -3083,7 +3092,7 @@ function openClassModal(idx){
   document.querySelectorAll('input[name="mc-priority"]').forEach(r=>{ r.checked=(r.value===pri); });
   openM('m-class');
 }
-function saveClass(){
+async function saveClass(){
   if(!VID)return;
   const cd=document.getElementById('mc-close').value.trim();
   const selPri = document.querySelector('input[name="mc-priority"]:checked');
@@ -3100,14 +3109,28 @@ function saveClass(){
   };
   if(!c.finding){toast('Finding title is required',true);return;}
   if(!FLEET[VID].classItems)FLEET[VID].classItems=[];
-  if(eClsIdx===null)FLEET[VID].classItems.push(c);else FLEET[VID].classItems[eClsIdx]=c;
-  persist('class',FLEET[VID].classItems);closeM('m-class');renderClass();renderDash();
-  toast(eClsIdx===null?'Class item added':'Class item updated');
+  const vid=VID, idx=eClsIdx, current=idx===null?null:FLEET[vid].classItems[idx];
+  try{
+    const saved=await mutateRow(`class:${vid}:${current?._id||'new'}`,
+      ()=>current?apiFetch(`${API}/class_items/${current._id}`,'PUT',c)
+                  :apiFetch(`${API}/vessels/${vid}/class_items`,'POST',c));
+    if(!saved)return;
+    if(idx===null)FLEET[vid].classItems.push(dbC(saved));else{
+      const target=FLEET[vid].classItems.findIndex(x=>String(x._id)===String(current._id));
+      if(target>=0)FLEET[vid].classItems[target]=dbC(saved);
+    }
+    if(VID===vid){closeM('m-class');renderClass();renderDash();}
+    toast(idx===null?'Class item added':'Class item updated');
+  }catch(_){ }
 }
-function deleteClass(){
+async function deleteClass(){
   if(eClsIdx===null||!VID)return;if(!confirm('Delete this class item?'))return;
-  FLEET[VID].classItems.splice(eClsIdx,1);persist('class',FLEET[VID].classItems);
-  closeM('m-class');renderClass();renderDash();toast('Class item deleted');
+  const vid=VID, idx=eClsIdx, item=FLEET[vid].classItems[idx];if(!item?._id)return;
+  try{const ok=await mutateRow(`class:${vid}:${item._id}`,()=>apiFetch(`${API}/class_items/${item._id}`,'DELETE'));
+    if(ok===null)return;const target=FLEET[vid].classItems.findIndex(x=>String(x._id)===String(item._id));
+    if(target>=0)FLEET[vid].classItems.splice(target,1);
+    if(VID===vid){closeM('m-class');renderClass();renderDash();}toast('Class item deleted');
+  }catch(_){ }
 }
 
 // ══ DISCUSSION ════════════════════════════════════════
@@ -3312,7 +3335,7 @@ function openDiscModal(idx){
   });
   openM('m-disc');
 }
-function saveDisc(){
+async function saveDisc(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
 
   if(!VID)return;
@@ -3332,16 +3355,27 @@ function saveDisc(){
   if(eDscIdx!==null && items[eDscIdx]?._id) d._id = items[eDscIdx]._id;
   if(!d.item){toast('Topic is required',true);return;}
   if(!FLEET[VID].discussions)FLEET[VID].discussions=[];
-  if(eDscIdx===null)FLEET[VID].discussions.push(d);else FLEET[VID].discussions[eDscIdx]=d;
-  persist('disc',FLEET[VID].discussions);closeM('m-disc');buildDDF();renderDisc();
-  toast(eDscIdx===null?'Log added':'Log updated');
+  const vid=VID, idx=eDscIdx, current=idx===null?null:items[idx];
+  try{const saved=await mutateRow(`disc:${vid}:${current?._id||'new'}`,
+      ()=>current?apiFetch(`${API}/discussions/${current._id}`,'PUT',d)
+                  :apiFetch(`${API}/vessels/${vid}/discussions`,'POST',d));
+    if(!saved)return;if(idx===null)FLEET[vid].discussions.push(dbD(saved));else{
+      const target=FLEET[vid].discussions.findIndex(x=>String(x._id)===String(current._id));
+      if(target>=0)FLEET[vid].discussions[target]=dbD(saved);
+    }
+    if(VID===vid){closeM('m-disc');buildDDF();renderDisc();}toast(idx===null?'Log added':'Log updated');
+  }catch(_){ }
 }
-function deleteDisc(){
+async function deleteDisc(){
   if(isViewer()) { toast('읽기 전용 계정입니다', true); return; }
 
   if(eDscIdx===null||!VID)return;if(!confirm('Delete?'))return;
-  FLEET[VID].discussions.splice(eDscIdx,1);persist('disc',FLEET[VID].discussions);
-  closeM('m-disc');buildDDF();renderDisc();toast('Log deleted');
+  const vid=VID, idx=eDscIdx, item=FLEET[vid].discussions[idx];if(!item?._id)return;
+  try{const ok=await mutateRow(`disc:${vid}:${item._id}`,()=>apiFetch(`${API}/discussions/${item._id}`,'DELETE'));
+    if(ok===null)return;const target=FLEET[vid].discussions.findIndex(x=>String(x._id)===String(item._id));
+    if(target>=0)FLEET[vid].discussions.splice(target,1);
+    if(VID===vid){closeM('m-disc');buildDDF();renderDisc();}toast('Log deleted');
+  }catch(_){ }
 }
 
 // ══ VESSEL ADD/EDIT ═══════════════════════════════════

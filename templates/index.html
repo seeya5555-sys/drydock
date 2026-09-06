@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/trmt-dock-ui.css') }}?v={{ version }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/trmt-skin.css') }}?v={{ version }}">
 </head>
-<body class="trmt-dock">
+<body class="trmt-dock{% if embedded %} is-embedded{% endif %}">
 
 <!-- HEADER -->
 <header>
@@ -24,7 +24,7 @@
     <span class="bc-item active">FLEET OVERVIEW</span>
   </div>
   <div class="header-r">
-    <a href="/" class="dd-back-trmt" title="TRMT로 돌아가기" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;margin-right:10px;background:var(--blue,#185FA5);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap">&larr; TRMT</a>
+    <a href="/" target="_top" class="dd-back-trmt" title="TRMT로 돌아가기" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;margin-right:10px;background:var(--blue,#185FA5);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap">&larr; TRMT</a>
     <div class="save-pill synced" id="savePill">● SYNCED</div>
     <div class="today-label" id="todayLbl"></div>
     <div class="avatar-wrap" id="avatarWrap">
