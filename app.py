@@ -642,17 +642,57 @@ def _web_card_metrics(jobs):
     return {'totalJobs': len(leaves), 'completed': sum(v >= 100 for v in values), 'inProgress': sum(0 < v < 100 for v in values)}
 
 
+def _overview_metrics(jobs, dc_rate, open_class):
+    """Exact lightweight values used by the legacy fleet cards, without detail payloads."""
+    by_number = {j['number']: j for j in jobs if j['number']}
+    parents = set()
+    for number in by_number:
+        candidate = number
+        while candidate:
+            match = re.match(r'^([A-Za-z]*)(.*)$', candidate)
+            prefix, rest = match.groups()
+            alpha = re.match(r'^([\d.]+)[A-Za-z]+$', rest)
+            dotted = re.match(r'^(.+)\.\d+[A-Za-z]*$', rest)
+            candidate = (prefix + alpha.group(1) if alpha else
+                         prefix + dotted.group(1) if dotted else
+                         prefix if prefix and rest.isdigit() else None)
+            if candidate in by_number:
+                parents.add(candidate)
+                break
+    leaves = [j for j in jobs if j['number'] not in parents]
+    values = []
+    today = datetime.now().date()
+    for job in leaves:
+        try:
+            start = datetime.strptime(job['start_date'], '%Y-%m-%d').date()
+            end = datetime.strptime(job['end_date'], '%Y-%m-%d').date()
+            value = 100 if today >= end else 0 if today <= start else round((today-start).days/(end-start).days*100)
+        except Exception:
+            value = float(job['completion'] or 0)
+        values.append(value)
+    rate = 1 - float(dc_rate or 0) / 100
+    budget = sum(float(j['budget'] or 0) * (rate if j['category'] == 'Shipyard' else 1) for j in jobs)
+    consumed = sum(float(j['consumption'] or 0) * (rate if j['category'] == 'Shipyard' else 1) for j in jobs)
+    return {'budget': budget, 'consumption': consumed, 'leafCount': len(leaves),
+            'completed': sum(v >= 100 for v in values), 'openClass': open_class}
+
+
 @app.route('/api/fleet/cards')
 @login_required
 def fleet_cards():
     db = get_db(); allowed = _fleet_allowed_ids(db)
     jobs_by_vessel = {}
-    for r in db.execute('SELECT id,vessel_id,number,section,category,start_date,end_date,completion FROM jobs ORDER BY vessel_id,id').fetchall():
+    for r in db.execute('SELECT id,vessel_id,number,section,category,start_date,end_date,completion,budget,consumption FROM jobs ORDER BY vessel_id,id').fetchall():
         jobs_by_vessel.setdefault(r['vessel_id'], []).append(r)
+    class_counts = {r['vessel_id']: r['n'] for r in db.execute(
+        "SELECT vessel_id,COUNT(*) n FROM class_items WHERE status='Open' GROUP BY vessel_id").fetchall()}
     result = []
     for vessel in db.execute('SELECT * FROM vessels ORDER BY created_at').fetchall():
         if allowed is not None and vessel['id'] not in allowed: continue
-        result.append(dict(info=to_vessel(vessel), **_web_card_metrics(jobs_by_vessel.get(vessel['id'], []))))
+        jobs = jobs_by_vessel.get(vessel['id'], [])
+        result.append(dict(info=to_vessel(vessel),
+                           overview=_overview_metrics(jobs, vessel['dc_rate'], class_counts.get(vessel['id'], 0)),
+                           **_web_card_metrics(jobs)))
     return jsonify(result)
 
 

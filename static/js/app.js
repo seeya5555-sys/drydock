@@ -92,12 +92,18 @@ document.addEventListener('drop', event => {
 
 function setSS(s){const el=document.getElementById('savePill');el.className='save-pill '+s;el.textContent=s==='saving'?'● SAVING…':s==='synced'?'● SYNCED':'● ERROR';}
 
+const API_GET_INFLIGHT=new Map();
 async function apiFetch(url, method='GET', body=null){
+  if(method==='GET' && API_GET_INFLIGHT.has(url))return API_GET_INFLIGHT.get(url);
+  const request=(async()=>{
   const opts={method, headers:{'Content-Type':'application/json'}};
   if(body!==null) opts.body=JSON.stringify(body);
   const res=await fetch(url,opts);
   if(!res.ok) throw new Error(`${method} ${url} → ${res.status}`);
   return res.json();
+  })();
+  if(method==='GET')API_GET_INFLIGHT.set(url,request);
+  try{return await request;}finally{if(method==='GET'&&API_GET_INFLIGHT.get(url)===request)API_GET_INFLIGHT.delete(url);}
 }
 
 async function persist(key, data){
@@ -182,26 +188,12 @@ async function loadAll(){
   } catch(e) {}
 
   try{
-    const summary=await apiFetch(`${API}/fleet/summary`);
+    const summary=await apiFetch(`${API}/fleet/cards`);
     IDX=[];FLEET={};
-    if(!summary.length){
-      const v=await apiFetch(`${API}/vessels`,'POST',{
-        name:'KUWAIT PROSPERITY',type:'Container Carrier',
-        imo:'',shipyard:'',classSociety:'',dockIn:'',dockOut:'',duration:'',grt:''
-      });
-      IDX=[v.id];
-      FLEET[v.id]={info:dbI(v),jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set()};
-    } else {
+    if(summary.length){
       for(const e of summary){
         const id=e.info.id; IDX.push(id);
-        FLEET[id]={info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],
-          attachSet: new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`))};
-        // secBudget 로드
-        (e.secBudget||[]).forEach(sb => {
-          const key = `${id}::${sb.category}::${sb.section}`;
-          if(!window._secManualBudget) window._secManualBudget = {};
-          window._secManualBudget[key] = {budget: sb.budget||0, consumed: sb.consumed||0};
-        });
+        FLEET[id]={info:dbI(e.info),overview:e.overview||{},jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set(),detailsLoaded:false};
       }
     }
   }catch(e){toast('로드 실패: '+e.message,true);IDX=[];FLEET={};}
@@ -247,21 +239,18 @@ function vesselStatus(info){
 
 function renderFleet(){
   let active=0,done=0,cls=0;
-  IDX.forEach(id=>{const v=FLEET[id];cls+=(v.classItems||[]).filter(c=>c.status==='Open').length;const s=vesselStatus(v.info);if(s==='IN DRY DOCK'||s==='IN WET DOCK')active++;if(s==='COMPLETED')done++;});
+  IDX.forEach(id=>{const v=FLEET[id];cls+=Number(v.overview?.openClass||0);const s=vesselStatus(v.info);if(s==='IN DRY DOCK'||s==='IN WET DOCK')active++;if(s==='COMPLETED')done++;});
   document.getElementById('fk-v').textContent=IDX.length;
   document.getElementById('fk-a').textContent=active;
   document.getElementById('fk-d').textContent=done;
   document.getElementById('fk-c').textContent=cls;
 
   document.getElementById('vesselsGrid').innerHTML=IDX.map(id=>{
-    const v=FLEET[id],info=v.info,jobs=v.jobs||[];
-    const dcRate = info.dcRate || 0;
-    const tb = jobs.reduce((s,j) => { const b=+j.budget||0; return s+(j.category==='Shipyard'?b*(1-dcRate/100):b); }, 0);
-    const tc = jobs.reduce((s,j) => { const c=+j.consumption||0; return s+(j.category==='Shipyard'?c*(1-dcRate/100):c); }, 0);
+    const v=FLEET[id],info=v.info,overview=v.overview||{};
+    const tb=Number(overview.budget||0),tc=Number(overview.consumption||0);
     const pct=tb?Math.min(100,(tc/tb)*100):0;
-    const done2=jobs.filter(j=>{if(hasChildren(j.number,jobs))return false;const p=calcProgress(j.start_date,j.end_date);return(p!==null?p:j.completion||0)>=100;}).length;
-    const leafCount=jobs.filter(j=>!hasChildren(j.number,jobs)).length;
-    const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
+    const done2=Number(overview.completed||0),leafCount=Number(overview.leafCount||0);
+    const oc=Number(overview.openClass||0);
     const st=vesselStatus(info);
     const stripeCls=st==='IN DRY DOCK'?'amber':st==='IN WET DOCK'?'amber':st==='COMPLETED'?'green':'grey';
     const badgeCls=st==='IN DRY DOCK'?'sb-dock':st==='IN WET DOCK'?'sb-wet':st==='COMPLETED'?'sb-done':'sb-plan';
@@ -346,14 +335,40 @@ function renderFleet(){
   show('page-fleet');
 }
 
-function openVessel(id){
+let vesselLoadGen=0;
+async function openVessel(id){
+  const gen=++vesselLoadGen;
+  setSS('saving');
+  let loaded=false;
+  try{
+    const e=await apiFetch(`${API}/fleet/summary/${id}`);
+    if(gen!==vesselLoadGen)return;
+    FLEET[id]={...FLEET[id],info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),
+      attachSet:new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`)),detailsLoaded:true};
+    window._secManualBudget=window._secManualBudget||{};
+    Object.keys(window._secManualBudget).filter(k=>k.startsWith(id+'::')).forEach(k=>delete window._secManualBudget[k]);
+    (e.secBudget||[]).forEach(sb=>{const key=`${id}::${sb.category}::${sb.section}`;window._secManualBudget[key]={budget:sb.budget||0,consumed:sb.consumed||0};});
+    loaded=true;
+  }catch(e){if(gen===vesselLoadGen)toast('선박 상세 로드 실패: '+e.message,true);return;}
+  finally{if(gen===vesselLoadGen&&loaded)setSS('synced');}
+  if(gen!==vesselLoadGen)return;
   VID=id;
+  _tankLayout=null;_tankPlanData=[];_pipePlanData=[];_wpsCriteria=null;
+  _curTankId=null;_curTankName=null;_curPipeTankId=null;_curPipeTankName=null;
   resetQF();
   show('page-vessel');
   showTab('dashboard',document.querySelector('.vnav-btn'));
   setBreadcrumb([{label:'FLEET OVERVIEW',fn:'goFleet()'},{label:FLEET[id].info.name}]);
 }
-function goFleet(){VID=null;renderFleet();}
+async function goFleet(){
+  vesselLoadGen++;VID=null;
+  renderFleet();
+  try{
+    const cards=await apiFetch(`${API}/fleet/cards`);
+    cards.forEach(e=>{const id=e.info.id;if(FLEET[id]){FLEET[id].info=dbI(e.info);FLEET[id].overview=e.overview||{};}});
+  }catch(e){toast('Fleet 요약 갱신 실패: '+e.message,true);}
+  if(VID===null)renderFleet();
+}
 
 // ── Avatar 메뉴 ───────────────────────────────────────
 function toggleAvatarMenu() {
@@ -3490,7 +3505,7 @@ async function saveVessel(){
         duration: payload.duration
       });
       const id=created.id;
-      FLEET[id]={info:dbI(created),jobs:[],classItems:[],discussions:[]};
+      FLEET[id]={info:dbI(created),overview:{budget:0,consumption:0,leafCount:0,completed:0,openClass:0},jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set(),detailsLoaded:true};
       IDX.push(id);
       setSS('synced');closeM('m-vessel');renderFleet();toast(`${name} added to fleet`);
     }
