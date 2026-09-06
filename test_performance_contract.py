@@ -30,6 +30,12 @@ class PerformanceContractTests(unittest.TestCase):
         self.assertIn('overview=_overview_metrics(', server)
         self.assertNotIn("name:'KUWAIT PROSPERITY'", js)
 
+    def test_job_hierarchy_index_is_render_scoped(self):
+        js = (ROOT / 'static/js/app.js').read_text()
+        self.assertIn('let JOB_HIERARCHY_CACHE = new WeakMap()', js)
+        self.assertIn('JOB_HIERARCHY_CACHE.set(jobs, parents)', js)
+        self.assertIn('function renderJobs(){\n  // One hierarchy index per render', js)
+
     def test_overview_discount_and_float_completion_contract(self):
         jobs = [
             {'number':'1','category':'Shipyard','budget':100,'consumption':50,

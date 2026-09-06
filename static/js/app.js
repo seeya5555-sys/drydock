@@ -100,6 +100,7 @@ async function apiFetch(url, method='GET', body=null){
   if(body!==null) opts.body=JSON.stringify(body);
   const res=await fetch(url,opts);
   if(!res.ok) throw new Error(`${method} ${url} → ${res.status}`);
+  if(method!=='GET' && /\/jobs(?:\/|$)/.test(url)) JOB_HIERARCHY_CACHE=new WeakMap();
   return res.json();
   })();
   if(method==='GET')API_GET_INFLIGHT.set(url,request);
@@ -1482,7 +1483,10 @@ function isJobVisible(job, jobs) {
 }
 
 // 해당 job의 직접 자식이 있는지 (중간 부모 없는 자손 포함)
+let JOB_HIERARCHY_CACHE = new WeakMap();
 function hasChildren(num, jobs) {
+  let parents = JOB_HIERARCHY_CACHE.get(jobs);
+  if(parents) return parents.has(num);
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
   function findNearestAncestor(n) {
@@ -1490,7 +1494,10 @@ function hasChildren(num, jobs) {
     while(p) { if(numMap[p]) return p; p = getParentNumber(p); }
     return null;
   }
-  return jobs.some(j => j.number !== num && findNearestAncestor(j.number) === num);
+  parents = new Set();
+  jobs.forEach(j=>{const parent=findNearestAncestor(j.number);if(parent && parent!==j.number)parents.add(parent);});
+  JOB_HIERARCHY_CACHE.set(jobs, parents);
+  return parents.has(num);
 }
 
 function toggleJobCollapse(num) {
@@ -1581,6 +1588,9 @@ function computeParentSums(jobs) {
 }
 
 function renderJobs(){
+  // One hierarchy index per render. All helpers below share it; mutations call
+  // renderJobs again and therefore cannot reuse stale parent relationships.
+  JOB_HIERARCHY_CACHE = new WeakMap();
   const jobs=FLEET[VID].jobs||[];
   const q=document.getElementById('j-q').value.toLowerCase();
   const sf=document.getElementById('j-sf').value,cf=document.getElementById('j-cf').value,pf=document.getElementById('j-pf').value;
