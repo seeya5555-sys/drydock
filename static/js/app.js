@@ -1511,73 +1511,43 @@ function toggleGanttCollapse(num) {
 function computeParentDates(jobs) {
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
-
-  // 모든 자손 수집 함수
-  function getDescendants(num) {
-    const result = [];
-    jobs.forEach(child => {
-      if(getParentNumber(child.number) === num) {
-        result.push(child);
-        getDescendants(child.number).forEach(d => result.push(d));
-      }
-    });
-    return result;
-  }
-
-  jobs.forEach(j => {
-    if(!hasChildren(j.number, jobs)) return;
-    const descendants = getDescendants(j.number);
-    if(!descendants.length) return;
-
-    const starts = descendants.map(d => d.start_date).filter(s => s && s.trim());
-    const ends   = descendants.map(d => d.end_date).filter(e => e && e.trim());
-
-    j._autoStart = starts.length ? starts.sort()[0] : null;
-    j._autoEnd   = ends.length   ? ends.sort().reverse()[0] : null;
+  const acc = new Map();
+  jobs.forEach(child=>{
+    let p=getParentNumber(child.number),seen=new Set();
+    while(p && numMap[p] && !seen.has(p)){
+      seen.add(p);const a=acc.get(p)||{count:0,start:null,end:null};a.count++;
+      const start=child.start_date, end=child.end_date;
+      if(start&&start.trim()&&(!a.start||start<a.start))a.start=start;
+      if(end&&end.trim()&&(!a.end||end>a.end))a.end=end;
+      acc.set(p,a);p=getParentNumber(p);
+    }
   });
+  jobs.forEach(j=>{if(!hasChildren(j.number,jobs))return;const a=acc.get(j.number);if(!a?.count)return;j._autoStart=a.start;j._autoEnd=a.end;});
 }
 
 // 상위항목 Budget/Consumed/Progress를 하위항목 합계로 자동 계산
 function computeParentSums(jobs) {
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
-
-  function getAllDesc(num) {
-    const result = [];
-    jobs.forEach(j => {
-      if(j.number === num) return;
-      let p = getParentNumber(j.number);
-      while(p) {
-        if(p === num) { result.push(j); break; }
-        p = getParentNumber(p);
-      }
-    });
-    return result;
-  }
-
-  jobs.forEach(j => {
-    if(!hasChildren(j.number, jobs)) { j._autoSum = null; return; }
-    const desc = getAllDesc(j.number);
-    if(!desc.length) { j._autoSum = null; return; }
-
-    const totalBudget   = desc.reduce((s,d) => s + (+d.budget||0), 0);
-    const totalConsumed = desc.reduce((s,d) => s + (+d.consumption||0), 0);
-    // leaf 항목만 기준으로 계산
-    const leaves = desc.filter(d => !hasChildren(d.number, jobs));
-    // 공정률: completion이 입력된(>0) leaf만 분자/분모에 포함 (규칙2: 미입력 항목은 제외)
-    const enteredLeaves = leaves.filter(d => (+d.completion||0) > 0);
-    const avgPct = enteredLeaves.length
-      ? Math.round(enteredLeaves.reduce((s,d)=>s+(+d.completion),0) / enteredLeaves.length)
-      : 0;
-    // 스케줄: 날짜가 있는 leaf만 분자/분모에 포함 (날짜 미입력 항목 제외)
-    const datedLeaves = leaves.filter(d => d.start_date && d.end_date);
-    const schedPcts = datedLeaves.map(d => {
-      const lp = calcProgress(d.start_date, d.end_date);
-      return lp !== null ? lp : 0;
-    });
-    const avgSchedPct = schedPcts.length ? Math.round(schedPcts.reduce((a,b)=>a+b,0)/schedPcts.length) : 0;
-    j._autoSum = { budget: totalBudget, consumption: totalConsumed, completion: avgPct, schedule: avgSchedPct };
+  const acc=new Map();
+  jobs.forEach(d=>{
+    const leaf=!hasChildren(d.number,jobs),completion=(+d.completion||0);
+    const schedule=leaf&&d.start_date&&d.end_date?(calcProgress(d.start_date,d.end_date)??0):0;
+    let p=getParentNumber(d.number),seen=new Set();
+    while(p&&!seen.has(p)){
+      seen.add(p);
+      if(numMap[p]){const a=acc.get(p)||{count:0,budget:0,consumption:0,completion:0,completionCount:0,schedule:0,scheduleCount:0};
+        a.count++;a.budget+=(+d.budget||0);a.consumption+=(+d.consumption||0);
+        if(leaf&&completion>0){a.completion+=completion;a.completionCount++;}
+        if(leaf&&d.start_date&&d.end_date){a.schedule+=schedule;a.scheduleCount++;}
+        acc.set(p,a);}
+      p=getParentNumber(p);
+    }
   });
+  jobs.forEach(j=>{const a=acc.get(j.number);if(!hasChildren(j.number,jobs)||!a?.count){j._autoSum=null;return;}
+    j._autoSum={budget:a.budget,consumption:a.consumption,
+      completion:a.completionCount?Math.round(a.completion/a.completionCount):0,
+      schedule:a.scheduleCount?Math.round(a.schedule/a.scheduleCount):0};});
 }
 
 function renderJobs(){
