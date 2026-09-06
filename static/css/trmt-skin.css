@@ -175,3 +175,177 @@ button, input, select, textarea { font-family: inherit !important; }
 .is-embedded > header .dd-back-trmt,
 .is-embedded > header .avatar-wrap { display:none !important; }
 .is-embedded > header { min-height:48px; }
+
+/* ============================================================
+   TRMT unified interface — final visual system
+   ============================================================ */
+:root {
+  --trmt-page:#F8F7F4; --trmt-surface:#FFFFFF; --trmt-surface-2:#F4F3EE;
+  --trmt-surface-3:#EBEAE3; --trmt-line:#E5E4DD; --trmt-line-strong:#D3D1C7;
+  --trmt-ink:#1F1F1D; --trmt-text:#2B2A27; --trmt-muted:#5F5E5A;
+  --trmt-faint:#888780; --trmt-blue:#185FA5; --trmt-blue-hover:#0F4C85;
+  --trmt-blue-soft:#E6F1FB; --trmt-blue-line:#85B7EB;
+  --radius:6px; --radius-md:10px; --radius-lg:12px;
+}
+html { background:var(--trmt-page); color-scheme:light; }
+body.trmt-dock { background:var(--trmt-page); color:var(--trmt-text); line-height:1.45; }
+body.trmt-dock main { max-width:1440px; padding:24px 28px 40px; }
+
+/* Header and navigation use the same restrained slate/ink language as TRMT. */
+body.trmt-dock > header { min-height:58px; padding:0 22px; background:#1E293B; border:0;
+  box-shadow:0 1px 0 rgba(255,255,255,.08); }
+.logo-icon { background:var(--trmt-blue)!important; border-radius:8px!important; box-shadow:none!important; }
+.logo-name { font-size:14px!important; letter-spacing:.02em!important; font-weight:650!important; }
+.logo-sub { font-size:9px!important; letter-spacing:.08em!important; opacity:.65; }
+.breadcrumb { color:#CBD5E1; font-size:12px; }
+.breadcrumb .active { color:#FFF; font-weight:650; }
+.save-pill { border-radius:999px!important; padding:4px 9px!important; font-size:10px!important; letter-spacing:.04em!important; }
+.vessel-nav { background:var(--trmt-surface); border:1px solid var(--trmt-line); border-width:1px 0;
+  padding:0 22px; gap:2px; box-shadow:none; overflow-x:auto; scrollbar-width:none; }
+.vessel-nav::-webkit-scrollbar { display:none; }
+.vnav-btn,.tracking-sub-btn { min-height:43px; padding:0 11px; border:0!important; color:var(--trmt-muted);
+  font-size:12px; font-weight:560; white-space:nowrap; }
+.vnav-btn:hover,.tracking-sub-btn:hover { background:var(--trmt-surface-2); color:var(--trmt-ink); }
+.vnav-btn.active,.tracking-sub-btn.active { color:var(--trmt-blue)!important; background:var(--trmt-blue-soft);
+  box-shadow:inset 0 -2px 0 var(--trmt-blue); }
+.tracking-subnav { background:var(--trmt-surface); border:1px solid var(--trmt-line); border-radius:10px;
+  box-shadow:0 12px 32px rgba(15,23,42,.12); padding:5px; }
+
+/* Remove the old marketing hero; use the same calm page-heading treatment as TRMT. */
+.fleet-hero { min-height:110px; margin-bottom:18px; padding:24px 26px; border:1px solid var(--trmt-line);
+  border-radius:var(--radius-lg); background:var(--trmt-surface)!important; box-shadow:none; }
+.fleet-hero::after { display:none; }
+.fleet-hero-title { color:var(--trmt-ink)!important; font-size:28px!important; letter-spacing:-.035em!important;
+  font-weight:720!important; }
+.fleet-hero-sub,.fleet-hero-date { color:var(--trmt-faint)!important; font-family:inherit!important;
+  letter-spacing:.03em!important; }
+.fleet-kpis,.dash-stats { gap:12px; margin-bottom:20px; }
+.kpi-card,.stat-card { background:var(--trmt-surface)!important; border:1px solid var(--trmt-line)!important;
+  border-radius:var(--radius-md)!important; box-shadow:none!important; padding:16px 17px!important; }
+.kpi-card::before,.stat-card::before { width:3px!important; height:auto!important; right:auto!important; bottom:0; border-radius:10px 0 0 10px; }
+.kpi-label,.stat-lbl { color:var(--trmt-muted)!important; letter-spacing:.035em!important; font-size:10.5px!important; }
+.kpi-value,.stat-val { color:var(--trmt-ink)!important; font-size:28px!important; font-weight:720!important; }
+.kpi-sub,.stat-sub { color:var(--trmt-faint)!important; }
+
+/* Cards and sections: flat white surfaces, subtle warm borders, no floating shadows. */
+.sec-hdr { margin:18px 0 10px; }
+.sec-title { color:var(--trmt-ink)!important; font-size:17px!important; font-weight:680!important; }
+.vessels-grid { gap:14px; }
+.vessel-card,.panel,.dash-panel,.docs-section,.tank-item-row { background:var(--trmt-surface)!important;
+  border:1px solid var(--trmt-line)!important; border-radius:var(--radius-md)!important; box-shadow:none!important; }
+.vessel-card { overflow:hidden; transition:border-color .12s,background .12s; }
+.vessel-card:hover { transform:none!important; border-color:var(--trmt-blue-line)!important; background:#FCFDFF!important; }
+.vc-stripe { width:3px!important; }
+.vc-name { color:var(--trmt-ink)!important; font-size:17px!important; font-weight:680!important; letter-spacing:-.015em!important; }
+.vc-type,.vc-meta,.vc-money { color:var(--trmt-muted)!important; }
+.vc-body,.vc-stats { border-color:var(--trmt-line)!important; background:var(--trmt-surface)!important; }
+.vc-prog-bar { background:var(--trmt-surface-3)!important; border-radius:99px!important; overflow:hidden; }
+.vc-prog-fill { background:var(--trmt-blue)!important; }
+.add-card { border:1px dashed var(--trmt-line-strong)!important; background:transparent!important;
+  border-radius:var(--radius-md)!important; color:var(--trmt-muted)!important; }
+.add-card:hover { border-color:var(--trmt-blue)!important; background:var(--trmt-blue-soft)!important; color:var(--trmt-blue)!important; }
+
+/* Tables and toolbars match TRMT list density and neutral hierarchy. */
+.table-wrap,.j-table-wrap,.c-table-wrap,.d-table-wrap { background:var(--trmt-surface); border:1px solid var(--trmt-line);
+  border-radius:var(--radius-md); overflow:auto; box-shadow:none; }
+thead th { background:var(--trmt-surface-2)!important; color:var(--trmt-muted)!important; border-color:var(--trmt-line)!important;
+  padding:9px 12px!important; font-size:10.5px!important; letter-spacing:.035em!important; }
+tbody tr { border-color:var(--trmt-line)!important; }
+tbody tr:hover { background:var(--trmt-blue-soft)!important; }
+tbody td { color:var(--trmt-text)!important; padding:9px 12px!important; }
+.toolbar,.j-toolbar,.c-toolbar,.d-toolbar,.qf-bar { background:var(--trmt-surface)!important;
+  border-color:var(--trmt-line)!important; box-shadow:none!important; gap:8px!important; }
+.qf-btn { border:1px solid var(--trmt-line)!important; background:var(--trmt-surface)!important; color:var(--trmt-muted)!important; }
+.qf-btn:hover { border-color:var(--trmt-blue-line)!important; background:var(--trmt-blue-soft)!important; color:var(--trmt-blue)!important; }
+.qf-btn.active { background:var(--trmt-blue)!important; border-color:var(--trmt-blue)!important; color:#fff!important; }
+
+/* One button grammar across every tool and modal. */
+.btn-add,.btn-pri { background:var(--trmt-blue)!important; border:1px solid var(--trmt-blue)!important;
+  color:#FFF!important; box-shadow:none!important; font-weight:650!important; }
+.btn-add:hover,.btn-pri:hover { background:var(--trmt-blue-hover)!important; border-color:var(--trmt-blue-hover)!important; }
+.btn-sec,.btn-edit,.edit-btn,.exp-btn { background:var(--trmt-surface)!important; border:1px solid var(--trmt-line-strong)!important;
+  color:var(--trmt-text)!important; box-shadow:none!important; font-weight:580!important; }
+.btn-sec:hover,.btn-edit:hover,.edit-btn:hover,.exp-btn:hover { background:var(--trmt-surface-2)!important;
+  border-color:var(--trmt-blue-line)!important; color:var(--trmt-blue)!important; }
+.btn-del { background:var(--red-bg)!important; border:1px solid #F09595!important; color:var(--red)!important; }
+.btn-del:hover { background:#F7D7D7!important; }
+button:focus-visible,a:focus-visible,[role="button"]:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
+  outline:2px solid var(--trmt-blue)!important; outline-offset:2px!important; }
+button:disabled { opacity:.48; cursor:not-allowed!important; }
+
+/* Forms and modals share TRMT's compact, quiet editing surface. */
+.modal-overlay { padding:18px; background:rgba(15,23,42,.46)!important; backdrop-filter:blur(3px)!important; }
+.modal { width:min(620px,calc(100vw - 28px)); max-height:calc(100vh - 36px); overflow:auto;
+  background:var(--trmt-surface)!important; border:1px solid var(--trmt-line)!important;
+  border-radius:var(--radius-lg)!important; box-shadow:0 20px 60px rgba(15,23,42,.22)!important; }
+.modal-hdr { padding:16px 20px 13px!important; border-color:var(--trmt-line)!important; }
+.modal-title { color:var(--trmt-ink)!important; font-size:16px!important; font-weight:680!important; }
+.modal-body { padding:18px 20px!important; }
+.modal-footer { padding:12px 20px!important; border-color:var(--trmt-line)!important; background:var(--trmt-surface-2); }
+.modal-x { border:1px solid var(--trmt-line)!important; color:var(--trmt-muted)!important; background:var(--trmt-surface)!important; }
+.form-lbl { color:var(--trmt-muted)!important; text-transform:none!important; letter-spacing:.01em!important; font-size:11.5px!important; }
+.form-ctrl,.inline-input,.fi,.rm-date-inp { background:var(--trmt-surface)!important; color:var(--trmt-ink)!important;
+  border:1px solid var(--trmt-line-strong)!important; border-radius:6px!important; min-height:38px; }
+.form-ctrl:hover,.inline-input:hover,.fi:hover { border-color:var(--trmt-blue-line)!important; }
+
+/* Status, empty, document and loading surfaces. */
+.status-badge,.bd,.live-pill { border-radius:999px!important; font-weight:650!important; letter-spacing:.02em!important; box-shadow:none!important; }
+.empty-state,.docs-empty,.dd-empty { color:var(--trmt-faint)!important; background:transparent!important; }
+.docs-section-hdr { background:#1E293B!important; }
+.docs-file-item { background:var(--trmt-surface)!important; border-color:var(--trmt-line)!important; border-radius:8px!important; }
+.docs-file-item:hover { background:var(--trmt-blue-soft)!important; }
+.toast { border-radius:8px!important; box-shadow:0 10px 30px rgba(15,23,42,.16)!important; }
+
+/* Embedded shell is visually continuous with TRMT and avoids nested chrome. */
+.is-embedded { background:var(--trmt-page)!important; }
+.is-embedded > header { background:var(--trmt-surface)!important; color:var(--trmt-text)!important;
+  border-bottom:1px solid var(--trmt-line)!important; box-shadow:none!important; }
+.is-embedded > header .breadcrumb,.is-embedded > header .breadcrumb .active { color:var(--trmt-muted)!important; }
+.is-embedded > header .save-pill.synced { color:var(--green)!important; background:var(--green-bg)!important; }
+
+@media(max-width:900px){
+  body.trmt-dock main { padding:18px 16px 30px; }
+  .fleet-kpis,.dash-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-hero { min-height:auto; padding:20px; }
+  .fleet-hero-title { font-size:24px!important; }
+  .form-row,.form-row3 { grid-template-columns:1fr; gap:0; }
+}
+@media(max-width:560px){
+  body.trmt-dock main { padding:14px 10px 24px; }
+  body.trmt-dock > header { padding:0 12px; }
+  .fleet-kpis,.dash-stats { gap:8px; }
+  .kpi-card,.stat-card { padding:13px!important; }
+  .vessel-nav { padding:0 8px; }
+  .vnav-btn { min-height:44px; padding:0 9px; }
+  .modal-overlay { padding:0; align-items:flex-end; }
+  .modal { width:100%!important; max-width:none!important; max-height:94vh!important; border-radius:14px 14px 0 0!important; }
+  .modal-body { padding:16px!important; }
+  .modal-footer { position:sticky; bottom:0; padding:10px 16px calc(10px + env(safe-area-inset-bottom))!important; }
+  .modal-footer .btn-pri,.modal-footer .btn-sec { min-height:42px; }
+  tbody td { padding:8px 9px!important; }
+  .form-ctrl,.inline-input,.fi,.rm-date-inp { min-height:44px; font-size:16px!important; }
+}
+
+/* main.css used to turn every mobile table into cards. Restore true data tables;
+   only the Job surface keeps its intentional card-like grouping. */
+@media(max-width:768px){
+  body.trmt-dock table thead { display:table-header-group; }
+  body.trmt-dock table tbody { display:table-row-group; }
+  body.trmt-dock table tbody tr { display:table-row; margin:0; padding:0;
+    border:0; border-bottom:1px solid var(--trmt-line); border-radius:0; box-shadow:none; }
+  body.trmt-dock table tbody td { display:table-cell; min-height:0; padding:8px 9px!important; }
+  body.trmt-dock table tbody td::before { display:none; content:none; }
+  body.trmt-dock [id^="vt-"] .table-wrap { max-width:100%; overflow-x:auto!important; -webkit-overflow-scrolling:touch; }
+  body.trmt-dock #vt-jobs thead { display:none; }
+  body.trmt-dock #vt-jobs tbody { display:block; }
+  body.trmt-dock #vt-jobs tbody tr { display:block; margin-bottom:8px; padding:11px 12px;
+    border:1px solid var(--trmt-line); border-radius:8px; }
+  body.trmt-dock #vt-jobs tbody td { display:flex; min-height:28px; padding:4px 0!important; }
+  body.trmt-dock #vt-jobs tbody td::before { display:block; content:attr(data-label); }
+}
+
+@media(prefers-reduced-motion:reduce){
+  body.trmt-dock *,body.trmt-dock *::before,body.trmt-dock *::after {
+    animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important;
+  }
+}

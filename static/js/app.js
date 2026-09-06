@@ -299,7 +299,7 @@ function renderFleet(){
       }
     }
 
-    return`<div class="vessel-card" onclick="openVessel('${id}')">
+    return`<div class="vessel-card" role="button" tabindex="0" aria-label="${htmlSafe(info.name)} 열기" onclick="openVessel('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openVessel('${id}')}" >
       <div class="vc-stripe ${stripeCls}"></div>
       <div class="vc-top">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -335,7 +335,7 @@ function renderFleet(){
         <div class="vc-stat"><div class="vc-stat-n" style="color:${oc>0?'var(--red)':'var(--green)'}">${oc}</div><div class="vc-stat-l">Class</div></div>
       </div>
     </div>`;
-  }).join('')+`<div class="add-card" onclick="openAddVesselModal()"><div class="add-card-icon">＋</div><div class="add-card-lbl">ADD NEW VESSEL</div></div>`;
+  }).join('')+`<div class="add-card" role="button" tabindex="0" onclick="openAddVesselModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAddVesselModal()}"><div class="add-card-icon">＋</div><div class="add-card-lbl">ADD NEW VESSEL</div></div>`;
 
   setBreadcrumb([{label:'FLEET OVERVIEW'}]);
   show('page-fleet');
