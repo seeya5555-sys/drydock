@@ -1419,32 +1419,18 @@ function buildJobTree(jobs) {
 
 // 계층 정렬: 부모 바로 아래 자식들이 오도록
 function sortJobTree(jobs) {
-  const numMap = {};
-  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+  const index = getJobHierarchy(jobs);
 
   const result = [];
   const visited = new Set();
-
-  // 가장 가까운 실존 조상 찾기
-  function findNearestAncestor(num) {
-    let p = getParentNumber(num);
-    while(p) {
-      if(numMap[p]) return p;
-      p = getParentNumber(p);
-    }
-    return null;
-  }
 
   function insertWithChildren(job) {
     if(visited.has(job.number)) return;
     visited.add(job.number);
     result.push(job);
     // 직접 자식 + 중간 부모가 없는 자손도 포함
-    const children = jobs
-      .filter(j => {
-        if(visited.has(j.number)) return false;
-        return findNearestAncestor(j.number) === job.number;
-      })
+    const children = (index.children.get(job.number)||[])
+      .filter(j => !visited.has(j.number))
       .sort((a,b) => pNum(a.number) - pNum(b.number));
     children.forEach(c => insertWithChildren(c));
   }
@@ -1453,7 +1439,7 @@ function sortJobTree(jobs) {
   const roots = jobs
     .filter(j => {
       if(!j.number) return true;
-      return findNearestAncestor(j.number) === null;
+      return index.nearest.get(j) === null;
     })
     .sort((a,b) => {
       if(!a.number) return 1;
@@ -1469,8 +1455,7 @@ function sortJobTree(jobs) {
 
 // 접힌 상태에서 보여야 할 항목인지 확인
 function isJobVisible(job, jobs) {
-  const numMap = {};
-  jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
+  const numMap = getJobHierarchy(jobs).byNumber;
 
   let p = getParentNumber(job.number);
   while(p) {
@@ -1484,9 +1469,9 @@ function isJobVisible(job, jobs) {
 
 // 해당 job의 직접 자식이 있는지 (중간 부모 없는 자손 포함)
 let JOB_HIERARCHY_CACHE = new WeakMap();
-function hasChildren(num, jobs) {
-  let parents = JOB_HIERARCHY_CACHE.get(jobs);
-  if(parents) return parents.has(num);
+function getJobHierarchy(jobs) {
+  let index = JOB_HIERARCHY_CACHE.get(jobs);
+  if(index) return index;
   const numMap = {};
   jobs.forEach(j => { if(j.number) numMap[j.number] = j; });
   function findNearestAncestor(n) {
@@ -1494,10 +1479,18 @@ function hasChildren(num, jobs) {
     while(p) { if(numMap[p]) return p; p = getParentNumber(p); }
     return null;
   }
-  parents = new Set();
-  jobs.forEach(j=>{const parent=findNearestAncestor(j.number);if(parent && parent!==j.number)parents.add(parent);});
-  JOB_HIERARCHY_CACHE.set(jobs, parents);
-  return parents.has(num);
+  const parents = new Set(), children = new Map(), nearest = new Map();
+  jobs.forEach(j=>{
+    const parent=findNearestAncestor(j.number);
+    nearest.set(j, parent);
+    if(parent && parent!==j.number){parents.add(parent);const bucket=children.get(parent)||[];bucket.push(j);children.set(parent,bucket);}
+  });
+  index={byNumber:numMap, parents, children, nearest};
+  JOB_HIERARCHY_CACHE.set(jobs, index);
+  return index;
+}
+function hasChildren(num, jobs) {
+  return getJobHierarchy(jobs).parents.has(num);
 }
 
 function toggleJobCollapse(num) {
