@@ -42,6 +42,13 @@ class PerformanceContractTests(unittest.TestCase):
         body = js.split('function renderDash(){', 1)[1].split('\n}', 1)[0]
         self.assertLess(body.index('computeParentDates(jobs)'), body.index("!panel.classList.contains('active')"))
 
+    def test_raw_uploads_fail_closed_on_http_errors(self):
+        js = (ROOT / 'static/js/app.js').read_text()
+        self.assertIn('async function rawFetchOK(url, opts)', js)
+        self.assertIn('if(!res.ok)', js.split('async function rawFetchOK', 1)[1].split('\n}', 1)[0])
+        self.assertGreaterEqual(js.count('await rawFetchOK('), 5)
+        self.assertGreaterEqual(js.count('업로드는 완료됐지만 목록 갱신에 실패했습니다.'), 5)
+
     def test_overview_discount_and_float_completion_contract(self):
         jobs = [
             {'number':'1','category':'Shipyard','budget':100,'consumption':50,

@@ -106,6 +106,11 @@ async function apiFetch(url, method='GET', body=null){
   if(method==='GET')API_GET_INFLIGHT.set(url,request);
   try{return await request;}finally{if(method==='GET'&&API_GET_INFLIGHT.get(url)===request)API_GET_INFLIGHT.delete(url);}
 }
+async function rawFetchOK(url, opts){
+  const res=await fetch(url,opts);
+  if(!res.ok)throw new Error(`HTTP ${res.status}`);
+  return res;
+}
 
 async function persist(key, data){
   setSS('saving');
@@ -2811,14 +2816,16 @@ async function uploadJobAttach(input) {
   const formData = new FormData();
   for(const f of files) formData.append('files', f);
   setSS('saving');
+  let uploaded=false;
   try {
-    await fetch(`${API}/vessels/${VID}/attachments/job/${jobId}`, {method:'POST', body:formData});
+    await rawFetchOK(`${API}/vessels/${VID}/attachments/job/${jobId}`, {method:'POST', body:formData});
+    uploaded=true;
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/job/${jobId}`);
     _renderJobAttachUI(list||[]);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`job:${jobId}`);
     _updateJobAttachBtn(jobId, list?list.length:0);
     setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
-  } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
+  } catch(e){ setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
   clearUploadSource(input);
 }
 
@@ -2917,14 +2924,16 @@ async function uploadGenAttach(input) {
   const formData = new FormData();
   for(const f of files) formData.append('files', f);
   setSS('saving');
+  let uploaded=false;
   try {
-    await fetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`, {method:'POST', body:formData});
+    await rawFetchOK(`${API}/vessels/${VID}/attachments/${refType}/${refId}`, {method:'POST', body:formData});
+    uploaded=true;
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`);
     _renderGenAttachUI(list || []);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`${refType}:${refId}`);
     _updateGenAttachBtn(refType, +refId, list ? list.length : 0);
     setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
-  } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
+  } catch(e){ setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
   clearUploadSource(input);
 }
 
@@ -5439,12 +5448,14 @@ async function uploadPlanDoc(input) {
   const formData = new FormData();
   for(const f of files) formData.append('files', f);
   setSS('saving');
+  let uploaded=false;
   try {
-    await fetch(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`,
+    await rawFetchOK(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`,
       {method:'POST', body:formData});
+    uploaded=true;
     await _loadPlanDocList();
     setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
-  } catch(e) { setSS('error'); toast('업로드 실패: '+e.message, true); }
+  } catch(e) { setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
   clearUploadSource(input);
 }
 
@@ -6150,7 +6161,7 @@ async function _loadWpsFiles() {
       </div></div>`;
   }).join('');
 }
-async function uploadWpsFile(input){const files=uploadFiles(input);if(!VID||!files.length)return;const fd=new FormData();for(const f of files)fd.append('files',f);setSS('saving');try{await fetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`,{method:'POST',body:fd});await _loadWpsFiles();setSS('synced');toast(`${files.length}개 업로드 완료`);}catch(e){setSS('error');toast('업로드 실패: '+e.message,true);}clearUploadSource(input);}
+async function uploadWpsFile(input){const files=uploadFiles(input);if(!VID||!files.length)return;const fd=new FormData();for(const f of files)fd.append('files',f);setSS('saving');let uploaded=false;try{await rawFetchOK(`${API}/vessels/${VID}/attachments/vessel_wps/0`,{method:'POST',body:fd});uploaded=true;await _loadWpsFiles();setSS('synced');toast(`${files.length}개 업로드 완료`);}catch(e){setSS('error');toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message,true);}clearUploadSource(input);}
 async function deleteWpsFile(aid){if(!confirm('파일을 삭제하시겠습니까?'))return;setSS('saving');try{await apiFetch(`${API}/attachments/${aid}`,'DELETE');await _loadWpsFiles();setSS('synced');toast('삭제됐습니다');}catch(e){setSS('error');toast('삭제 실패: '+e.message,true);}}
 
 
@@ -6968,9 +6979,10 @@ async function uploadDocument(input, docType) {
   formData.append('doc_type', docType);
   for(const f of files) formData.append('file', f);
   setSS('saving');
+  let uploaded=false;
   try {
-    await fetch(`${API}/vessels/${VID}/documents`, {method:'POST', body:formData});
-    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
+    await rawFetchOK(`${API}/vessels/${VID}/documents`, {method:'POST', body:formData});
+    uploaded=true;
     // 해당 섹션만 갱신
     const listId = 'docs-list-'+_docTypeId(docType);
     const el = document.getElementById(listId);
@@ -6979,7 +6991,8 @@ async function uploadDocument(input, docType) {
       el.innerHTML = allDocs&&allDocs.length ? allDocs.map(f=>_docFileItem(f)).join('')
         : '<div class="docs-empty">📂 업로드된 파일이 없습니다</div>';
     }
-  } catch(e){ setSS('error'); toast('업로드 실패: '+e.message, true); }
+    setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
+  } catch(e){ setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
   clearUploadSource(input);
 }
 
