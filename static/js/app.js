@@ -763,6 +763,8 @@ function renderDash(){
   // _autoSum이 항상 최신값이 되도록 재계산 (Job Progress 탭 미방문 시에도 동일 값 보장)
   computeParentDates(jobs);
   computeParentSums(jobs);
+  const panel=document.getElementById('vt-dashboard');
+  if(panel && !panel.classList.contains('active'))return;
   // Shipyard는 After D/C 기준으로 합산
   const dcRate = info.dcRate || 0;
   const tb = jobs.reduce((s,j) => {

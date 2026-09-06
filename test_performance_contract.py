@@ -37,6 +37,11 @@ class PerformanceContractTests(unittest.TestCase):
         self.assertIn('(index.children.get(job.number)||[])', js)
         self.assertIn('function renderJobs(){\n  // One hierarchy index per render', js)
 
+    def test_hidden_dashboard_keeps_aggregates_fresh_but_skips_dom(self):
+        js = (ROOT / 'static/js/app.js').read_text()
+        body = js.split('function renderDash(){', 1)[1].split('\n}', 1)[0]
+        self.assertLess(body.index('computeParentDates(jobs)'), body.index("!panel.classList.contains('active')"))
+
     def test_overview_discount_and_float_completion_contract(self):
         jobs = [
             {'number':'1','category':'Shipyard','budget':100,'consumption':50,
