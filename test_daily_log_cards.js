@@ -171,7 +171,8 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   global.FLEET = { v_1: { discussions: [
     { _id: 1, date: '2026-09-03', item: 'open item', status: 'Open', priority: 'Urgent' },
     { _id: 2, date: '2026-09-03', item: 'done item', status: 'Close', priority: 'Normal' },
-    { _id: 3, date: '2026-09-02', item: 'older', status: 'Open', priority: 'Normal' }
+    { _id: 3, date: '2026-09-02', item: 'older', status: 'Open', priority: 'Normal' },
+    { _id: 4, date: '2026-09-04', item: 'close only', status: 'Closed', priority: 'Normal' }
   ] } };
   const host = { innerHTML: '' };
   const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
@@ -193,9 +194,35 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the sidebar');
   assert.match(host.innerHTML, /dd-date-sidebar/);
   assert.match(host.innerHTML, /2026-09-03/);
+  assert.match(host.innerHTML, /2026-09-04/);
   assert.match(host.innerHTML, /남음 1/);
+  assert.match(host.innerHTML, /완료 1/);
   assert.match(host.innerHTML, /긴급 1/);
-  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 2');
+  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 4');
+});
+
+test('Close tab renders both Close and Closed variants without Open leakage', () => {
+  global.VID = 'v_1';
+  global.FLEET = { v_1: { discussions: [
+    { _id: 1, date: '2026-09-01', item: 'open only', status: 'Open', priority: 'Normal' },
+    { _id: 2, date: '2026-09-02', item: 'close value', status: 'Close', priority: 'Normal' },
+    { _id: 3, date: '2026-09-02', item: 'closed value', status: 'Closed', priority: 'Normal' }
+  ] } };
+  const host = { innerHTML: '' };
+  const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
+  const elements = {
+    'd-q': { value: '' }, 'd-df': { value: '' }, 'd-sf': { value: 'Close' }, 'd-pf': { value: '' },
+    'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
+    'd-body': { closest: () => wrap }, 'd-cards': host
+  };
+  global.document = { getElementById: id => elements[id] || null };
+  window._ddPreferredDate = '';
+  cardRender();
+  assert.equal(window._ddSelectedDate, '2026-09-02', 'fallback should prefer a date with cards in the active tab');
+  assert.match(host.innerHTML, /close value/);
+  assert.match(host.innerHTML, /closed value/);
+  assert.doesNotMatch(host.innerHTML, /open only/);
+  assert.equal(window._ddVisibleDailyItems.length, 2);
 });
 
 test('Today is consumed once and preferred date returns after a temporary filter fallback', () => {
