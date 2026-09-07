@@ -70,6 +70,28 @@ class PerformanceContractTests(unittest.TestCase):
         self.assertIn('target="_top" class="dd-back-trmt"', html)
         self.assertIn('.is-embedded > header', css)
 
+    def test_boot_requests_are_parallel_and_tab_resources_are_reused(self):
+        js = (ROOT / 'static/js/app.js').read_text()
+        self.assertLess(js.index("const cardsRequest = apiFetch(`${API}/fleet/cards`)") ,
+                        js.index('CURRENT_USER = await userRequest'))
+        for key in ('tracking:', "'tank_plan'", "'pipe_plan'", "'tank_layout'", "'documents'"):
+            self.assertIn(key, js)
+        self.assertIn('if(VID!==vid || FLEET[vid]!==vessel)return;', js)
+
+    def test_plan_render_skips_hidden_svg_and_badges_use_summary_counts(self):
+        js = (ROOT / 'static/js/app.js').read_text()
+        self.assertIn("const tankActive=document.getElementById('vt-tankplan')?.classList.contains('active')", js)
+        self.assertIn("const pipeActive=document.getElementById('vt-pipeplan')?.classList.contains('active')", js)
+        badge_body = js.split('function _initPlanDocBadges()', 1)[1].split('\n}', 1)[0]
+        self.assertIn("counts.get(`${cfg.ref_type}:${cfg.ref_id}`)", badge_body)
+        self.assertNotIn('apiFetch(', badge_body)
+
+    def test_icon_observer_fast_rejects_plain_text(self):
+        icons = (ROOT / 'static/js/trmt-dock-icons.js').read_text()
+        self.assertIn('if(!emoji.test(n.nodeValue))return NodeFilter.FILTER_REJECT', icons)
+        self.assertIn('.dd-ui-icon', icons)
+        self.assertIn('plain+=chunk', icons)
+
 
 if __name__ == '__main__':
     unittest.main()
