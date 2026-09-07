@@ -9,6 +9,43 @@ from openpyxl import Workbook
 
 
 class FilePreviewTest(unittest.TestCase):
+    def test_xlsx_pdf_copy_is_fit_to_one_page_wide_without_dropping_media(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml',
+                '<worksheet><sheetPr><tabColor rgb="FF0000"/></sheetPr><pageMargins left="0.7"/>'
+                '<pageSetup orientation="portrait" scale="75"/></worksheet>')
+            archive.writestr('xl/media/image1.wmf', b'unchanged-image')
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            sheet = archive.read('xl/worksheets/sheet1.xml').decode('utf-8')
+            self.assertEqual(b'unchanged-image', archive.read('xl/media/image1.wmf'))
+        self.assertIn('fitToWidth="1"', sheet)
+        self.assertIn('fitToHeight="0"', sheet)
+        self.assertIn('fitToPage="1"', sheet)
+        self.assertNotIn('scale="75"', sheet)
+
+    def test_xlsx_fit_expands_self_closing_sheet_properties(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml',
+                '<worksheet><sheetPr codeName="Sheet1"/><pageSetup fitToWidth="3" fitToHeight="2"/></worksheet>')
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            sheet = archive.read('xl/worksheets/sheet1.xml').decode('utf-8')
+        self.assertEqual(1, sheet.count('<sheetPr'))
+        self.assertIn('<pageSetUpPr fitToPage="1"/>', sheet)
+        self.assertIn('fitToWidth="1"', sheet)
+
+    def test_xlsx_sheet_without_page_setup_is_left_unchanged(self):
+        original = '<worksheet><sheetPr/><drawing r:id="rId1"/></worksheet>'
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml', original)
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            self.assertEqual(original, archive.read('xl/worksheets/sheet1.xml').decode('utf-8'))
+
     def test_office_preview_prefers_converted_pdf(self):
         with drydock.app.test_request_context('/'), patch.object(drydock, '_office_pdf', return_value=b'%PDF-1.4 converted'):
             response = drydock._file_preview('report.docx', 'application/octet-stream', b'office')

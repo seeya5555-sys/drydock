@@ -1035,6 +1035,57 @@ _PREVIEW_TEXT_EXTS = {'.txt', '.csv', '.log', '.md', '.json', '.xml'}
 _PREVIEW_OFFICE_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.ppt', '.pptx'}
 _OFFICE_CONVERT_SLOTS = threading.BoundedSemaphore(1)
 
+def _xml_tag_attr(tag, name, value):
+    pattern = re.compile(r'(\s' + re.escape(name) + r')="[^"]*"')
+    if pattern.search(tag):
+        return pattern.sub(r'\1="' + value + '"', tag, count=1)
+    return tag[:-2] + f' {name}="{value}"/>' if tag.endswith('/>') else tag[:-1] + f' {name}="{value}">'
+
+def _xlsx_fit_to_width(data):
+    """Set Calc print scaling without parsing/resaving drawings or embedded media."""
+    output = io.BytesIO()
+    with _safe_zip(data) as archive, zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as fitted:
+        for info in archive.infolist():
+            payload = archive.read(info.filename)
+            if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', info.filename):
+                xml = payload.decode('utf-8')
+                setup = re.search(r'<(?:[A-Za-z_][\w.-]*:)?pageSetup\b[^>]*?/?>', xml)
+                if setup:
+                    tag = re.sub(r'\s+scale="[^"]*"', '', setup.group(0))
+                    tag = _xml_tag_attr(tag, 'fitToWidth', '1')
+                    tag = _xml_tag_attr(tag, 'fitToHeight', '0')
+                    xml = xml[:setup.start()] + tag + xml[setup.end():]
+                else:
+                    fitted.writestr(info, payload)
+                    continue
+                page_pr = re.search(r'<(?:[A-Za-z_][\w.-]*:)?pageSetUpPr\b[^>]*?/?>', xml)
+                if page_pr:
+                    tag = _xml_tag_attr(page_pr.group(0), 'fitToPage', '1')
+                    xml = xml[:page_pr.start()] + tag + xml[page_pr.end():]
+                else:
+                    sheet_pr = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheetPr\b[^>]*>.*?</(?P=prefix)sheetPr>', xml, re.DOTALL)
+                    page_pr_tag = '<pageSetUpPr fitToPage="1"/>'
+                    if sheet_pr:
+                        close = '</' + (sheet_pr.group('prefix') or '') + 'sheetPr>'
+                        tag = sheet_pr.group(0).replace(close, page_pr_tag + close, 1)
+                        xml = xml[:sheet_pr.start()] + tag + xml[sheet_pr.end():]
+                    else:
+                        sheet_pr = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheetPr\b[^>]*/>', xml)
+                        if sheet_pr:
+                            prefix = sheet_pr.group('prefix') or ''
+                            opening = sheet_pr.group(0)[:-2] + '>'
+                            tag = opening + page_pr_tag + '</' + prefix + 'sheetPr>'
+                            xml = xml[:sheet_pr.start()] + tag + xml[sheet_pr.end():]
+                        else:
+                            start = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)worksheet\b[^>]*>', xml)
+                            if start:
+                                prefix = start.group('prefix') or ''
+                                tag = '<' + prefix + 'sheetPr><' + prefix + 'pageSetUpPr fitToPage="1"/></' + prefix + 'sheetPr>'
+                                xml = xml[:start.end()] + tag + xml[start.end():]
+                payload = xml.encode('utf-8')
+            fitted.writestr(info, payload)
+    return output.getvalue()
+
 def _preview_page(title, body, status=200):
     page = f"""<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{html.escape(title)}</title>
@@ -1104,6 +1155,11 @@ def _office_pdf(filename, data):
     try:
         with tempfile.TemporaryDirectory(prefix='drydock-office-') as workdir:
             source = os.path.join(workdir, 'source' + ext)
+            if ext in ('.xlsx', '.xlsm'):
+                try:
+                    data = _xlsx_fit_to_width(data)
+                except (ValueError, UnicodeDecodeError, zipfile.BadZipFile, RuntimeError):
+                    pass  # Preview conversion still gets the original workbook.
             with open(source, 'wb') as handle:
                 handle.write(data)
             profile = os.path.join(workdir, 'profile')
