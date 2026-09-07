@@ -40,7 +40,7 @@ class FilePreviewTest(unittest.TestCase):
         with zipfile.ZipFile(payload, 'w') as archive:
             archive.writestr('word/document.xml',
                 '<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:t>A &amp; B</w:t></w:r></w:p></w:body></w:document>')
-        with drydock.app.test_request_context('/'):
+        with drydock.app.test_request_context('/'), patch('app.shutil.which', return_value=None):
             response = drydock._file_preview('report.docx',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', payload.getvalue())
         self.assertEqual(200, response.status_code)
@@ -53,7 +53,7 @@ class FilePreviewTest(unittest.TestCase):
         sheet.append(['Job', '<b>Open</b>'])
         payload = io.BytesIO()
         workbook.save(payload)
-        with drydock.app.test_request_context('/'):
+        with drydock.app.test_request_context('/'), patch('app.shutil.which', return_value=None):
             response = drydock._file_preview('status.xlsx',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', payload.getvalue())
         body = response.get_data(as_text=True)
