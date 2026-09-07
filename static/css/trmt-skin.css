@@ -251,7 +251,7 @@ body.trmt-dock > header { min-height:58px; padding:0 22px; background:#1E293B; b
 thead th { background:var(--trmt-surface-2)!important; color:var(--trmt-muted)!important; border-color:var(--trmt-line)!important;
   padding:9px 12px!important; font-size:10.5px!important; letter-spacing:.035em!important; }
 tbody tr { border-color:var(--trmt-line)!important; }
-tbody tr:hover { background:var(--trmt-blue-soft)!important; }
+tbody tr:not(.job-group-row):hover { background:var(--trmt-blue-soft)!important; }
 tbody td { color:var(--trmt-text)!important; padding:9px 12px!important; }
 .toolbar,.j-toolbar,.c-toolbar,.d-toolbar,.qf-bar { background:var(--trmt-surface)!important;
   border-color:var(--trmt-line)!important; box-shadow:none!important; gap:8px!important; }

@@ -31,6 +31,12 @@ class TRMTDesignSystemTests(unittest.TestCase):
     def test_external_font_waterfall_removed(self):
         self.assertNotIn('fonts.googleapis.com', self.html)
 
+    def test_job_group_rows_keep_dark_background_on_hover(self):
+        self.assertIn('tbody tr:not(.job-group-row):hover', self.css)
+        self.assertNotIn('tbody tr:hover { background:var(--trmt-blue-soft)!important; }', self.css)
+        self.assertIn('class="job-group-row job-category-row"', self.js)
+        self.assertIn('class="job-group-row job-section-row"', self.js)
+
     def test_fleet_cards_are_keyboard_operable(self):
         self.assertIn('class="vessel-card" role="button" tabindex="0"', self.js)
         self.assertIn('class="add-card" role="button" tabindex="0"', self.js)
