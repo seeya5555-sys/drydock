@@ -18,6 +18,10 @@
 
   function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function attrArg(s){ return encodeURIComponent(String(s)).replace(/'/g,'%27'); }
+  function attachLabel(refType, refId){
+    var counts=FLEET[VID].attachCounts, n=counts&&counts.get(refType+':'+refId)||0;
+    return '📎 첨부'+(n?' '+n:'');
+  }
   window._ddAttrArg = attrArg;
 
   // 우선순위 → TRMT .bd .pri-* 매핑 (drydock: Normal/Urgent/Critical/On Hold)
@@ -222,7 +226,7 @@
           timeline(c.actions, c.action)+
           '<div class="exp-meta">'+(c.by?'담당 '+esc(c.by):'')+(c.close_date?'  ·  완료 '+esc(c.close_date):'')+'</div>'+
           '<div class="exp-btns"><button class="exp-btn pri" onclick="openClassModal('+ri+')">상세 / 편집</button>'+
-          '<button class="exp-btn" onclick="openGenAttach(\'class\','+c._id+')">📎 첨부</button></div></div>';
+          '<button class="exp-btn" id="cattbtn-'+c._id+'" onclick="openGenAttach(\'class\','+c._id+')">'+attachLabel('class',c._id)+'</button></div></div>';
       }
       return '<div class="issue-card'+(exp?' is-expanded':'')+'" onclick="_ddTgl(\'cls\',\''+c._id+'\')">'+
              '<div class="issue-card-head">'+head+'</div>'+
@@ -299,7 +303,7 @@
           '<div class="exp-label">상세 내용</div><div class="exp-desc dd-inline-edit" title="클릭하여 바로 편집" onclick="_ddEditDaily(event,decodeURIComponent(\''+idArg+'\'),this,\'description\')">'+esc(d.description||'—')+'</div>'+
           timeline(d.actions, d.action)+
           '<div class="exp-btns"><button class="exp-btn pri" onclick="openDiscModalById(\''+d._id+'\')">상세 / 편집</button>'+
-          '<button class="exp-btn" onclick="openGenAttach(\'disc\','+d._id+')">📎 첨부</button></div></div>';
+          '<button class="exp-btn" id="dattbtn-'+d._id+'" onclick="openGenAttach(\'disc\','+d._id+')">'+attachLabel('disc',d._id)+'</button></div></div>';
       }
       return '<div class="issue-card'+(exp?' is-expanded':'')+'" onclick="_ddTgl(\'dsc\',\''+d._id+'\')">'+
              '<div class="issue-card-head">'+head+'</div>'+

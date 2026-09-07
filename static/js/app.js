@@ -350,7 +350,8 @@ async function openVessel(id){
     const e=await apiFetch(`${API}/fleet/summary/${id}`);
     if(gen!==vesselLoadGen)return;
     FLEET[id]={...FLEET[id],info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),
-      attachSet:new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`)),detailsLoaded:true};
+      attachSet:new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`)),
+      attachCounts:new Map((e.attachments||[]).map(a=>[`${a.ref_type}:${a.ref_id}`,Number(a.attachment_count)||0])),detailsLoaded:true};
     window._secManualBudget=window._secManualBudget||{};
     Object.keys(window._secManualBudget).filter(k=>k.startsWith(id+'::')).forEach(k=>delete window._secManualBudget[k]);
     (e.secBudget||[]).forEach(sb=>{const key=`${id}::${sb.category}::${sb.section}`;window._secManualBudget[key]={budget:sb.budget||0,consumed:sb.consumed||0};});
@@ -2931,6 +2932,7 @@ async function uploadGenAttach(input) {
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`);
     _renderGenAttachUI(list || []);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`${refType}:${refId}`);
+    if(FLEET[VID].attachCounts) FLEET[VID].attachCounts.set(`${refType}:${refId}`, list ? list.length : 0);
     _updateGenAttachBtn(refType, +refId, list ? list.length : 0);
     setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
   } catch(e){ setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
@@ -2948,6 +2950,7 @@ async function deleteGenAttach(aid) {
     _renderGenAttachUI(list || []);
     const cnt = list ? list.length : 0;
     if(!cnt && FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`${refType}:${refId}`);
+    if(FLEET[VID].attachCounts){ if(cnt) FLEET[VID].attachCounts.set(`${refType}:${refId}`,cnt); else FLEET[VID].attachCounts.delete(`${refType}:${refId}`); }
     _updateGenAttachBtn(refType, +refId, cnt);
     setSS('synced'); toast('삭제됐습니다');
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
