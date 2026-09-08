@@ -105,6 +105,12 @@ run("_tankAssessments={COT1P:{steel_none:false,inspection_pending:true}}; _rende
 assert.match(elements['tank-svg-wrap'].innerHTML, />검사예정</);
 assert.match(elements['tank-svg-wrap'].innerHTML, /fill="#2563eb"[^>]*>검사예정/);
 assert.doesNotMatch(elements['tank-svg-wrap'].innerHTML, /\(검사예정\)/);
+run("VID='test'; _planDataVID='test'; _tankPlanData=[]; _syncTankPlanSteelRow({id:99,position_tank:'WBT 5S',new_weight:'401.28'}); _renderPlanLayoutViews();");
+assert.match(elements['tank-svg-wrap'].innerHTML, /401\.3 kg/);
+run("_syncTankPlanSteelRow({id:99,priority:'Urgent',new_weight:undefined})");
+assert.strictEqual(run("_tankPlanData[0].new_weight"), '401.28');
+run("_syncTankPlanSteelRow({id:99},true)");
+assert.strictEqual(run('_tankPlanData.length'), 0);
 
 (async () => {
   context.apiCalls = [];
@@ -146,5 +152,5 @@ assert.doesNotMatch(elements['tank-svg-wrap'].innerHTML, /\(검사예정\)/);
   assert.strictEqual(context.apiCalls.length, 3);
   assert.strictEqual(context.apiCalls[2][1], 'PUT');
   assert.match(context.apiCalls[2][0], /tank_assessments\/COT1P$/);
-  console.log('tank visual resize/runtime assessment: 37 assertions PASS');
+  console.log('tank visual resize/runtime assessment: 40 assertions PASS');
 })().catch(error => { console.error(error); process.exitCode=1; });

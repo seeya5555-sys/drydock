@@ -3914,6 +3914,7 @@ async function saveTrackingRow(key, id, row){
   setSS('saving');
   try {
     await apiFetch(`${API}/${cfg.api}/${id}`, 'PUT', row);
+    if(key==='steel') _syncTankPlanSteelRow(row);
     setSS('synced');
   } catch(e){ setSS('error'); toast('저장 실패: '+e.message, true); }
   _renderTrackingTable(key);
@@ -3929,6 +3930,7 @@ async function addTrackingRow(key){
   try {
     const newRow = await apiFetch(`${API}/vessels/${VID}/${cfg.api}`, 'POST', cfg.newRow());
     FLEET[VID][cfg.key] = [...(FLEET[VID][cfg.key]||[]), newRow];
+    if(key==='steel') _syncTankPlanSteelRow(newRow);
     setSS('synced');
     _renderTrackingTable(key);
     toast('행이 추가됐습니다');
@@ -3945,6 +3947,7 @@ async function deleteTrackingRow(key, rowId){
   try {
     await apiFetch(`${API}/${cfg.api}/${rowId}`, 'DELETE');
     FLEET[VID][cfg.key] = (FLEET[VID][cfg.key]||[]).filter(r=>String(r.id)!==String(rowId));
+    if(key==='steel') _syncTankPlanSteelRow({id:rowId}, true);
     setSS('synced');
     _renderTrackingTable(key);
     toast('삭제됐습니다');
@@ -4058,6 +4061,22 @@ const TANK_ROW_MIN = 38;
 const TANK_COL_MIN = 40;
 const TANK_PLAN_PALETTE = ['#dbeafe', '#3b82f6', '#1d4ed8'];
 const PIPE_PLAN_PALETTE = ['#d1fae5', '#10b981', '#065f46'];
+
+function _syncTankPlanSteelRow(row, remove=false) {
+  if(!row || _planDataVID!==VID) return;
+  if(row.id===undefined || row.id===null) {
+    FLEET[VID]?.loadedResources?.delete('tank_plan');
+    return;
+  }
+  const index=_tankPlanData.findIndex(item=>String(item.id)===String(row.id));
+  if(remove) {
+    if(index>=0) _tankPlanData.splice(index,1);
+    return;
+  }
+  const clean=Object.fromEntries(Object.entries(row).filter(([,value])=>value!==undefined));
+  if(index>=0) Object.assign(_tankPlanData[index], clean);
+  else _tankPlanData.push(clean);
+}
 
 // ── Type color map ────────────────────────────────────────────
 const TANK_BASE_COLORS = {
@@ -4674,10 +4693,9 @@ async function saveTankItemEdit(id) {
   try {
     await apiFetch(`${API}/steel_repair/${id}`, 'PUT', updated);
     Object.assign(row, updated);
-    // _tankPlanData 동기화
-    const tp = _tankPlanData.find(r=>r.id===id);
-    if(tp) Object.assign(tp, {priority:updated.priority, status:updated.status, new_weight:updated.new_weight});
+    _syncTankPlanSteelRow(updated);
     setSS('synced'); _editTankItemId = null; _renderTankModalBody();
+    _renderPlanLayoutViews();
     toast('저장됐습니다');
   } catch(e) { setSS('error'); toast('저장 실패: '+e.message, true); }
 }
@@ -5140,14 +5158,9 @@ async function saveTankItem() {
   try {
     const n=await apiFetch(`${API}/vessels/${VID}/steel_repair`,'POST',payload);
     FLEET[VID].steel=[...(FLEET[VID].steel||[]),n];
-    _tankPlanData=[..._tankPlanData,{id:n.id,no:n.no,position_tank:n.position_tank||_curTankName,
-      priority:n.priority,status:n.status,description:n.description}];
+    _syncTankPlanSteelRow({...payload,...n,position_tank:n.position_tank||_curTankName});
     setSS('synced'); hideTankAddForm(); _renderTankModalBody();
-    const wrap=document.getElementById('tank-svg-wrap');
-    if(wrap&&_tankLayout) {
-      const _cf=_makeColFn(_tankPlanData,'#dbeafe','#3b82f6','#1d4ed8');
-      wrap.innerHTML=_svgFromLayout(_tankLayout,'openTankModal',_cf);
-    }
+    _renderPlanLayoutViews();
     toast('Steel Repair 항목이 추가됐습니다');
   } catch(e){setSS('error');toast('추가 실패: '+e.message,true);}
 }
