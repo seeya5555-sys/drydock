@@ -9,7 +9,7 @@ const classes = new Set();
 const elements = Object.fromEntries([
   'tank-svg-wrap', 'pipe-svg-wrap',
   'tank-layout-visual-toolbar', 'pipe-layout-visual-toolbar',
-  'btn-layout-edit-tank', 'btn-layout-edit-pipe', 'savePill', 'm-tank-layout', 'toast'
+  'btn-layout-edit-tank', 'btn-layout-edit-pipe', 'savePill', 'm-tank-layout', 'm-tank-summary', 'm-tank-body', 'toast'
 ].map(id => [id, {id, style:{}, innerHTML:'', classList:{add(){},remove(){}}}]));
 
 const documentStub = {
@@ -92,6 +92,16 @@ assert.match(elements['tank-svg-wrap'].innerHTML, /onclick="openTankModal/);
 assert.strictEqual(classes.has('layout-resizing'), false);
 assert.deepStrictEqual(Array.from(run('_layoutRowHeights({columns:[{c:{id:"C"}}]})')), [76,76,76]);
 
+run(`_tankPlanData=[
+  {position_tank:'COT 1P',new_weight:'100'},
+  {position_tank:'COT 1P',length_l:'1000',width_w:'1000',thickness_t:'10'}
+]; _renderPlanLayoutViews();`);
+assert.match(elements['tank-svg-wrap'].innerHTML, /180\.0 kg/);
+run("_tankAssessments={COT1P:{steel_none:true,inspection_pending:false}}; _renderPlanLayoutViews();");
+assert.match(elements['tank-svg-wrap'].innerHTML, /강재 수리 없음/);
+run("_tankAssessments={COT1P:{steel_none:false,inspection_pending:true}}; _renderPlanLayoutViews();");
+assert.match(elements['tank-svg-wrap'].innerHTML, /\(검사예정\)/);
+
 (async () => {
   context.apiCalls = [];
   context.apiMock = async (...args) => { context.apiCalls.push(args); return {success:true}; };
@@ -111,5 +121,26 @@ assert.deepStrictEqual(Array.from(run('_layoutRowHeights({columns:[{c:{id:"C"}}]
   assert.strictEqual(run('_visualLayoutEditing'), true);
   assert.strictEqual(elements['pipe-layout-visual-toolbar'].style.display, 'flex');
   run('cancelVisualLayoutEdit()');
-  console.log('tank visual resize runtime: 22 assertions PASS');
+  context.apiCalls = [];
+  context.apiMock = async (...args) => { context.apiCalls.push(args); throw new Error('assessment save failed'); };
+  run(`apiFetch=apiMock; VID='test'; FLEET={test:{steel:[]}}; _curTankId='COT1P'; _curTankName='COT 1P';
+    _tankAssessmentSaving=false; _tankAssessments={}; _tankPlanData=[];`);
+  await run("setTankAssessment('steel_none',true)");
+  assert.strictEqual(run("Object.prototype.hasOwnProperty.call(_tankAssessments,'COT1P')"), false);
+  assert.strictEqual(run('_tankAssessmentSaving'), false);
+  context.apiMock = async (...args) => {
+    context.apiCalls.push(args);
+    return {...args[2],tank_id:'COT1P'};
+  };
+  run('apiFetch=apiMock');
+  await run("setTankAssessment('steel_none',true)");
+  assert.strictEqual(run("_tankAssessments.COT1P.steel_none"), true);
+  assert.strictEqual(run("_tankAssessments.COT1P.inspection_pending"), false);
+  await run("setTankAssessment('inspection_pending',true)");
+  assert.strictEqual(run("_tankAssessments.COT1P.steel_none"), false);
+  assert.strictEqual(run("_tankAssessments.COT1P.inspection_pending"), true);
+  assert.strictEqual(context.apiCalls.length, 3);
+  assert.strictEqual(context.apiCalls[2][1], 'PUT');
+  assert.match(context.apiCalls[2][0], /tank_assessments\/COT1P$/);
+  console.log('tank visual resize/runtime assessment: 33 assertions PASS');
 })().catch(error => { console.error(error); process.exitCode=1; });

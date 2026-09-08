@@ -364,7 +364,7 @@ async function openVessel(id){
   if(gen!==vesselLoadGen)return;
   VID=id;
   _tankLayout=null;_tankPlanData=[];_pipePlanData=[];_wpsCriteria=null;
-  _planDataVID=null;
+  _tankAssessments={};_planDataVID=null;_tankAssessmentDataVID=null;
   _curTankId=null;_curTankName=null;_curPipeTankId=null;_curPipeTankName=null;
   resetQF();
   show('page-vessel');
@@ -4042,9 +4042,12 @@ async function uploadTrackingXlsx(input){
 let _tankPlanData  = [];
 let _tankLayout    = null;
 let _planDataVID   = null;
+let _tankAssessments = {};
+let _tankAssessmentDataVID = null;
 let _layoutEditing = null;
 let _curTankId     = null;
 let _curTankName   = null;
+let _tankAssessmentSaving = false;
 let _visualLayoutEditing = false;
 let _visualLayoutOriginal = null;
 let _layoutResizeDrag = null;
@@ -4133,19 +4136,39 @@ function _matchItemsFrom(tankName, data) {
   });
 }
 
+function _tankWeightKg(items) {
+  return (items||[]).reduce((sum, item) => {
+    const weight = parseFloat(item.new_weight) || parseFloat(calcSteelWeight(item)) || 0;
+    return sum + (weight > 0 ? weight : 0);
+  }, 0);
+}
+
+function _findTankInLayout(tankId, layout=_tankLayout) {
+  for(const sec of (layout?.sections||[])) {
+    for(const col of (sec.columns||[])) {
+      for(const field of ['p','c','s']) {
+        const tank=col[field];
+        if(tank && !tank.empty && tank.id===tankId) return tank;
+      }
+    }
+  }
+  return null;
+}
+
 // 색상 생성 헬퍼 — data 배열을 캡처한 colFn 반환
 function _makeColFn(data, hasItemsFill, hasItemsStroke, hasItemsText) {
   return function(name, type, clickable) {
     const b = TANK_BASE_COLORS[type] || TANK_BASE_COLORS.MISC;
-    if(!clickable) return {fill:'#f1f5f9', stroke:'#cbd5e1', text:'#94a3b8', count:0, done:0};
+    if(!clickable) return {fill:'#f1f5f9', stroke:'#cbd5e1', text:'#94a3b8', count:0, done:0, weightKg:0};
     const items = _matchItemsFrom(name, data);
-    if(!items.length) return {fill:b.f, stroke:b.s, text:'#475569', count:0, done:0};
+    const weightKg = _tankWeightKg(items);
+    if(!items.length) return {fill:b.f, stroke:b.s, text:'#475569', count:0, done:0, weightKg};
     const cr   = items.filter(i=>i.priority==='Critical').length;
     const ug   = items.filter(i=>i.priority==='Urgent').length;
     const done = items.filter(i=>i.status==='Completed').length;
-    if(cr>0) return {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b', count:items.length, done, critical:cr};
-    if(ug>0) return {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e', count:items.length, done};
-    return {fill:hasItemsFill, stroke:hasItemsStroke, text:hasItemsText, count:items.length, done};
+    if(cr>0) return {fill:'#fee2e2', stroke:'#ef4444', text:'#991b1b', count:items.length, done, critical:cr, weightKg};
+    if(ug>0) return {fill:'#fef3c7', stroke:'#f59e0b', text:'#92400e', count:items.length, done, weightKg};
+    return {fill:hasItemsFill, stroke:hasItemsStroke, text:hasItemsText, count:items.length, done, weightKg};
   };
 }
 
@@ -4234,15 +4257,24 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
       : '';
     const nl = t.name.split(/[\n\/]/);
     const ty = ry + h/2;
+    const state = editOptions.assessments?.[t.id] || {};
+    const assessment = state.inspection_pending ? '(검사예정)'
+      : state.steel_none ? '강재 수리 없음'
+      : `${c.weightKg.toFixed(1)} kg`;
+    const nameOffset = t.cl && !editable ? -7 : 0;
     const nameEl = nl.map((l,i) =>
-      `<text x="${cx+w/2}" y="${ty+(i-(nl.length-1)/2)*13}"
+      `<text x="${cx+w/2}" y="${ty+nameOffset+(i-(nl.length-1)/2)*13}"
         font-family="IBM Plex Sans,Arial" font-size="${nl.length>1?9:10}" font-weight="700"
         fill="${c.text}" text-anchor="middle" dominant-baseline="central">${l}</text>`
     ).join('');
+    const assessmentEl = t.cl && !editable
+      ? `<text x="${cx+w/2}" y="${ty+12}" font-family="IBM Plex Sans,Arial" font-size="9"
+          font-weight="800" fill="#dc2626" text-anchor="middle" dominant-baseline="central">${assessment}</text>`
+      : '';
     return `<g class="${t.cl?'tk':''}" style="cursor:${cursor}" ${oc}>
       <rect x="${cx}" y="${ry}" width="${w}" height="${h}" rx="2"
         fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5"/>
-      ${nameEl}${badge}</g>`;
+      ${nameEl}${assessmentEl}${badge}</g>`;
   };
 
   // 섹션 그리기
@@ -4355,7 +4387,7 @@ function _renderPlanLayoutViews() {
   if(tankWrap && (tankActive||noActivePlan)) {
     const colorFn = _makeColFn(_tankPlanData, ...TANK_PLAN_PALETTE);
     tankWrap.innerHTML = _svgFromLayout(layout, 'openTankModal', colorFn,
-      {editable:_visualLayoutEditing});
+      {editable:_visualLayoutEditing, assessments:_tankAssessments});
   }
   const pipeWrap = document.getElementById('pipe-svg-wrap');
   if(pipeWrap && (pipeActive||noActivePlan)) {
@@ -4494,14 +4526,20 @@ async function renderTankPlan() {
   const wrap = document.getElementById('tank-svg-wrap');
   if(wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#334155;font-size:13px">로딩 중…</div>';
 
-  const [items, saved] = await Promise.all([
+  const [items, saved, assessments] = await Promise.all([
     _planDataVID===vid && vessel.loadedResources.has('tank_plan') ? Promise.resolve(_tankPlanData) : apiFetch(`${API}/vessels/${vid}/tank_plan`).catch(()=>[]),
     _planDataVID===vid && vessel.loadedResources.has('tank_layout') ? Promise.resolve(_tankLayout) : apiFetch(`${API}/vessels/${vid}/tank_layout`).catch(()=>null),
+    _tankAssessmentDataVID===vid && vessel.loadedResources.has('tank_assessments') ? Promise.resolve(_tankAssessments) : apiFetch(`${API}/vessels/${vid}/tank_assessments`).catch(()=>null),
   ]);
   if(VID!==vid || FLEET[vid]!==vessel)return;
   _tankPlanData = items || [];
   _planDataVID=vid;
   vessel.loadedResources.add('tank_plan'); vessel.loadedResources.add('tank_layout');
+  if(assessments!==null) {
+    _tankAssessments=assessments||{};
+    _tankAssessmentDataVID=vid;
+    vessel.loadedResources.add('tank_assessments');
+  }
   // 구버전 레이아웃 감지 (Cargo에 FPT 포함 or DBT에 WBT FWD 포함) → 기본값 재설정
   let layout = saved;
   if(layout) {
@@ -4561,6 +4599,41 @@ async function openTankModal(tankId, tankName) {
     try { FLEET[VID].steel = await apiFetch(`${API}/vessels/${VID}/steel_repair`); } catch(e) {}
   }
   _renderTankModalBody();
+}
+
+async function setTankAssessment(field, checked) {
+  if(isViewer()) { toast('읽기 전용 계정입니다', true); _renderTankModalBody(); return; }
+  if(_tankAssessmentSaving || !['steel_none','inspection_pending'].includes(field)) return;
+  if(!_findTankInLayout(_curTankId)) { toast('탱크 정보를 찾을 수 없습니다', true); return; }
+  if(field==='steel_none' && checked && _matchItems(_curTankName).length) {
+    toast('등록된 Steel Repair 항목이 있어 강재 수리 없음으로 표시할 수 없습니다', true);
+    _renderTankModalBody();
+    return;
+  }
+  const hadBefore=Object.prototype.hasOwnProperty.call(_tankAssessments,_curTankId);
+  const before={...(_tankAssessments[_curTankId]||{steel_none:false,inspection_pending:false})};
+  const next={...before,[field]:!!checked};
+  if(checked) next[field==='steel_none'?'inspection_pending':'steel_none']=false;
+  _tankAssessments[_curTankId]=next;
+  _tankAssessmentSaving=true;
+  _renderTankModalBody();
+  _renderPlanLayoutViews();
+  setSS('saving');
+  try {
+    const saved=await apiFetch(`${API}/vessels/${VID}/tank_assessments/${encodeURIComponent(_curTankId)}`, 'PUT', next);
+    _tankAssessments[_curTankId]={steel_none:!!saved.steel_none,inspection_pending:!!saved.inspection_pending};
+    setSS('synced');
+    toast('탱크 상태가 저장됐습니다');
+  } catch(e) {
+    if(hadBefore) _tankAssessments[_curTankId]=before;
+    else delete _tankAssessments[_curTankId];
+    setSS('error');
+    toast('탱크 상태 저장 실패: '+e.message, true);
+  } finally {
+    _tankAssessmentSaving=false;
+    _renderTankModalBody();
+    _renderPlanLayoutViews();
+  }
 }
 
 let _editTankItemId  = null;   // 현재 편집 중인 Tank modal item ID
@@ -4699,14 +4772,20 @@ function _renderTankModalBody() {
   });
   const sum=document.getElementById('m-tank-summary');
   if(sum){
+    const assessment=_tankAssessments[_curTankId]||{};
     const cr=items.filter(i=>i.priority==='Critical').length;
     const ug=items.filter(i=>i.priority==='Urgent').length;
     const dn=items.filter(i=>i.status==='Completed').length;
-    sum.innerHTML=`<span style="font-size:12px;color:var(--txt-s)">총 <b style="color:var(--txt-h)">${items.length}</b>건
+    sum.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:12px;color:var(--txt-s)">총 <b style="color:var(--txt-h)">${items.length}</b>건
       ${cr?` · <span style="color:#ef4444">🔴 Critical <b>${cr}</b></span>`:''}
       ${ug?` · <span style="color:#d97706">🟡 Urgent <b>${ug}</b></span>`:''}
       ${dn?` · ✅ Completed <b style="color:var(--green)">${dn}</b>`:''}
-    </span>`;
+    </span><span style="display:flex;gap:12px;align-items:center;font-size:11px;font-weight:700;color:var(--txt-h)">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${assessment.steel_none?'checked':''}
+        ${_tankAssessmentSaving||isViewer()?'disabled':''} onchange="setTankAssessment('steel_none',this.checked)"> 강재 수리 없음</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" ${assessment.inspection_pending?'checked':''}
+        ${_tankAssessmentSaving||isViewer()?'disabled':''} onchange="setTankAssessment('inspection_pending',this.checked)"> 검사예정</label>
+    </span></div>`;
   }
   const body=document.getElementById('m-tank-body');
   if(!items.length){

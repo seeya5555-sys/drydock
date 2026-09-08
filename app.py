@@ -208,6 +208,15 @@ with app.app_context():
         layout_json TEXT NOT NULL,
         updated_at  TEXT DEFAULT (datetime('now'))
     )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS vessel_tank_assessment (
+        vessel_id         TEXT NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+        tank_id           TEXT NOT NULL,
+        steel_none        INTEGER NOT NULL DEFAULT 0 CHECK(steel_none IN (0,1)),
+        inspection_pending INTEGER NOT NULL DEFAULT 0 CHECK(inspection_pending IN (0,1)),
+        updated_at        TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY(vessel_id, tank_id),
+        CHECK(NOT (steel_none = 1 AND inspection_pending = 1))
+    )""")
     db.execute("""CREATE TABLE IF NOT EXISTS vessel_wps_criteria (
         vessel_id      TEXT PRIMARY KEY REFERENCES vessels(id) ON DELETE CASCADE,
         criteria_json  TEXT NOT NULL,
@@ -1829,6 +1838,50 @@ def save_tank_layout(vid):
                   VALUES(?, ?, datetime('now'))""", (vid, layout_str))
     db.commit()
     return jsonify({"success": True})
+
+
+@app.route("/api/vessels/<vid>/tank_assessments", methods=["GET"])
+@login_required
+def get_tank_assessments(vid):
+    result = {}
+    for r in get_db().execute(
+            "SELECT tank_id, steel_none, inspection_pending FROM vessel_tank_assessment WHERE vessel_id=?",
+            (vid,)).fetchall():
+        result[r['tank_id']] = {
+            'steel_none': bool(r['steel_none']),
+            'inspection_pending': bool(r['inspection_pending']),
+        }
+    return jsonify(result)
+
+
+@app.route("/api/vessels/<vid>/tank_assessments/<path:tank_id>", methods=["PUT"])
+@login_required
+@viewer_forbidden
+def save_tank_assessment(vid, tank_id):
+    if not tank_id or len(tank_id) > 100 or any(ord(ch) < 32 for ch in tank_id):
+        return jsonify({'error': 'Invalid tank id'}), 400
+    data = request.get_json(force=True)
+    steel_none = data.get('steel_none')
+    inspection_pending = data.get('inspection_pending')
+    if not isinstance(steel_none, bool) or not isinstance(inspection_pending, bool):
+        return jsonify({'error': 'Assessment flags must be boolean'}), 400
+    if steel_none and inspection_pending:
+        return jsonify({'error': 'Assessment flags are mutually exclusive'}), 400
+    db = get_db()
+    db.execute("""INSERT INTO vessel_tank_assessment
+                  (vessel_id, tank_id, steel_none, inspection_pending, updated_at)
+                  VALUES(?,?,?,?,datetime('now'))
+                  ON CONFLICT(vessel_id, tank_id) DO UPDATE SET
+                    steel_none=excluded.steel_none,
+                    inspection_pending=excluded.inspection_pending,
+                    updated_at=datetime('now')""",
+               (vid, tank_id, int(steel_none), int(inspection_pending)))
+    db.commit()
+    return jsonify({
+        'tank_id': tank_id,
+        'steel_none': steel_none,
+        'inspection_pending': inspection_pending,
+    })
 
 
 @app.route("/api/vessels/<path:vid>/wps_criteria", methods=["GET"])
