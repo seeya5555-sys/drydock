@@ -298,10 +298,8 @@ button:disabled { opacity:.48; cursor:not-allowed!important; }
 
 /* Embedded shell is visually continuous with TRMT and avoids nested chrome. */
 .is-embedded { background:var(--trmt-page)!important; }
-.is-embedded > header { background:var(--trmt-surface)!important; color:var(--trmt-text)!important;
-  border-bottom:1px solid var(--trmt-line)!important; box-shadow:none!important; }
-.is-embedded > header .breadcrumb,.is-embedded > header .breadcrumb .active { color:var(--trmt-muted)!important; }
-.is-embedded > header .save-pill.synced { color:var(--green)!important; background:var(--green-bg)!important; }
+.is-embedded > header { display:none!important; }
+.is-embedded .vessel-nav { top:0!important; }
 
 @media(max-width:900px){
   body.trmt-dock main { padding:18px 16px 30px; }

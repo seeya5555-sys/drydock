@@ -31,6 +31,11 @@ class TRMTDesignSystemTests(unittest.TestCase):
     def test_external_font_waterfall_removed(self):
         self.assertNotIn('fonts.googleapis.com', self.html)
 
+    def test_embedded_shell_removes_duplicate_sticky_header_gap(self):
+        self.assertIn('.is-embedded > header { display:none!important; }', self.css)
+        self.assertIn('.is-embedded .vessel-nav { top:0!important; }', self.css)
+        self.assertIn('body.trmt-dock > header { min-height:58px;', self.css)
+
     def test_fleet_cards_are_keyboard_operable(self):
         self.assertIn('class="vessel-card" role="button" tabindex="0"', self.js)
         self.assertIn('class="add-card" role="button" tabindex="0"', self.js)
