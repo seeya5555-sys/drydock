@@ -67,7 +67,8 @@
 
 <!-- ══ VESSEL DETAIL ════════════════════════════════════════════ -->
 <div id="page-vessel" class="page">
-  <div class="vessel-nav">
+  <div class="vessel-nav-stack">
+    <div class="vessel-nav">
     <button class="vnav-btn" onclick="showTab('dashboard',this)">Dashboard</button>
     <button class="vnav-btn" onclick="showTab('jobs',this)">Job Progress</button>
     <button class="vnav-btn" onclick="showTab('gantt',this)">Gantt Chart</button>
@@ -84,18 +85,19 @@
       <button class="btn-edit" onclick="openVesselEditModal()">✎ Edit Info</button>
       <button class="btn-back" onclick="goFleet()">← Fleet</button>
     </div>
-  </div><!-- /vessel-nav -->
+    </div><!-- /vessel-nav -->
 
-  <!-- Tracking 서브탭 행 -->
-  <div class="tracking-subnav" id="trackingMenu">
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('steel',this)">Steel Repair</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('pipe',this)">Pipe Repair</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('outfit',this)">Outfitting</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('wbt',this)">WBT &amp; COT</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('fan',this)">Portable Fan</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('staging',this)">Staging</button>
-    <button class="tracking-sub-btn" onclick="pickTrackingTab('gasfree',this)">Gas Free</button>
-  </div>
+    <!-- Tracking 서브탭 행 -->
+    <div class="tracking-subnav" id="trackingMenu">
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('steel',this)">Steel Repair</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('pipe',this)">Pipe Repair</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('outfit',this)">Outfitting</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('wbt',this)">WBT &amp; COT</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('fan',this)">Portable Fan</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('staging',this)">Staging</button>
+      <button class="tracking-sub-btn" onclick="pickTrackingTab('gasfree',this)">Gas Free</button>
+    </div>
+  </div><!-- /vessel-nav-stack -->
 
   <!-- Dashboard -->
   <div id="vt-dashboard" class="page active"><main>

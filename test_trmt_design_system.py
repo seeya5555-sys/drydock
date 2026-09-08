@@ -40,15 +40,23 @@ class TRMTDesignSystemTests(unittest.TestCase):
 
     def test_embedded_shell_removes_duplicate_sticky_header_gap(self):
         self.assertIn('.is-embedded > header { display:none!important; }', self.css)
-        self.assertIn('.is-embedded .vessel-nav { top:0!important; }', self.css)
+        self.assertIn('.vessel-nav-stack { position:sticky; top:var(--dock-header-height); z-index:200; display:flex; flex-direction:column;', self.css)
         self.assertIn('body.trmt-dock > header { min-height:58px;', self.css)
 
     def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
         self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
         self.assertIn('.is-embedded { --dock-header-height:0px;', self.css)
-        self.assertIn('top:calc(var(--dock-header-height) + var(--dock-vessel-nav-height));', self.css)
         self.assertIn('top:calc(var(--dock-header-height) + var(--dock-vessel-nav-height) + var(--dock-tracking-nav-height));', self.css)
         self.assertIn('flex-wrap:nowrap; overflow-x:auto;', self.css)
+        self.assertIn('.vessel-nav-stack .vessel-nav { position:static; top:auto;', self.css)
+        self.assertIn('.vessel-nav-stack .tracking-subnav { position:static; top:auto;', self.css)
+        self.assertNotIn('#trackingMenu', self.css)
+        self.assertNotRegex(self.js, r'trackingMenu[^;\n]*(?:style\.(?:position|top)|appendChild)')
+        self.assertEqual(self.html.count('class="vessel-nav-stack"'), 1)
+        stack = re.search(r'<div class="vessel-nav-stack">(.*?)</div><!-- /vessel-nav-stack -->', self.html, re.S)
+        self.assertIsNotNone(stack)
+        self.assertIn('class="vessel-nav"', stack.group(1))
+        self.assertIn('class="tracking-subnav"', stack.group(1))
         self.assertIn('.tracking-page > main { padding-top:10px; }', self.css)
         self.assertEqual(self.html.count('class="page tracking-page"'), 7)
         for page_id in ('steel', 'pipe', 'outfit', 'wbt', 'fan', 'staging', 'gasfree'):
