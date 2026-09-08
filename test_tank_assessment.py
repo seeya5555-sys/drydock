@@ -34,7 +34,7 @@ class TankAssessmentContractTests(unittest.TestCase):
         self.assertIn('/tank_assessments`', self.frontend)
         self.assertRegex(
             self.frontend,
-            r"state\.inspection_pending \? '\(검사예정\)'\s*:\s*state\.steel_none \? '강재 수리 없음'",
+            r"state\.inspection_pending \? '검사예정'\s*:\s*state\.steel_none \? '강재 수리 없음'",
         )
         self.assertIn("`${c.weightKg.toFixed(1)} kg`", self.frontend)
 

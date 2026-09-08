@@ -4258,7 +4258,7 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
     const nl = t.name.split(/[\n\/]/);
     const ty = ry + h/2;
     const state = editOptions.assessments?.[t.id] || {};
-    const assessment = state.inspection_pending ? '(검사예정)'
+    const assessment = state.inspection_pending ? '검사예정'
       : state.steel_none ? '강재 수리 없음'
       : `${c.weightKg.toFixed(1)} kg`;
     const assessmentColor = state.inspection_pending ? '#2563eb'
