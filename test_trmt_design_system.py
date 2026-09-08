@@ -45,7 +45,8 @@ class TRMTDesignSystemTests(unittest.TestCase):
 
     def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
         self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
-        self.assertIn('.is-embedded { --dock-header-height:0px;', self.css)
+        self.assertIn('body.trmt-dock.is-embedded { --dock-header-height:0px;', self.css)
+        self.assertNotRegex(self.css, r'(?m)^\s*\.is-embedded\s*\{[^}]*--dock-header-height')
         self.assertIn('top:calc(var(--dock-header-height) + var(--dock-vessel-nav-height) + var(--dock-tracking-nav-height));', self.css)
         self.assertIn('flex-wrap:nowrap; overflow-x:auto;', self.css)
         self.assertIn('.vessel-nav-stack .vessel-nav { position:static; top:auto;', self.css)

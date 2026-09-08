@@ -291,7 +291,8 @@ button:disabled { opacity:.48; cursor:not-allowed!important; }
 .toast { border-radius:8px!important; box-shadow:0 10px 30px rgba(15,23,42,.16)!important; }
 
 /* Embedded shell is visually continuous with TRMT and avoids nested chrome. */
-.is-embedded { --dock-header-height:0px; background:var(--trmt-page)!important; }
+.is-embedded { background:var(--trmt-page)!important; }
+body.trmt-dock.is-embedded { --dock-header-height:0px; }
 .is-embedded > header { display:none!important; }
 .is-embedded .tracking-subnav { border:1px solid var(--trmt-line); border-width:0 0 1px; border-radius:0; box-shadow:none; }
 
