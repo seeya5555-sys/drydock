@@ -4276,7 +4276,8 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
       : '';
     const nl = t.name.split(/[\n\/]/);
     const ty = ry + h/2;
-    const state = editOptions.assessments?.[t.id] || {};
+    const showAssessment = editOptions.showAssessment === true;
+    const state = showAssessment ? (editOptions.assessments?.[t.id] || {}) : {};
     const assessment = state.inspection_pending ? '검사예정'
       : state.steel_none ? '강재 수리 없음'
       : `${c.weightKg.toFixed(1)} kg`;
@@ -4289,7 +4290,7 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
         font-family="IBM Plex Sans,Arial" font-size="${nl.length>1?9:10}" font-weight="700"
         fill="${c.text}" text-anchor="middle" dominant-baseline="central">${l}</text>`
     ).join('');
-    const assessmentEl = t.cl && !editable
+    const assessmentEl = t.cl && !editable && showAssessment
       ? `<text x="${cx+w/2}" y="${ty+12}" font-family="IBM Plex Sans,Arial" font-size="9"
           font-weight="800" fill="${assessmentColor}" text-anchor="middle" dominant-baseline="central">${assessment}</text>`
       : '';
@@ -4409,7 +4410,7 @@ function _renderPlanLayoutViews() {
   if(tankWrap && (tankActive||noActivePlan)) {
     const colorFn = _makeColFn(_tankPlanData, ...TANK_PLAN_PALETTE);
     tankWrap.innerHTML = _svgFromLayout(layout, 'openTankModal', colorFn,
-      {editable:_visualLayoutEditing, assessments:_tankAssessments});
+      {editable:_visualLayoutEditing, showAssessment:true, assessments:_tankAssessments});
   }
   const pipeWrap = document.getElementById('pipe-svg-wrap');
   if(pipeWrap && (pipeActive||noActivePlan)) {

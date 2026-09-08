@@ -111,6 +111,11 @@ run("_syncTankPlanSteelRow({id:99,priority:'Urgent',new_weight:undefined})");
 assert.strictEqual(run("_tankPlanData[0].new_weight"), '401.28');
 run("_syncTankPlanSteelRow({id:99},true)");
 assert.strictEqual(run('_tankPlanData.length'), 0);
+assert.doesNotMatch(elements['pipe-svg-wrap'].innerHTML, /\d+\.\d+ kg|강재 수리 없음|검사예정/);
+run("_tankAssessments=null; _renderPlanLayoutViews();");
+assert.match(elements['tank-svg-wrap'].innerHTML, /0\.0 kg/);
+assert.doesNotMatch(elements['pipe-svg-wrap'].innerHTML, /\d+\.\d+ kg|강재 수리 없음|검사예정/);
+run('_tankAssessments={}');
 
 (async () => {
   context.apiCalls = [];
@@ -152,5 +157,5 @@ assert.strictEqual(run('_tankPlanData.length'), 0);
   assert.strictEqual(context.apiCalls.length, 3);
   assert.strictEqual(context.apiCalls[2][1], 'PUT');
   assert.match(context.apiCalls[2][0], /tank_assessments\/COT1P$/);
-  console.log('tank visual resize/runtime assessment: 40 assertions PASS');
+  console.log('tank visual resize/runtime assessment: 43 assertions PASS');
 })().catch(error => { console.error(error); process.exitCode=1; });
