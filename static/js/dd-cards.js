@@ -138,6 +138,7 @@
     window._ddSelectedDate = date;
     var df = document.getElementById('d-df');
     if(df) df.value = '';
+    window._ddRestoreDailyDateFocus = true;
     window.renderDisc();
   };
 
@@ -286,7 +287,7 @@
     }
     var matchedOpen=matchedAll.filter(function(d){return d.status!=='Close' && d.status!=='Closed';}).length;
     var cnt=document.getElementById('d-cnt');
-    if(cnt) cnt.textContent = '남음 '+matchedOpen+' · 전체 '+matchedAll.length;
+    if(cnt) cnt.textContent = '남음 '+matchedOpen;
     if(!matchedAll.length){ mount('d-body','d-cards','<div class="dd-empty">조건에 맞는 Daily Log가 없습니다</div>'); return; }
 
     function card(d){
@@ -313,22 +314,22 @@
              '<div class="issue-card-body"><button type="button" class="issue-card-title dd-title-toggle" aria-expanded="'+(exp?'true':'false')+'">'+esc(d.item||'—')+'</button></div>'+det+'</div>';
     }
 
-    var nav = dates.map(function(k){
-      var list=groups[k], open=list.filter(isOpen).length, done=list.length-open;
-      var urgent=list.filter(function(d){return d.priority==='Urgent'||d.priority==='Critical';}).length;
-      var dateArg=attrArg(k), active=k===window._ddSelectedDate;
-      return '<button type="button" class="dd-date-nav'+(active?' is-active':'')+'" aria-pressed="'+(active?'true':'false')+'" onclick="_ddSelectDailyDate(decodeURIComponent(\''+dateArg+'\'))">'+
-        '<span class="dd-date-nav-top"><span class="dd-date-nav-date">'+esc(k)+'</span><span class="dd-date-nav-total">'+list.length+'</span></span>'+
-        '<span class="dd-date-nav-stats"><b>남음 '+open+'</b><span>완료 '+done+'</span>'+(urgent?'<em>긴급 '+urgent+'</em>':'')+'</span></button>';
+    var dateOptions = dates.map(function(k){
+      var open=groups[k].filter(isOpen).length;
+      return '<option value="'+attrArg(k)+'"'+(k===window._ddSelectedDate?' selected':'')+'>'+esc(k)+' · 남음 '+open+'</option>';
     }).join('');
-    var selectedOpen=selectedAll.filter(isOpen).length, selectedDone=selectedAll.length-selectedOpen;
+    var selectedOpen=selectedAll.filter(isOpen).length;
     var selectedArg=attrArg(window._ddSelectedDate);
     var cardList = fil.length ? fil.map(card).join('') : '<div class="dd-empty">선택 날짜에 '+esc(sf)+' 항목이 없습니다</div>';
-    var html = '<div class="dd-daily-layout"><aside class="dd-date-sidebar">'+
-      '<div class="dd-date-summary"><span>전체 현황</span><strong>'+matchedOpen+'<small> 남음</small></strong><p>완료 '+(matchedAll.length-matchedOpen)+' · 전체 '+matchedAll.length+'</p></div>'+nav+'</aside>'+
-      '<section class="dd-date-content"><div class="dd-date-content-head"><div><span>선택 날짜</span><h3>'+esc(window._ddSelectedDate)+'</h3><p>남음 '+selectedOpen+' · 완료 '+selectedDone+' · 전체 '+selectedAll.length+'</p></div>'+
+    var html = '<div class="dd-daily-layout"><section class="dd-date-content"><div class="dd-date-content-head"><div class="dd-date-picker"><label for="dd-date-select">날짜 선택</label>'+
+      '<select id="dd-date-select" class="dd-date-select" onchange="_ddSelectDailyDate(decodeURIComponent(this.value))">'+dateOptions+'</select><p>남음 '+selectedOpen+'</p></div>'+
       '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+selectedArg+'\'))">+ Add Log</button></div>'+cardList+'</section></div>';
     mount('d-body','d-cards', html);
+    if(window._ddRestoreDailyDateFocus){
+      window._ddRestoreDailyDateFocus = false;
+      var dateSelect=document.getElementById('dd-date-select');
+      if(dateSelect) dateSelect.focus();
+    }
   };
 
   // 안전망 래퍼: 카드 렌더 에러 시 원본 테이블 렌더로 폴백

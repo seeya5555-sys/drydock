@@ -103,14 +103,18 @@ test('daily toggle expands and collapses date groups and cards together', () => 
   assert.equal(renders, 2);
 });
 
-test('sidebar date selection survives the hidden legacy date filter', () => {
+test('dropdown date selection survives the hidden legacy date filter', () => {
   const df = { value: '2026-09-02' };
-  global.document = { getElementById: id => id === 'd-df' ? df : null };
+  let focused = false;
+  const select = { focus: () => { focused = true; } };
+  global.document = { getElementById: id => id === 'd-df' ? df : (id === 'dd-date-select' ? select : null) };
   global.renderDisc = () => {};
   _ddSelectDailyDate('2026-09-03');
   assert.equal(window._ddSelectedDate, '2026-09-03');
   assert.equal(window._ddPreferredDate, '2026-09-03');
   assert.equal(df.value, '');
+  assert.equal(window._ddRestoreDailyDateFocus, true);
+  assert.equal(decodeURIComponent(window._ddAttrArg('(날짜 없음)')), '(날짜 없음)');
 });
 
 test('Open and Close tabs drive the hidden compatibility status value', () => {
@@ -166,7 +170,7 @@ test('failed status PUT rolls back and unlocks the item for retry', async () => 
   assert.equal(window._ddStatusSaving.has('8'), false);
 });
 
-test('daily render builds a date sidebar with remaining and completed counts', () => {
+test('daily render builds a date dropdown with open counts only', () => {
   global.VID = 'v_1';
   global.FLEET = { v_1: { discussions: [
     { _id: 1, date: '2026-09-03', item: 'open item', status: 'Open', priority: 'Urgent' },
@@ -187,18 +191,16 @@ test('daily render builds a date sidebar with remaining and completed counts', (
   window._ddPreferredDate = '';
   cardRender();
   assert.equal(window._ddSelectedDate, '2026-09-02', 'earliest date should be selected by default');
-  const earlyDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-02');
-  const laterDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-03');
-  assert.ok(earlyDateIndex >= 0, 'earliest sidebar date should be rendered');
-  assert.ok(laterDateIndex >= 0, 'later sidebar date should be rendered');
-  assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the sidebar');
-  assert.match(host.innerHTML, /dd-date-sidebar/);
-  assert.match(host.innerHTML, /2026-09-03/);
-  assert.match(host.innerHTML, /2026-09-04/);
-  assert.match(host.innerHTML, /남음 1/);
-  assert.match(host.innerHTML, /완료 1/);
-  assert.match(host.innerHTML, /긴급 1/);
-  assert.equal(elements['d-cnt'].textContent, '남음 2 · 전체 4');
+  const earlyDateIndex = host.innerHTML.indexOf('2026-09-02 · 남음 1');
+  const laterDateIndex = host.innerHTML.indexOf('2026-09-03 · 남음 1');
+  assert.ok(earlyDateIndex >= 0, 'earliest dropdown date should be rendered');
+  assert.ok(laterDateIndex >= 0, 'later dropdown date should be rendered');
+  assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the dropdown');
+  assert.match(host.innerHTML, /id="dd-date-select"/);
+  assert.match(host.innerHTML, /2026-09-04 · 남음 0/);
+  assert.equal((host.innerHTML.match(/ selected/g) || []).length, 1);
+  assert.doesNotMatch(host.innerHTML, /완료 \d|전체 \d|긴급 \d/);
+  assert.equal(elements['d-cnt'].textContent, '남음 2');
 });
 
 test('Close tab renders both Close and Closed variants without Open leakage', () => {
@@ -223,6 +225,7 @@ test('Close tab renders both Close and Closed variants without Open leakage', ()
   assert.match(host.innerHTML, /closed value/);
   assert.doesNotMatch(host.innerHTML, /open only/);
   assert.equal(window._ddVisibleDailyItems.length, 2);
+  assert.equal(elements['d-cnt'].textContent, '남음 1', 'Close tab에서도 숫자는 Open 전체 기준이어야 함');
 });
 
 test('Today is consumed once and preferred date returns after a temporary filter fallback', () => {
