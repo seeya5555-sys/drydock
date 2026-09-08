@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -41,6 +42,19 @@ class TRMTDesignSystemTests(unittest.TestCase):
         self.assertIn('.is-embedded > header { display:none!important; }', self.css)
         self.assertIn('.is-embedded .vessel-nav { top:0!important; }', self.css)
         self.assertIn('body.trmt-dock > header { min-height:58px;', self.css)
+
+    def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
+        self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
+        self.assertIn('.is-embedded { --dock-header-height:0px;', self.css)
+        self.assertIn('top:calc(var(--dock-header-height) + var(--dock-vessel-nav-height));', self.css)
+        self.assertIn('top:calc(var(--dock-header-height) + var(--dock-vessel-nav-height) + var(--dock-tracking-nav-height));', self.css)
+        self.assertIn('flex-wrap:nowrap; overflow-x:auto;', self.css)
+        self.assertIn('.tracking-page > main { padding-top:10px; }', self.css)
+        self.assertEqual(self.html.count('class="page tracking-page"'), 7)
+        for page_id in ('steel', 'pipe', 'outfit', 'wbt', 'fan', 'staging', 'gasfree'):
+            page = re.search(rf'id="vt-{page_id}" class="page tracking-page"><main>(.*?)</main></div>', self.html, re.S)
+            self.assertIsNotNone(page)
+            self.assertEqual(page.group(1).count('<div class="sec-hdr">'), 1)
 
     def test_fleet_cards_are_keyboard_operable(self):
         self.assertIn('class="vessel-card" role="button" tabindex="0"', self.js)
