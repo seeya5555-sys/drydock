@@ -8,7 +8,7 @@ Run:
 Open: http://localhost:5000
 """
 
-import sqlite3, os, io, json, hashlib, secrets, gzip, re, html, zipfile
+import sqlite3, os, io, json, hashlib, secrets, gzip, re, html, zipfile, shutil, subprocess, tempfile, signal, threading
 from xml.etree import ElementTree
 from urllib.parse import quote as url_quote
 from datetime import datetime
@@ -1032,7 +1032,59 @@ def bulk_discussions(vid):
 # ══════════════════════════════════════════════════════════════
 
 _PREVIEW_TEXT_EXTS = {'.txt', '.csv', '.log', '.md', '.json', '.xml'}
-_PREVIEW_OFFICE_EXTS = {'.docx', '.xlsx', '.xlsm', '.pptx'}
+_PREVIEW_OFFICE_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.ppt', '.pptx'}
+_OFFICE_CONVERT_SLOTS = threading.BoundedSemaphore(1)
+
+def _xml_tag_attr(tag, name, value):
+    pattern = re.compile(r'(\s' + re.escape(name) + r')="[^"]*"')
+    if pattern.search(tag):
+        return pattern.sub(r'\1="' + value + '"', tag, count=1)
+    return tag[:-2] + f' {name}="{value}"/>' if tag.endswith('/>') else tag[:-1] + f' {name}="{value}">'
+
+def _xlsx_fit_to_width(data):
+    """Set Calc print scaling without parsing/resaving drawings or embedded media."""
+    output = io.BytesIO()
+    with _safe_zip(data) as archive, zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as fitted:
+        for info in archive.infolist():
+            payload = archive.read(info.filename)
+            if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', info.filename):
+                xml = payload.decode('utf-8')
+                setup = re.search(r'<(?:[A-Za-z_][\w.-]*:)?pageSetup\b[^>]*?/?>', xml)
+                if setup:
+                    tag = re.sub(r'\s+scale="[^"]*"', '', setup.group(0))
+                    tag = _xml_tag_attr(tag, 'fitToWidth', '1')
+                    tag = _xml_tag_attr(tag, 'fitToHeight', '0')
+                    xml = xml[:setup.start()] + tag + xml[setup.end():]
+                else:
+                    fitted.writestr(info, payload)
+                    continue
+                page_pr = re.search(r'<(?:[A-Za-z_][\w.-]*:)?pageSetUpPr\b[^>]*?/?>', xml)
+                if page_pr:
+                    tag = _xml_tag_attr(page_pr.group(0), 'fitToPage', '1')
+                    xml = xml[:page_pr.start()] + tag + xml[page_pr.end():]
+                else:
+                    sheet_pr = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheetPr\b[^>]*>.*?</(?P=prefix)sheetPr>', xml, re.DOTALL)
+                    page_pr_tag = '<pageSetUpPr fitToPage="1"/>'
+                    if sheet_pr:
+                        close = '</' + (sheet_pr.group('prefix') or '') + 'sheetPr>'
+                        tag = sheet_pr.group(0).replace(close, page_pr_tag + close, 1)
+                        xml = xml[:sheet_pr.start()] + tag + xml[sheet_pr.end():]
+                    else:
+                        sheet_pr = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)sheetPr\b[^>]*/>', xml)
+                        if sheet_pr:
+                            prefix = sheet_pr.group('prefix') or ''
+                            opening = sheet_pr.group(0)[:-2] + '>'
+                            tag = opening + page_pr_tag + '</' + prefix + 'sheetPr>'
+                            xml = xml[:sheet_pr.start()] + tag + xml[sheet_pr.end():]
+                        else:
+                            start = re.search(r'<(?P<prefix>(?:[A-Za-z_][\w.-]*:)?)worksheet\b[^>]*>', xml)
+                            if start:
+                                prefix = start.group('prefix') or ''
+                                tag = '<' + prefix + 'sheetPr><' + prefix + 'pageSetUpPr fitToPage="1"/></' + prefix + 'sheetPr>'
+                                xml = xml[:start.end()] + tag + xml[start.end():]
+                payload = xml.encode('utf-8')
+            fitted.writestr(info, payload)
+    return output.getvalue()
 
 def _preview_page(title, body, status=200):
     page = f"""<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">
@@ -1088,6 +1140,53 @@ def _office_preview(filename, data):
             sections.append(f'{heading}<p>{content}</p>')
         return ''.join(sections) or '<div class="note">표시할 텍스트가 없습니다.</div>'
 
+def _office_pdf(filename, data):
+    """Render an Office attachment with LibreOffice in an isolated temp dir."""
+    converter = shutil.which('libreoffice') or shutil.which('soffice')
+    if not converter:
+        return None
+    ext = os.path.splitext(filename or '')[1].lower()
+    if ext not in _PREVIEW_OFFICE_EXTS:
+        return None
+    if len(data) > 50 * 1024 * 1024:
+        raise ValueError('office document too large')
+    if not _OFFICE_CONVERT_SLOTS.acquire(timeout=10):
+        raise ValueError('office converter busy')
+    try:
+        with tempfile.TemporaryDirectory(prefix='drydock-office-') as workdir:
+            source = os.path.join(workdir, 'source' + ext)
+            if ext in ('.xlsx', '.xlsm'):
+                try:
+                    data = _xlsx_fit_to_width(data)
+                except (ValueError, UnicodeDecodeError, zipfile.BadZipFile, RuntimeError):
+                    pass  # Preview conversion still gets the original workbook.
+            with open(source, 'wb') as handle:
+                handle.write(data)
+            profile = os.path.join(workdir, 'profile')
+            process = subprocess.Popen(
+                [converter, '--headless', '--nologo', '--nodefault', '--nofirststartwizard',
+                 '-env:UserInstallation=file://' + profile,
+                 '--convert-to', 'pdf', '--outdir', workdir, source],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            try:
+                returncode = process.wait(timeout=45)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+                raise
+            if returncode:
+                raise subprocess.CalledProcessError(returncode, process.args)
+            output = os.path.join(workdir, 'source.pdf')
+            if os.path.getsize(output) > 100 * 1024 * 1024:
+                raise ValueError('converted PDF too large')
+            with open(output, 'rb') as handle:
+                pdf = handle.read()
+            if not pdf.startswith(b'%PDF-'):
+                raise ValueError('invalid converted PDF')
+            return pdf
+    finally:
+        _OFFICE_CONVERT_SLOTS.release()
+
 def _decode_preview_text(data):
     for encoding in ('utf-8-sig', 'cp949'):
         try:
@@ -1117,8 +1216,18 @@ def _file_preview(filename, mimetype, data, download_url=None):
             if len(data) > 2 * 1024 * 1024: raise ValueError('텍스트 파일이 너무 큽니다')
             return _preview_page(filename, f'<pre>{html.escape(_decode_preview_text(data))}</pre>')
         if ext in _PREVIEW_OFFICE_EXTS:
+            pdf = _office_pdf(filename, data)
+            if pdf is not None:
+                converted_name = os.path.splitext(filename)[0] + '.pdf'
+                resp = send_file(io.BytesIO(pdf), mimetype='application/pdf', as_attachment=False,
+                                 download_name=converted_name)
+                resp.headers['Content-Disposition'] = f"inline; filename*=UTF-8''{url_quote(converted_name)}"
+                resp.headers['X-Content-Type-Options'] = 'nosniff'
+                resp.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
+                return resp
             return _preview_page(filename, _office_preview(filename, data))
-    except (ValueError, KeyError, OSError, ImportError, zipfile.BadZipFile, ElementTree.ParseError):
+    except (ValueError, KeyError, OSError, ImportError, subprocess.SubprocessError,
+            zipfile.BadZipFile, ElementTree.ParseError):
         return _unsupported_preview(filename, '이 문서의 미리보기를 만들 수 없습니다.', download_url, 422)
     return _unsupported_preview(filename, '이 파일 형식은 브라우저 미리보기를 지원하지 않습니다.', download_url, 415)
 

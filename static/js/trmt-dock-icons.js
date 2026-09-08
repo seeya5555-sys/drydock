@@ -41,26 +41,28 @@
   function segments(text){ return segmenter?[...segmenter.segment(text)].map(x=>x.segment):Array.from(text); }
   function transformText(node){
     const text=node.nodeValue; if(!segmenter || !emoji.test(text)) return;
-    const frag=document.createDocumentFragment(); let onlyIcon=true, firstKind='generic';
+    const frag=document.createDocumentFragment(); let onlyIcon=true, firstKind='generic', plain='';
+    function flush(){if(plain){frag.appendChild(document.createTextNode(plain));plain='';}}
     for(const chunk of segments(text)){
       emoji.lastIndex=0;
-      if(emoji.test(chunk)){ const kind=map[chunk]||map[[...chunk][0]]||'generic'; firstKind=kind; frag.appendChild(icon(kind)); }
-      else { frag.appendChild(document.createTextNode(chunk)); if(chunk.trim()) onlyIcon=false; }
+      if(emoji.test(chunk)){ flush(); const kind=map[chunk]||map[[...chunk][0]]||'generic'; firstKind=kind; frag.appendChild(icon(kind)); }
+      else { plain+=chunk; if(chunk.trim()) onlyIcon=false; }
     }
+    flush();
     const host=node.parentElement;
     if(onlyIcon && host && host.matches('button,a') && !host.getAttribute('aria-label')) host.setAttribute('aria-label',host.getAttribute('title')||ariaLabels[firstKind]||'동작');
     node.parentNode.replaceChild(frag,node);
   }
   function eligible(p){
-    if(!p || p.closest('script,style,textarea,code,pre,option,select,input,[contenteditable],[data-dd-icon-skip],.exp-desc,.act-progress,td')) return false;
+    if(!p || p.closest('script,style,textarea,code,pre,option,select,input,[contenteditable],[data-dd-icon-skip],.dd-ui-icon,.exp-desc,.act-progress,td')) return false;
     return !!p.closest('header,.vessel-nav,.tracking-subnav,.sec-hdr,.modal-title,.modal-hdr,.toast,button,.btn-add,.btn-pri,.btn-sec,.btn-edit,.btn-del,.qf-btn,.fleet-hero,.vessel-banner');
   }
   function sweep(root){
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode(n){
-      const p=n.parentElement; emoji.lastIndex=0;
-      return eligible(p)&&emoji.test(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
+      emoji.lastIndex=0; if(!emoji.test(n.nodeValue))return NodeFilter.FILTER_REJECT;
+      return eligible(n.parentElement)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
     }}); const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode); nodes.forEach(transformText);
   }
-  function start(){ sweep(document.body); new MutationObserver(ms=>{for(const m of ms) for(const n of m.addedNodes){if(n.nodeType===Node.TEXT_NODE){if(eligible(n.parentElement)) transformText(n);} else if(n.nodeType===Node.ELEMENT_NODE) sweep(n);}}).observe(document.body,{childList:true,subtree:true}); }
+  function start(){ sweep(document.body); new MutationObserver(ms=>{for(const m of ms) for(const n of m.addedNodes){if(n.nodeType===Node.TEXT_NODE){emoji.lastIndex=0;if(emoji.test(n.nodeValue)&&eligible(n.parentElement))transformText(n);}else if(n.nodeType===Node.ELEMENT_NODE&&!n.classList.contains('dd-ui-icon'))sweep(n);}}).observe(document.body,{childList:true,subtree:true}); }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',start):start();
 })();

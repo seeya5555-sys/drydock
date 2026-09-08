@@ -187,19 +187,22 @@ function applyRoleUI() {
 
 async function loadAll(){
   setSS('saving');
+  const userRequest = apiFetch(`${API}/auth/me`);
+  const cardsRequest = apiFetch(`${API}/fleet/cards`);
+  userRequest.catch(()=>{}); cardsRequest.catch(()=>{}); // later awaits own the visible error paths
   // 현재 사용자 정보 로드
   try {
-    CURRENT_USER = await apiFetch(`${API}/auth/me`);
+    CURRENT_USER = await userRequest;
     applyRoleUI();
   } catch(e) {}
 
   try{
-    const summary=await apiFetch(`${API}/fleet/cards`);
+    const summary=await cardsRequest;
     IDX=[];FLEET={};
     if(summary.length){
       for(const e of summary){
         const id=e.info.id; IDX.push(id);
-        FLEET[id]={info:dbI(e.info),overview:e.overview||{},jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set(),detailsLoaded:false};
+        FLEET[id]={info:dbI(e.info),overview:e.overview||{},jobs:[],classItems:[],discussions:[],steel:[],pipe:[],outfit:[],wbt:[],fan:[],staging:[],gasfree:[],attachSet:new Set(),loadedResources:new Set(),detailsLoaded:false};
       }
     }
   }catch(e){toast('로드 실패: '+e.message,true);IDX=[];FLEET={};}
@@ -350,7 +353,8 @@ async function openVessel(id){
     const e=await apiFetch(`${API}/fleet/summary/${id}`);
     if(gen!==vesselLoadGen)return;
     FLEET[id]={...FLEET[id],info:dbI(e.info),jobs:(e.jobs||[]).map(dbJ),classItems:(e.classItems||[]).map(dbC),discussions:(e.discussions||[]).map(dbD),
-      attachSet:new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`)),detailsLoaded:true};
+      attachSet:new Set((e.attachments||[]).map(a=>`${a.ref_type}:${a.ref_id}`)),
+      attachCounts:new Map((e.attachments||[]).map(a=>[`${a.ref_type}:${a.ref_id}`,Number(a.attachment_count)||0])),loadedResources:new Set(),detailsLoaded:true};
     window._secManualBudget=window._secManualBudget||{};
     Object.keys(window._secManualBudget).filter(k=>k.startsWith(id+'::')).forEach(k=>delete window._secManualBudget[k]);
     (e.secBudget||[]).forEach(sb=>{const key=`${id}::${sb.category}::${sb.section}`;window._secManualBudget[key]={budget:sb.budget||0,consumed:sb.consumed||0};});
@@ -360,6 +364,7 @@ async function openVessel(id){
   if(gen!==vesselLoadGen)return;
   VID=id;
   _tankLayout=null;_tankPlanData=[];_pipePlanData=[];_wpsCriteria=null;
+  _planDataVID=null;
   _curTankId=null;_curTankName=null;_curPipeTankId=null;_curPipeTankName=null;
   resetQF();
   show('page-vessel');
@@ -2931,6 +2936,7 @@ async function uploadGenAttach(input) {
     const list = await apiFetch(`${API}/vessels/${VID}/attachments/${refType}/${refId}`);
     _renderGenAttachUI(list || []);
     if(FLEET[VID].attachSet) FLEET[VID].attachSet.add(`${refType}:${refId}`);
+    if(FLEET[VID].attachCounts) FLEET[VID].attachCounts.set(`${refType}:${refId}`, list ? list.length : 0);
     _updateGenAttachBtn(refType, +refId, list ? list.length : 0);
     setSS('synced'); toast(`${files.length}개 파일 업로드 완료`);
   } catch(e){ setSS('error'); toast(uploaded?'업로드는 완료됐지만 목록 갱신에 실패했습니다. 새로고침해 주세요.':'업로드 실패: '+e.message, true); }
@@ -2948,6 +2954,7 @@ async function deleteGenAttach(aid) {
     _renderGenAttachUI(list || []);
     const cnt = list ? list.length : 0;
     if(!cnt && FLEET[VID].attachSet) FLEET[VID].attachSet.delete(`${refType}:${refId}`);
+    if(FLEET[VID].attachCounts){ if(cnt) FLEET[VID].attachCounts.set(`${refType}:${refId}`,cnt); else FLEET[VID].attachCounts.delete(`${refType}:${refId}`); }
     _updateGenAttachBtn(refType, +refId, cnt);
     setSS('synced'); toast('삭제됐습니다');
   } catch(e){ setSS('error'); toast('삭제 실패: '+e.message, true); }
@@ -3626,11 +3633,18 @@ const TRACKING_OPTS = {
 // 데이터 로드 + 렌더
 async function renderTracking(key){
   if(!VID) return;
+  const vid=VID, vessel=FLEET[vid];
   const cfg = TRACKING_CFG[key];
-  try {
-    const data = await apiFetch(`${API}/vessels/${VID}/${cfg.api}`);
-    FLEET[VID][cfg.key] = data;
-  } catch(e) { toast('로드 실패: '+e.message, true); return; }
+  vessel.loadedResources=vessel.loadedResources||new Set();
+  if(!vessel.loadedResources.has('tracking:'+key)){
+    try {
+      const data = await apiFetch(`${API}/vessels/${vid}/${cfg.api}`);
+      if(VID!==vid || FLEET[vid]!==vessel)return;
+      vessel[cfg.key] = data;
+      vessel.loadedResources.add('tracking:'+key);
+    } catch(e) { if(VID===vid)toast('로드 실패: '+e.message, true); return; }
+  }
+  if(VID!==vid || FLEET[vid]!==vessel)return;
 
   // steel/pipe: 첫 로드 시에만 전체 접힌 상태로 초기화 (이미 상태 있으면 유지)
   if((key === 'steel' || key === 'pipe') && !_trackingGroupCollapsed[key]) {
@@ -4027,6 +4041,7 @@ async function uploadTrackingXlsx(input){
 
 let _tankPlanData  = [];
 let _tankLayout    = null;
+let _planDataVID   = null;
 let _layoutEditing = null;
 let _curTankId     = null;
 let _curTankName   = null;
@@ -4334,13 +4349,16 @@ function _renderPlanLayoutViews() {
   const layout = _visualLayoutEditing ? _layoutEditing : _tankLayout;
   if(!layout) return;
   const tankWrap = document.getElementById('tank-svg-wrap');
-  if(tankWrap) {
+  const tankActive=document.getElementById('vt-tankplan')?.classList.contains('active');
+  const pipeActive=document.getElementById('vt-pipeplan')?.classList.contains('active');
+  const noActivePlan=!tankActive&&!pipeActive;
+  if(tankWrap && (tankActive||noActivePlan)) {
     const colorFn = _makeColFn(_tankPlanData, ...TANK_PLAN_PALETTE);
     tankWrap.innerHTML = _svgFromLayout(layout, 'openTankModal', colorFn,
       {editable:_visualLayoutEditing});
   }
   const pipeWrap = document.getElementById('pipe-svg-wrap');
-  if(pipeWrap) {
+  if(pipeWrap && (pipeActive||noActivePlan)) {
     const colorFn = _makeColFn(_pipePlanData, ...PIPE_PLAN_PALETTE);
     pipeWrap.innerHTML = _svgFromLayout(layout, 'openPipeModal', colorFn,
       {editable:_visualLayoutEditing});
@@ -4471,14 +4489,19 @@ window.addEventListener('blur', () => _finishLayoutResize({pointerId:null}));
 // ── Render ───────────────────────────────────────────────────
 async function renderTankPlan() {
   if(!VID) return;
+  const vid=VID, vessel=FLEET[vid];
+  vessel.loadedResources=vessel.loadedResources||new Set();
   const wrap = document.getElementById('tank-svg-wrap');
   if(wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#334155;font-size:13px">로딩 중…</div>';
 
   const [items, saved] = await Promise.all([
-    apiFetch(`${API}/vessels/${VID}/tank_plan`).catch(()=>[]),
-    apiFetch(`${API}/vessels/${VID}/tank_layout`).catch(()=>null),
+    _planDataVID===vid && vessel.loadedResources.has('tank_plan') ? Promise.resolve(_tankPlanData) : apiFetch(`${API}/vessels/${vid}/tank_plan`).catch(()=>[]),
+    _planDataVID===vid && vessel.loadedResources.has('tank_layout') ? Promise.resolve(_tankLayout) : apiFetch(`${API}/vessels/${vid}/tank_layout`).catch(()=>null),
   ]);
+  if(VID!==vid || FLEET[vid]!==vessel)return;
   _tankPlanData = items || [];
+  _planDataVID=vid;
+  vessel.loadedResources.add('tank_plan'); vessel.loadedResources.add('tank_layout');
   // 구버전 레이아웃 감지 (Cargo에 FPT 포함 or DBT에 WBT FWD 포함) → 기본값 재설정
   let layout = saved;
   if(layout) {
@@ -4494,7 +4517,7 @@ async function renderTankPlan() {
   // Steel Plan 색상: 파란색 — 렌더 시점 데이터 캡처
   _renderPlanLayoutViews();
 
-  _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
+  _initPlanDocBadges();  // summary attachment counts; no extra requests
 
   const total=_tankPlanData.length, cr=_tankPlanData.filter(i=>i.priority==='Critical').length;
   const ug=_tankPlanData.filter(i=>i.priority==='Urgent').length;
@@ -5388,6 +5411,8 @@ async function _loadPlanDocList() {
   const cfg = PLAN_DOC_CFG[_curPlanDocKey];
   const files = await apiFetch(`${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`)
     .catch(()=>[]);
+  const countKey=`${cfg.ref_type}:${cfg.ref_id}`;
+  if(FLEET[VID]?.attachCounts){if(files.length)FLEET[VID].attachCounts.set(countKey,files.length);else FLEET[VID].attachCounts.delete(countKey);}
   _renderPlanDocList(files || []);
   _updatePlanDocBtn(_curPlanDocKey, (files||[]).length);
 }
@@ -5470,26 +5495,19 @@ async function deletePlanDoc(aid) {
 }
 
 // 탭 로드 시 버튼 뱃지 초기화
-async function _initPlanDocBadges() {
+function _initPlanDocBadges() {
   if(!VID) return;
-  for(const [docKey, cfg] of Object.entries(PLAN_DOC_CFG)) {
-    try {
-      const files = await apiFetch(
-        `${API}/vessels/${VID}/attachments/${cfg.ref_type}/${cfg.ref_id}`);
-      _updatePlanDocBtn(docKey, (files||[]).length);
-    } catch(e) {}
+  const counts=FLEET[VID]?.attachCounts||new Map();
+  Object.entries(PLAN_DOC_CFG).forEach(([docKey,cfg])=>{
+    _updatePlanDocBtn(docKey,counts.get(`${cfg.ref_type}:${cfg.ref_id}`)||0);
+  });
+  const cnt=counts.get('vessel_wps:0')||0;
+  const btn = document.getElementById('btn-wps-tank');
+  if(btn) {
+    btn.style.background = cnt > 0 ? 'var(--blue)' : '';
+    btn.style.color      = cnt > 0 ? 'var(--white)' : '';
+    btn.textContent      = cnt > 0 ? `🔥 WPS (${cnt})` : '🔥 WPS';
   }
-  // WPS 버튼 뱃지 별도 초기화
-  try {
-    const wpsFiles = await apiFetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`);
-    const cnt = (wpsFiles||[]).length;
-    const btn = document.getElementById('btn-wps-tank');
-    if(btn) {
-      btn.style.background = cnt > 0 ? 'var(--blue)' : '';
-      btn.style.color      = cnt > 0 ? 'var(--white)' : '';
-      btn.textContent      = cnt > 0 ? `🔥 WPS (${cnt})` : '🔥 WPS';
-    }
-  } catch(e) {}
 }
 
 // ══ WPS FIT-UP INSPECTOR ════════════════════════════════════════
@@ -6142,6 +6160,7 @@ async function _loadWpsFiles() {
   if(!list) return;
   list.innerHTML='<div style="text-align:center;padding:20px;color:var(--txt-m)">로딩 중…</div>';
   const files = await apiFetch(`${API}/vessels/${VID}/attachments/vessel_wps/0`).catch(()=>[]);
+  if(FLEET[VID]?.attachCounts){if(files.length)FLEET[VID].attachCounts.set('vessel_wps:0',files.length);else FLEET[VID].attachCounts.delete('vessel_wps:0');}
   const cnt=(files||[]).length;
   const badge=document.getElementById('wps-file-badge');
   if(badge) badge.textContent=cnt>0?` (${cnt})`:'';
@@ -6182,14 +6201,19 @@ const PIPE_PLAN_COLORS = {
 
 async function renderPipePlan() {
   if(!VID) return;
+  const vid=VID, vessel=FLEET[vid];
+  vessel.loadedResources=vessel.loadedResources||new Set();
   const wrap = document.getElementById('pipe-svg-wrap');
   if(wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#334155;font-size:13px">로딩 중…</div>';
 
   const [items, saved] = await Promise.all([
-    apiFetch(`${API}/vessels/${VID}/pipe_plan`).catch(()=>[]),
-    apiFetch(`${API}/vessels/${VID}/tank_layout`).catch(()=>null),
+    _planDataVID===vid && vessel.loadedResources.has('pipe_plan') ? Promise.resolve(_pipePlanData) : apiFetch(`${API}/vessels/${vid}/pipe_plan`).catch(()=>[]),
+    _planDataVID===vid && vessel.loadedResources.has('tank_layout') ? Promise.resolve(_tankLayout) : apiFetch(`${API}/vessels/${vid}/tank_layout`).catch(()=>null),
   ]);
+  if(VID!==vid || FLEET[vid]!==vessel)return;
   _pipePlanData = items || [];
+  _planDataVID=vid;
+  vessel.loadedResources.add('pipe_plan'); vessel.loadedResources.add('tank_layout');
 
   // 레이아웃은 Tank Plan과 공유
   if(!_tankLayout) {
@@ -6200,7 +6224,7 @@ async function renderPipePlan() {
   // Pipe Plan 색상: 초록색 — 렌더 시점 데이터 캡처
   _renderPlanLayoutViews();
 
-  _initPlanDocBadges().catch(()=>{});  // GA / Repair Plan 버튼 뱃지
+  _initPlanDocBadges();  // summary attachment counts; no extra requests
 
   const total=_pipePlanData.length;
   const cr=_pipePlanData.filter(i=>i.priority==='Critical').length;
@@ -6828,10 +6852,17 @@ const _docCollapsed = new Set(); // 기본 접힘
 
 async function renderDocuments() {
   if(!VID) return;
+  const vid=VID, vessel=FLEET[vid];
+  vessel.loadedResources=vessel.loadedResources||new Set();
   const grid = document.getElementById('docs-grid');
   grid.innerHTML = '<div style="color:var(--txt-m);padding:20px">Loading…</div>';
   try {
-    const allDocs = await apiFetch(`${API}/vessels/${VID}/documents`);
+    let allDocs=vessel.documents||[];
+    if(!vessel.loadedResources.has('documents')){
+      allDocs = await apiFetch(`${API}/vessels/${vid}/documents`);
+      if(VID!==vid || FLEET[vid]!==vessel)return;
+      vessel.documents=allDocs||[]; vessel.loadedResources.add('documents');
+    }
     const byType = {};
     DOC_TYPES.forEach(t => byType[t.key] = []);
     (allDocs||[]).forEach(d => { if(byType[d.doc_type]) byType[d.doc_type].push(d); });
@@ -6983,6 +7014,7 @@ async function uploadDocument(input, docType) {
   try {
     await rawFetchOK(`${API}/vessels/${VID}/documents`, {method:'POST', body:formData});
     uploaded=true;
+    FLEET[VID]?.loadedResources?.delete('documents');
     // 해당 섹션만 갱신
     const listId = 'docs-list-'+_docTypeId(docType);
     const el = document.getElementById(listId);
@@ -7003,6 +7035,7 @@ async function deleteDoc(did, typeId) {
     // doc_type 복원
     const docType = DOC_TYPES.find(t=>_docTypeId(t.key)===typeId)?.key||'';
     await apiFetch(`${API}/documents/${did}`, 'DELETE');
+    FLEET[VID]?.loadedResources?.delete('documents');
     setSS('synced'); toast('삭제됐습니다');
     const el = document.getElementById('docs-list-'+typeId);
     if(el && docType){

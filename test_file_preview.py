@@ -2,12 +2,68 @@ import io
 from pathlib import Path
 import unittest
 import zipfile
+from unittest.mock import patch
 
 import app as drydock
 from openpyxl import Workbook
 
 
 class FilePreviewTest(unittest.TestCase):
+    def test_xlsx_pdf_copy_is_fit_to_one_page_wide_without_dropping_media(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml',
+                '<worksheet><sheetPr><tabColor rgb="FF0000"/></sheetPr><pageMargins left="0.7"/>'
+                '<pageSetup orientation="portrait" scale="75"/></worksheet>')
+            archive.writestr('xl/media/image1.wmf', b'unchanged-image')
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            sheet = archive.read('xl/worksheets/sheet1.xml').decode('utf-8')
+            self.assertEqual(b'unchanged-image', archive.read('xl/media/image1.wmf'))
+        self.assertIn('fitToWidth="1"', sheet)
+        self.assertIn('fitToHeight="0"', sheet)
+        self.assertIn('fitToPage="1"', sheet)
+        self.assertNotIn('scale="75"', sheet)
+
+    def test_xlsx_fit_expands_self_closing_sheet_properties(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml',
+                '<worksheet><sheetPr codeName="Sheet1"/><pageSetup fitToWidth="3" fitToHeight="2"/></worksheet>')
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            sheet = archive.read('xl/worksheets/sheet1.xml').decode('utf-8')
+        self.assertEqual(1, sheet.count('<sheetPr'))
+        self.assertIn('<pageSetUpPr fitToPage="1"/>', sheet)
+        self.assertIn('fitToWidth="1"', sheet)
+
+    def test_xlsx_sheet_without_page_setup_is_left_unchanged(self):
+        original = '<worksheet><sheetPr/><drawing r:id="rId1"/></worksheet>'
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('xl/worksheets/sheet1.xml', original)
+        fitted = drydock._xlsx_fit_to_width(payload.getvalue())
+        with zipfile.ZipFile(io.BytesIO(fitted)) as archive:
+            self.assertEqual(original, archive.read('xl/worksheets/sheet1.xml').decode('utf-8'))
+
+    def test_office_preview_prefers_converted_pdf(self):
+        with drydock.app.test_request_context('/'), patch.object(drydock, '_office_pdf', return_value=b'%PDF-1.4 converted'):
+            response = drydock._file_preview('report.docx', 'application/octet-stream', b'office')
+        self.assertEqual('application/pdf', response.mimetype)
+        self.assertIn('inline', response.headers['Content-Disposition'])
+        response.direct_passthrough = False
+        self.assertEqual(b'%PDF-1.4 converted', response.get_data())
+
+    def test_office_preview_falls_back_when_converter_is_absent(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            archive.writestr('word/document.xml',
+                '<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:t>Fallback</w:t></w:r></w:p></w:body></w:document>')
+        with drydock.app.test_request_context('/'), patch('app.shutil.which', return_value=None):
+            response = drydock._file_preview('report.docx', 'application/octet-stream', payload.getvalue())
+        self.assertEqual('text/html', response.mimetype)
+        self.assertIn('Fallback', response.get_data(as_text=True))
+
     def test_text_preview_escapes_active_html(self):
         with drydock.app.test_request_context('/'):
             response = drydock._file_preview('note.txt', 'text/plain', b'<script>alert(1)</script>')
@@ -21,7 +77,7 @@ class FilePreviewTest(unittest.TestCase):
         with zipfile.ZipFile(payload, 'w') as archive:
             archive.writestr('word/document.xml',
                 '<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:t>A &amp; B</w:t></w:r></w:p></w:body></w:document>')
-        with drydock.app.test_request_context('/'):
+        with drydock.app.test_request_context('/'), patch('app.shutil.which', return_value=None):
             response = drydock._file_preview('report.docx',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', payload.getvalue())
         self.assertEqual(200, response.status_code)
@@ -34,7 +90,7 @@ class FilePreviewTest(unittest.TestCase):
         sheet.append(['Job', '<b>Open</b>'])
         payload = io.BytesIO()
         workbook.save(payload)
-        with drydock.app.test_request_context('/'):
+        with drydock.app.test_request_context('/'), patch('app.shutil.which', return_value=None):
             response = drydock._file_preview('status.xlsx',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', payload.getvalue())
         body = response.get_data(as_text=True)
@@ -64,6 +120,11 @@ class FilePreviewTest(unittest.TestCase):
 
 
 class UploadUiContractTest(unittest.TestCase):
+    def test_daily_cards_show_attachment_count(self):
+        script = Path('static/js/dd-cards.js').read_text(encoding='utf-8')
+        self.assertIn('attachCounts', script)
+        self.assertIn("attachLabel('disc',d._id)", script)
+
     def test_all_upload_surfaces_have_drop_handlers(self):
         template = Path('templates/index.html').read_text(encoding='utf-8')
         script = Path('static/js/app.js').read_text(encoding='utf-8')
