@@ -4261,6 +4261,9 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
     const assessment = state.inspection_pending ? '(검사예정)'
       : state.steel_none ? '강재 수리 없음'
       : `${c.weightKg.toFixed(1)} kg`;
+    const assessmentColor = state.inspection_pending ? '#2563eb'
+      : state.steel_none ? '#16a34a'
+      : '#dc2626';
     const nameOffset = t.cl && !editable ? -7 : 0;
     const nameEl = nl.map((l,i) =>
       `<text x="${cx+w/2}" y="${ty+nameOffset+(i-(nl.length-1)/2)*13}"
@@ -4269,7 +4272,7 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
     ).join('');
     const assessmentEl = t.cl && !editable
       ? `<text x="${cx+w/2}" y="${ty+12}" font-family="IBM Plex Sans,Arial" font-size="9"
-          font-weight="800" fill="#dc2626" text-anchor="middle" dominant-baseline="central">${assessment}</text>`
+          font-weight="800" fill="${assessmentColor}" text-anchor="middle" dominant-baseline="central">${assessment}</text>`
       : '';
     return `<g class="${t.cl?'tk':''}" style="cursor:${cursor}" ${oc}>
       <rect x="${cx}" y="${ry}" width="${w}" height="${h}" rx="2"

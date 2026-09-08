@@ -97,10 +97,13 @@ run(`_tankPlanData=[
   {position_tank:'COT 1P',length_l:'1000',width_w:'1000',thickness_t:'10'}
 ]; _renderPlanLayoutViews();`);
 assert.match(elements['tank-svg-wrap'].innerHTML, /180\.0 kg/);
+assert.match(elements['tank-svg-wrap'].innerHTML, /fill="#dc2626"[^>]*>180\.0 kg/);
 run("_tankAssessments={COT1P:{steel_none:true,inspection_pending:false}}; _renderPlanLayoutViews();");
 assert.match(elements['tank-svg-wrap'].innerHTML, /강재 수리 없음/);
+assert.match(elements['tank-svg-wrap'].innerHTML, /fill="#16a34a"[^>]*>강재 수리 없음/);
 run("_tankAssessments={COT1P:{steel_none:false,inspection_pending:true}}; _renderPlanLayoutViews();");
 assert.match(elements['tank-svg-wrap'].innerHTML, /\(검사예정\)/);
+assert.match(elements['tank-svg-wrap'].innerHTML, /fill="#2563eb"[^>]*>\(검사예정\)/);
 
 (async () => {
   context.apiCalls = [];
@@ -142,5 +145,5 @@ assert.match(elements['tank-svg-wrap'].innerHTML, /\(검사예정\)/);
   assert.strictEqual(context.apiCalls.length, 3);
   assert.strictEqual(context.apiCalls[2][1], 'PUT');
   assert.match(context.apiCalls[2][0], /tank_assessments\/COT1P$/);
-  console.log('tank visual resize/runtime assessment: 33 assertions PASS');
+  console.log('tank visual resize/runtime assessment: 36 assertions PASS');
 })().catch(error => { console.error(error); process.exitCode=1; });
