@@ -298,6 +298,10 @@ button:disabled { opacity:.48; cursor:not-allowed!important; }
 .docs-file-item { background:var(--trmt-surface)!important; border-color:var(--trmt-line)!important; border-radius:8px!important; }
 .docs-file-item:hover { background:var(--trmt-blue-soft)!important; }
 .toast { border-radius:8px!important; box-shadow:0 10px 30px rgba(15,23,42,.16)!important; }
+.job-attach-dropzone { min-height:190px; border:2px dashed transparent; border-radius:8px;
+  transition:border-color .15s,background .15s,box-shadow .15s; }
+body.trmt-dock .job-attach-dropzone.is-dragover { border-color:var(--trmt-blue)!important;
+  background:var(--trmt-blue-soft)!important; box-shadow:inset 0 0 0 2px rgba(24,95,165,.12)!important; transform:none; }
 
 /* Embedded shell is visually continuous with TRMT and avoids nested chrome. */
 .is-embedded { background:var(--trmt-page)!important; }
