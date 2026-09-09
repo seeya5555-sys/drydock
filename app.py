@@ -22,6 +22,28 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7일
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # 캐시버스팅 있으니 0
 os.makedirs(app.instance_path, exist_ok=True)
 
+MIB = 1024 * 1024
+JOB_ATTACHMENT_MAX_BYTES = 100 * MIB
+JOB_ATTACHMENT_REQUEST_MAX_BYTES = 105 * MIB
+_JOB_ATTACHMENT_UPLOAD_SLOT = threading.BoundedSemaphore(1)
+
+
+@app.before_request
+def job_attachment_request_limit():
+    """Keep the global 50 MiB cap; only Job attachment multipart requests may be larger."""
+    if (request.method == 'POST' and request.endpoint == 'upload_attachment'
+            and (request.view_args or {}).get('ref_type') == 'job'):
+        request.max_content_length = JOB_ATTACHMENT_REQUEST_MAX_BYTES
+
+
+@app.errorhandler(413)
+def upload_too_large(_error):
+    is_job = (request.endpoint == 'upload_attachment'
+              and (request.view_args or {}).get('ref_type') == 'job')
+    limit = JOB_ATTACHMENT_MAX_BYTES if is_job else app.config['MAX_CONTENT_LENGTH']
+    label = 'Job 첨부파일' if is_job else '업로드 요청'
+    return jsonify({'error': f'{label}은 최대 {limit // MIB} MiB입니다'}), 413
+
 def _asset_version():
     h = hashlib.sha256()
     for rel in ("static/css/main.css", "static/css/trmt-dock-ui.css", "static/css/trmt-skin.css",
@@ -1251,19 +1273,35 @@ def get_attachments(vid, ref_type, ref_id):
 def upload_attachment(vid, ref_type, ref_id):
     if "files" not in request.files:
         return jsonify({"error": "No files"}), 400
-    db = get_db()
-    uploaded = []
-    for f in request.files.getlist("files"):
-        if not f.filename: continue
-        data = f.read()
-        cur = db.execute(
-            "INSERT INTO attachments(vessel_id,ref_type,ref_id,filename,filesize,mimetype,data)"
-            " VALUES(?,?,?,?,?,?,?)",
-            (vid, ref_type, ref_id, f.filename, len(data), f.content_type, data))
-        uploaded.append({"id": cur.lastrowid, "filename": f.filename,
-                         "filesize": len(data), "mimetype": f.content_type})
-    db.commit()
-    return jsonify(uploaded), 201
+    owns_slot = ref_type != 'job' or _JOB_ATTACHMENT_UPLOAD_SLOT.acquire(blocking=False)
+    if not owns_slot:
+        return jsonify({'error': '다른 Job 대용량 첨부를 처리 중입니다. 잠시 후 다시 시도하세요'}), 429
+    try:
+        limit = JOB_ATTACHMENT_MAX_BYTES if ref_type == 'job' else app.config['MAX_CONTENT_LENGTH']
+        pending = []
+        total_size = 0
+        for f in request.files.getlist("files"):
+            if not f.filename: continue
+            data = f.read()
+            total_size += len(data)
+            if total_size > limit:
+                label = 'Job 첨부파일' if ref_type == 'job' else '첨부파일'
+                return jsonify({"error": f"{label} 합계는 최대 {limit // MIB} MiB입니다"}), 413
+            pending.append((f, data))
+        db = get_db()
+        uploaded = []
+        for f, data in pending:
+            cur = db.execute(
+                "INSERT INTO attachments(vessel_id,ref_type,ref_id,filename,filesize,mimetype,data)"
+                " VALUES(?,?,?,?,?,?,?)",
+                (vid, ref_type, ref_id, f.filename, len(data), f.content_type, data))
+            uploaded.append({"id": cur.lastrowid, "filename": f.filename,
+                             "filesize": len(data), "mimetype": f.content_type})
+        db.commit()
+        return jsonify(uploaded), 201
+    finally:
+        if ref_type == 'job' and owns_slot:
+            _JOB_ATTACHMENT_UPLOAD_SLOT.release()
 
 @app.route("/api/attachments/<int:aid>", methods=["GET"])
 def download_attachment(aid):

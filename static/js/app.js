@@ -59,6 +59,7 @@ const DEF_JOBS = [
 
 // ══ FLASK REST API ════════════════════════════════════
 const API = '/drydock/api';
+const JOB_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 
 function uploadFiles(source) { return Array.from(source?.files || source || []); }
 function clearUploadSource(source) { if(source && 'value' in source) source.value = ''; }
@@ -108,7 +109,11 @@ async function apiFetch(url, method='GET', body=null){
 }
 async function rawFetchOK(url, opts){
   const res=await fetch(url,opts);
-  if(!res.ok)throw new Error(`HTTP ${res.status}`);
+  if(!res.ok){
+    let message='';
+    try { message=(await res.json())?.error||''; } catch(_) {}
+    throw new Error(message||`HTTP ${res.status}`);
+  }
   return res;
 }
 
@@ -2817,6 +2822,12 @@ function _renderJobAttachUI(files) {
 async function uploadJobAttach(input) {
   const files = uploadFiles(input);
   if(!VID || !files.length) return;
+  const totalBytes=files.reduce((sum,file)=>sum+(Number(file.size)||0),0);
+  if(totalBytes>JOB_ATTACHMENT_MAX_BYTES){
+    toast('Job 첨부파일 합계는 최대 100 MiB입니다', true);
+    clearUploadSource(input);
+    return;
+  }
   const jobId = +document.getElementById('ja-jobid').value;
   const formData = new FormData();
   for(const f of files) formData.append('files', f);
