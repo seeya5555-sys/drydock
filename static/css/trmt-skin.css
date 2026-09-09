@@ -293,6 +293,7 @@ button:disabled { opacity:.48; cursor:not-allowed!important; }
 /* Embedded shell is visually continuous with TRMT and avoids nested chrome. */
 .is-embedded { background:var(--trmt-page)!important; }
 body.trmt-dock.is-embedded { --dock-header-height:0px; }
+body.trmt-dock.is-embedded main { max-width:none; padding-left:8px; padding-right:8px; }
 .is-embedded > header { display:none!important; }
 .is-embedded .tracking-subnav { border:1px solid var(--trmt-line); border-width:0 0 1px; border-radius:0; box-shadow:none; }
 

@@ -43,6 +43,11 @@ class TRMTDesignSystemTests(unittest.TestCase):
         self.assertIn('.vessel-nav-stack { position:sticky; top:var(--dock-header-height); z-index:200; display:flex; flex-direction:column;', self.css)
         self.assertIn('body.trmt-dock > header { min-height:58px;', self.css)
 
+    def test_embedded_all_tabs_use_full_available_width(self):
+        self.assertIn('body.trmt-dock.is-embedded main { max-width:none; padding-left:8px; padding-right:8px; }', self.css)
+        self.assertNotIn('body.trmt-dock.is-embedded main { max-width:1440px', self.css)
+        self.assertIn('* { margin:0; padding:0; box-sizing:border-box; }', (ROOT / 'static/css/main.css').read_text())
+
     def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
         self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
         self.assertIn('body.trmt-dock.is-embedded { --dock-header-height:0px;', self.css)
