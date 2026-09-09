@@ -1791,7 +1791,7 @@ function renderJobs(){
           </div>
         </div>
       </td>
-      <td colspan="3" style="padding:10px 8px"></td>
+      <td colspan="2" style="padding:10px 8px"></td>
     </tr>`;
 
     // 하위 job 행들 - Section 중분류로 그룹화
@@ -2201,7 +2201,7 @@ function _jobRow(j, jobs, fil, treeMap, extraDepth, isFiltering) {
         ${dateInfo}`
         }
       </td>
-      <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" ${isViewer()?'':` onclick="openJobModal(${ri})"`} style="cursor:${isViewer()?'default':'pointer'};max-width:300px" ${isViewer()?'':` title="클릭하여 Remark 편집"`}>${renderRemarkCell(j)}</div></td>
+      <td data-label="Remark" style="vertical-align:middle"><div class="remark-cell" ${isViewer()?'':` onclick="openJobModal(${ri})"`} style="cursor:${isViewer()?'default':'pointer'}" ${isViewer()?'':` title="클릭하여 Remark 편집"`}>${renderRemarkCell(j)}</div></td>
       <td style="white-space:nowrap">
         <button class="edit-btn" onclick="openJobModal(${ri})">Edit</button>
         <button class="attach-btn" id="jattbtn-${j._id}" onclick="openJobAttach(${j._id})" title="첨부파일" style="${(FLEET[VID].attachSet||new Set()).has('job:'+j._id)?'background:var(--blue);color:var(--white)':''}">

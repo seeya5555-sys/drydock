@@ -247,6 +247,15 @@ thead th { background:var(--trmt-surface-2)!important; color:var(--trmt-muted)!i
 tbody tr { border-color:var(--trmt-line)!important; }
 tbody tr:not(.job-group-row):hover { background:var(--trmt-blue-soft)!important; }
 tbody td { color:var(--trmt-text)!important; padding:9px 12px!important; }
+@media(min-width:769px){
+  #vt-jobs table { width:100%; table-layout:fixed; }
+  #vt-jobs .job-col-no{width:3.5%} #vt-jobs .job-col-section{width:5.5%} #vt-jobs .job-col-category{width:6.5%}
+  #vt-jobs .job-col-description{width:17%} #vt-jobs .job-col-vendor{width:10%} #vt-jobs .job-col-budget{width:7%}
+  #vt-jobs .job-col-consumed{width:6%} #vt-jobs .job-col-progress{width:13%} #vt-jobs .job-col-remark{width:25.5%}
+  #vt-jobs .job-col-actions{width:6%}
+  #vt-jobs .remark-cell { max-width:none; width:100%; }
+  #vt-jobs tbody td:nth-child(4),#vt-jobs tbody td:nth-child(5),#vt-jobs tbody td:nth-child(9){overflow-wrap:anywhere;word-break:break-word}
+}
 .toolbar,.j-toolbar,.c-toolbar,.d-toolbar,.qf-bar { background:var(--trmt-surface)!important;
   border-color:var(--trmt-line)!important; box-shadow:none!important; gap:8px!important; }
 .qf-btn { border:1px solid var(--trmt-line)!important; background:var(--trmt-surface)!important; color:var(--trmt-muted)!important; }

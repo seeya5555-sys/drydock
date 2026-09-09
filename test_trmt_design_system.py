@@ -48,6 +48,15 @@ class TRMTDesignSystemTests(unittest.TestCase):
         self.assertNotIn('body.trmt-dock.is-embedded main { max-width:1440px', self.css)
         self.assertIn('* { margin:0; padding:0; box-sizing:border-box; }', (ROOT / 'static/css/main.css').read_text())
 
+    def test_job_columns_prioritize_remark_width_on_desktop(self):
+        self.assertIn('<colgroup class="job-columns">', self.html)
+        self.assertIn('#vt-jobs .job-col-remark{width:25.5%}', self.css)
+        self.assertIn('#vt-jobs .job-col-actions{width:6%}', self.css)
+        self.assertIn('#vt-jobs .remark-cell { max-width:none; width:100%; }', self.css)
+        self.assertIn('overflow-wrap:anywhere;word-break:break-word', self.css)
+        self.assertNotIn('max-width:300px', self.js)
+        self.assertIn('<td colspan="2" style="padding:10px 8px"></td>', self.js)
+
     def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
         self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
         self.assertIn('body.trmt-dock.is-embedded { --dock-header-height:0px;', self.css)
