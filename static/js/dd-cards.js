@@ -314,21 +314,25 @@
              '<div class="issue-card-body"><button type="button" class="issue-card-title dd-title-toggle" aria-expanded="'+(exp?'true':'false')+'">'+esc(d.item||'—')+'</button></div>'+det+'</div>';
     }
 
-    var dateOptions = dates.map(function(k){
+    var dateNav = dates.map(function(k){
       var open=groups[k].filter(isOpen).length;
-      return '<option value="'+attrArg(k)+'"'+(k===window._ddSelectedDate?' selected':'')+'>'+esc(k)+' · 남음 '+open+'</option>';
+      var active=k===window._ddSelectedDate, dateArg=attrArg(k);
+      return '<button type="button" class="dd-date-nav'+(active?' is-active':'')+'"'+(active?' id="dd-date-active"':'')+
+        ' aria-pressed="'+(active?'true':'false')+'" onclick="_ddSelectDailyDate(decodeURIComponent(\''+dateArg+'\'))">'+
+        '<span class="dd-date-nav-date">'+esc(k)+'</span><span class="dd-date-nav-open">남음 '+open+'</span></button>';
     }).join('');
     var selectedOpen=selectedAll.filter(isOpen).length;
     var selectedArg=attrArg(window._ddSelectedDate);
     var cardList = fil.length ? fil.map(card).join('') : '<div class="dd-empty">선택 날짜에 '+esc(sf)+' 항목이 없습니다</div>';
-    var html = '<div class="dd-daily-layout"><section class="dd-date-content"><div class="dd-date-content-head"><div class="dd-date-picker"><label for="dd-date-select">날짜 선택</label>'+
-      '<select id="dd-date-select" class="dd-date-select" onchange="_ddSelectDailyDate(decodeURIComponent(this.value))">'+dateOptions+'</select><p>남음 '+selectedOpen+'</p></div>'+
+    var html = '<div class="dd-daily-layout"><aside class="dd-date-sidebar" aria-label="Daily Log 날짜 선택">'+dateNav+'</aside>'+
+      '<section class="dd-date-content"><div class="dd-date-content-head"><div><span>선택 날짜</span><h3>'+esc(window._ddSelectedDate)+'</h3><p>남음 '+selectedOpen+'</p></div>'+
       '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+selectedArg+'\'))">+ Add Log</button></div>'+cardList+'</section></div>';
     mount('d-body','d-cards', html);
+    var activeDate=document.getElementById('dd-date-active');
+    if(activeDate) activeDate.scrollIntoView({block:'nearest',inline:'nearest'});
     if(window._ddRestoreDailyDateFocus){
       window._ddRestoreDailyDateFocus = false;
-      var dateSelect=document.getElementById('dd-date-select');
-      if(dateSelect) dateSelect.focus();
+      if(activeDate) activeDate.focus({preventScroll:true});
     }
   };
 

@@ -57,6 +57,12 @@ class TRMTDesignSystemTests(unittest.TestCase):
         self.assertNotIn('max-width:300px', self.js)
         self.assertIn('<td colspan="2" style="padding:10px 8px"></td>', self.js)
 
+    def test_daily_sidebar_fits_fifteen_compact_dates(self):
+        self.assertIn('grid-template-columns:176px minmax(0,1fr)', self.css)
+        self.assertIn('height:28px; min-height:28px;', self.css)
+        self.assertIn('gap:2px;', self.css)
+        self.assertLessEqual(15 * 28 + 14 * 2, 448)
+
     def test_tracking_navigation_and_toolbar_have_contiguous_sticky_offsets(self):
         self.assertIn('--dock-header-height:58px; --dock-vessel-nav-height:45px; --dock-tracking-nav-height:43px;', self.css)
         self.assertIn('body.trmt-dock.is-embedded { --dock-header-height:0px;', self.css)

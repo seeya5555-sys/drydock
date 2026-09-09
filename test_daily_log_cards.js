@@ -103,11 +103,9 @@ test('daily toggle expands and collapses date groups and cards together', () => 
   assert.equal(renders, 2);
 });
 
-test('dropdown date selection survives the hidden legacy date filter', () => {
+test('sidebar date selection survives the hidden legacy date filter', () => {
   const df = { value: '2026-09-02' };
-  let focused = false;
-  const select = { focus: () => { focused = true; } };
-  global.document = { getElementById: id => id === 'd-df' ? df : (id === 'dd-date-select' ? select : null) };
+  global.document = { getElementById: id => id === 'd-df' ? df : null };
   global.renderDisc = () => {};
   _ddSelectDailyDate('2026-09-03');
   assert.equal(window._ddSelectedDate, '2026-09-03');
@@ -170,7 +168,7 @@ test('failed status PUT rolls back and unlocks the item for retry', async () => 
   assert.equal(window._ddStatusSaving.has('8'), false);
 });
 
-test('daily render builds a date dropdown with open counts only', () => {
+test('daily render builds a compact date sidebar with open counts only', () => {
   global.VID = 'v_1';
   global.FLEET = { v_1: { discussions: [
     { _id: 1, date: '2026-09-03', item: 'open item', status: 'Open', priority: 'Urgent' },
@@ -181,24 +179,32 @@ test('daily render builds a date dropdown with open counts only', () => {
   const host = { innerHTML: '' };
   const wrap = { style: {}, parentNode: { insertBefore: () => {} } };
   const body = { closest: () => wrap };
+  let activeFocused = false, activeScrolled = false, focusOptions = null;
   const elements = {
     'd-q': { value: '' }, 'd-df': { value: '' }, 'd-sf': { value: 'Open' }, 'd-pf': { value: '' },
     'd-cnt': { textContent: '' }, 'btn-daily-expand-all': { disabled: false, textContent: '', setAttribute: () => {} },
-    'd-body': body, 'd-cards': host
+    'd-body': body, 'd-cards': host, 'dd-date-active': {
+      focus: options => { activeFocused = true; focusOptions = options; },
+      scrollIntoView: options => { activeScrolled = options.block === 'nearest' && options.inline === 'nearest'; }
+    }
   };
   global.document = { getElementById: id => elements[id] || null };
   window._ddSelectedDate = '';
   window._ddPreferredDate = '';
+  window._ddRestoreDailyDateFocus = true;
   cardRender();
   assert.equal(window._ddSelectedDate, '2026-09-02', 'earliest date should be selected by default');
-  const earlyDateIndex = host.innerHTML.indexOf('2026-09-02 · 남음 1');
-  const laterDateIndex = host.innerHTML.indexOf('2026-09-03 · 남음 1');
-  assert.ok(earlyDateIndex >= 0, 'earliest dropdown date should be rendered');
-  assert.ok(laterDateIndex >= 0, 'later dropdown date should be rendered');
-  assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the dropdown');
-  assert.match(host.innerHTML, /id="dd-date-select"/);
-  assert.match(host.innerHTML, /2026-09-04 · 남음 0/);
-  assert.equal((host.innerHTML.match(/ selected/g) || []).length, 1);
+  const earlyDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-02');
+  const laterDateIndex = host.innerHTML.indexOf('dd-date-nav-date">2026-09-03');
+  assert.ok(earlyDateIndex >= 0, 'earliest sidebar date should be rendered');
+  assert.ok(laterDateIndex >= 0, 'later sidebar date should be rendered');
+  assert.ok(earlyDateIndex < laterDateIndex, 'earliest date should appear first in the sidebar');
+  assert.match(host.innerHTML, /class="dd-date-sidebar"/);
+  assert.match(host.innerHTML, /dd-date-nav-date">2026-09-04<\/span><span class="dd-date-nav-open">남음 0/);
+  assert.equal((host.innerHTML.match(/id="dd-date-active"/g) || []).length, 1);
+  assert.equal(activeFocused, true);
+  assert.equal(activeScrolled, true);
+  assert.deepEqual(focusOptions, {preventScroll:true});
   assert.doesNotMatch(host.innerHTML, /완료 \d|전체 \d|긴급 \d/);
   assert.equal(elements['d-cnt'].textContent, '남음 2');
 });
