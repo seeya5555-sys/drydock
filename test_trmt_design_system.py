@@ -58,8 +58,11 @@ class TRMTDesignSystemTests(unittest.TestCase):
         self.assertIn('<td colspan="2" style="padding:10px 8px"></td>', self.js)
 
     def test_daily_sidebar_fits_fifteen_compact_dates(self):
-        self.assertIn('grid-template-columns:176px minmax(0,1fr)', self.css)
-        self.assertIn('height:28px; min-height:28px;', self.css)
+        self.assertIn('grid-template-columns:190px minmax(0,1fr)', self.css)
+        self.assertIn('height:auto; min-height:28px;', self.css)
+        self.assertIn('padding:4px 8px;', self.css)
+        self.assertIn('font:750 11px/1.35 ui-monospace', self.css)
+        self.assertIn('font-size:10px; line-height:1.35;', self.css)
         self.assertIn('gap:2px;', self.css)
         self.assertLessEqual(15 * 28 + 14 * 2, 448)
 
