@@ -15,7 +15,7 @@ class TRMTDesignSystemTests(unittest.TestCase):
 
     def test_final_layer_uses_canonical_trmt_surfaces(self):
         for token in ('--trmt-page:#F8F7F4', '--trmt-surface:#FFFFFF',
-                      '--trmt-blue:#185FA5', '--trmt-ink:#1F1F1D'):
+                      '--trmt-blue:#1D5B94', '--trmt-ink:#1F1F1D'):
             self.assertIn(token, self.css)
         self.assertIn('.vessel-card,.panel,.dash-panel,.docs-section,.tank-item-row', self.css)
 

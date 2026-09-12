@@ -802,6 +802,13 @@ function renderDash(){
   const prog=leafJobs.filter(j=>{const p=calcProgress(j.start_date,j.end_date);const pct=p!==null?p:j.completion||0;return pct>0&&pct<100;}).length;
   const oc=(v.classItems||[]).filter(c=>c.status==='Open').length;
   document.getElementById('vb-name').textContent=info.name;
+  const summaryEdit=document.getElementById('dock-vessel-edit');
+  if(summaryEdit) summaryEdit.hidden=isViewer();
+  const vesselName=document.getElementById('vb-name');
+  vesselName.classList.toggle('dock-edit-surface',!isViewer());
+  vesselName.onclick=isViewer()?null:()=>openVesselEditModal();
+  if(!isViewer()){ vesselName.setAttribute('role','button'); vesselName.tabIndex=0; vesselName.title='선박 정보 편집'; }
+  else { vesselName.removeAttribute('role'); vesselName.removeAttribute('tabindex'); vesselName.removeAttribute('title'); }
   document.getElementById('vs-total').textContent=leafJobs.length;
   document.getElementById('vs-done').textContent=done;
   document.getElementById('vs-prog').textContent=prog;
@@ -864,7 +871,7 @@ function renderDash(){
   const st=vesselStatus(info);
   const sv=document.getElementById('vb-status');
   sv.textContent=st;
-  sv.style.color=st==='IN DRY DOCK'?'#fbbf24':st==='IN WET DOCK'?'#60a5fa':st==='COMPLETED'?'#4ade80':'rgba(255,255,255,.5)';
+  sv.style.color=st==='IN DRY DOCK'?'var(--amber)':st==='IN WET DOCK'?'var(--trmt-blue)':st==='COMPLETED'?'var(--green)':'var(--trmt-muted)';
 
   // ── Progress Overview (Shipyard / Shore Repair 스케줄 + 공정률) ──
   const OV_CATS = ['Shipyard', 'Shore Repair'];
@@ -3527,9 +3534,36 @@ async function deleteVessel(){
 
 // ══ HELPERS ═══════════════════════════════════════════
 function show(id){document.querySelectorAll('.page:not([id^="vt-"]):not([id^="vtab-"])').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
-function openM(id){document.getElementById(id).classList.add('open');}
-function closeM(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+function openM(id){
+  const overlay=document.getElementById(id);
+  if(overlay.classList.contains('open')) return;
+  overlay._dockReturnFocus=document.activeElement;
+  overlay._dockReturnFocusId=document.activeElement&&document.activeElement.id||'';
+  overlay.classList.add('open');
+  const modal=overlay.querySelector('.modal');
+  if(modal){
+    modal.setAttribute('role','dialog'); modal.setAttribute('aria-modal','true'); modal.tabIndex=-1;
+    const title=modal.querySelector('.modal-title');
+    if(title){ if(!title.id) title.id=id+'-label'; modal.setAttribute('aria-labelledby',title.id); }
+    else modal.setAttribute('aria-label','상세 / 편집');
+    // Start at the dialog without selecting or modifying any field.
+    modal.focus({preventScroll:true});
+  }
+}
+function closeM(id){
+  const overlay=document.getElementById(id);
+  if(!overlay.classList.contains('open')) return;
+  overlay.classList.remove('open');
+  const previous=overlay._dockReturnFocus;
+  const fallback=overlay._dockReturnFocusId&&document.getElementById(overlay._dockReturnFocusId);
+  if(previous && previous.isConnected) previous.focus({preventScroll:true});
+  else if(fallback) fallback.focus({preventScroll:true});
+  else {
+    const page=document.querySelector('.page.active');
+    if(page){ page.tabIndex=-1; page.focus({preventScroll:true}); }
+  }
+}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeM(o.id);}));
 
 function setBreadcrumb(items){
   document.getElementById('breadcrumb').innerHTML=items.map((item,i)=>{
@@ -4839,7 +4873,7 @@ function _renderTankModalBody() {
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);
                     font-weight:700;min-width:28px;padding-top:1px">${item.no||idx+1}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">${item.description||'—'}</div>
+          <${!isViewer()&&!isEditing?'button type="button" class="dock-edit-surface" onclick="startTankItemEdit('+item.id+')"':'div'} style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">${item.description||'—'}${!isViewer()&&!isEditing?'<span class="dock-edit-hint">편집</span>':''}</${!isViewer()&&!isEditing?'button':'div'}>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${ph}
             <span class="c-badge ${stCls}" style="font-size:10px">${item.status||'Not Started'}</span>
@@ -6532,10 +6566,10 @@ function _renderPipeModalBody() {
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#10b981;
                     font-weight:700;min-width:28px;padding-top:1px">${item.no||idx+1}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">
+          <${!isViewer()&&!isEditing?'button type="button" class="dock-edit-surface" onclick="startPipeItemEdit('+item.id+')"':'div'} style="font-size:13px;font-weight:600;color:var(--txt-h);margin-bottom:4px">
             ${item.system_line?`<span style="font-size:11px;font-weight:700;color:#0891b2;background:#e0f2fe;padding:1px 6px;border-radius:3px;margin-right:5px">${item.system_line}</span>`:''}
-            ${item.description||'—'}
-          </div>
+            ${item.description||'—'}${!isViewer()&&!isEditing?'<span class="dock-edit-hint">편집</span>':''}
+          </${!isViewer()&&!isEditing?'button':'div'}>
           <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
             ${ph}
             <span class="c-badge ${stCls}" style="font-size:10px">${item.status||'Not Started'}</span>

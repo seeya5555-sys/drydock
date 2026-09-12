@@ -49,16 +49,16 @@ class DailyLogCardContractTests(unittest.TestCase):
         self.assertIn("window._ddDscExp.add", js)
         self.assertIn("window._ddDscExp.delete", js)
 
-    def test_date_sidebar_surfaces_remaining_completed_and_urgent_counts(self):
+    def test_date_sidebar_surfaces_compact_remaining_count(self):
         js = (ROOT / "static/js/dd-cards.js").read_text()
         css = (ROOT / "static/css/trmt-skin.css").read_text()
         self.assertIn("window._ddSelectDailyDate = function(date)", js)
         self.assertIn('class="dd-date-sidebar"', js)
-        self.assertIn("<b>남음 '+open", js)
-        self.assertIn("<span>완료 '+done", js)
-        self.assertIn("<em>긴급 '+urgent", js)
+        self.assertIn("남음 '+open", js)
+        self.assertNotIn("<span>완료 '+done", js)
+        self.assertNotIn("<em>긴급 '+urgent", js)
         self.assertIn(".dd-daily-layout", css)
-        self.assertIn("grid-template-columns:238px", css)
+        self.assertIn("grid-template-columns:190px", css)
 
     def test_executable_node_contract_exists(self):
         self.assertTrue((ROOT / "test_daily_log_cards.js").is_file())

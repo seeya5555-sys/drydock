@@ -223,7 +223,10 @@
       var det='';
       if(exp){
         det = '<div class="issue-card-det" onclick="event.stopPropagation()">'+
-          (c.description?'<div class="exp-label">상세 내용</div><div class="exp-desc">'+esc(c.description)+'</div>':'')+
+          '<div class="exp-label">상세 내용</div>'+
+          (typeof isViewer==='function' && isViewer()
+            ? '<div class="exp-desc">'+esc(c.description||'—')+'</div>'
+            : '<button type="button" class="dock-edit-surface exp-desc" onclick="openClassModal('+ri+')">'+esc(c.description||'상세 내용 추가')+'<span class="dock-edit-hint">편집</span></button>')+
           timeline(c.actions, c.action)+
           '<div class="exp-meta">'+(c.by?'담당 '+esc(c.by):'')+(c.close_date?'  ·  완료 '+esc(c.close_date):'')+'</div>'+
           '<div class="exp-btns"><button class="exp-btn pri" onclick="openClassModal('+ri+')">상세 / 편집</button>'+
@@ -231,7 +234,7 @@
       }
       return '<div class="issue-card'+(exp?' is-expanded':'')+'" onclick="_ddTgl(\'cls\',\''+c._id+'\')">'+
              '<div class="issue-card-head">'+head+'</div>'+
-             '<div class="issue-card-body"><div class="issue-card-title">'+esc(c.finding||'—')+'</div></div>'+det+'</div>';
+             '<div class="issue-card-body"><button type="button" class="issue-card-title dd-title-toggle" aria-expanded="'+exp+'" onclick="event.stopPropagation();_ddTgl(\'cls\',\''+c._id+'\')">'+esc(c.finding||'—')+'</button></div>'+det+'</div>';
     }).join('');
     mount('c-body','c-cards', html);
   };

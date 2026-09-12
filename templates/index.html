@@ -105,6 +105,7 @@
       <div>
         <div class="vb-name" id="vb-name">—</div>
         <div class="vb-meta" id="vb-meta"></div>
+        <button type="button" class="dock-summary-edit" id="dock-vessel-edit" onclick="openVesselEditModal()">선박 정보 편집</button>
       </div>
       <div id="vb-dday" style="text-align:center;min-width:120px"></div>
       <div>
@@ -1384,5 +1385,6 @@
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
   <script src="{{ url_for('static', filename='js/trmt-dock-icons.js') }}?v={{ version }}"></script>
   <script src="{{ url_for('static', filename='js/dd-cards.js') }}?v={{ version }}"></script>
+  <script src="{{ url_for('static', filename='js/dock-accessibility.js') }}?v={{ version }}"></script>
 </body>
 </html>

@@ -176,8 +176,8 @@ button, input, select, textarea { font-family: inherit !important; }
   --trmt-page:#F8F7F4; --trmt-surface:#FFFFFF; --trmt-surface-2:#F4F3EE;
   --trmt-surface-3:#EBEAE3; --trmt-line:#E5E4DD; --trmt-line-strong:#D3D1C7;
   --trmt-ink:#1F1F1D; --trmt-text:#2B2A27; --trmt-muted:#5F5E5A;
-  --trmt-faint:#888780; --trmt-blue:#185FA5; --trmt-blue-hover:#0F4C85;
-  --trmt-blue-soft:#E6F1FB; --trmt-blue-line:#85B7EB;
+  --trmt-faint:#888780; --trmt-blue:#1D5B94; --trmt-blue-hover:#174C7D;
+  --trmt-blue-soft:#EDF2F7; --trmt-blue-line:#A4B7C8;
   --radius:6px; --radius-md:10px; --radius-lg:12px;
 }
 html { background:var(--trmt-page); color-scheme:light; }
@@ -364,4 +364,32 @@ body.trmt-dock.is-embedded main { max-width:none; padding-left:8px; padding-righ
   body.trmt-dock *,body.trmt-dock *::before,body.trmt-dock *::after {
     animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important;
   }
+}
+
+/* September UI audit: share TRMT's warm ink, paper and muted-blue accents. */
+body.trmt-dock > header,.docs-section-hdr { background:#26241E!important; }
+.vessel-banner { background:var(--trmt-surface)!important; border-color:var(--trmt-line)!important; }
+.vessel-banner .vb-name,#vb-dday > div:first-child { color:var(--trmt-ink)!important; }
+#vb-dday > div:last-child { color:var(--trmt-muted)!important; }
+.vessel-banner .vb-meta-item,.vessel-banner .vb-meta-item span,.vessel-banner .vb-status-lbl { color:var(--trmt-muted)!important; }
+.dd-date-add { background:var(--trmt-blue); border-color:var(--trmt-blue); color:#fff; }
+.dd-date-add:hover { background:var(--trmt-blue-hover); box-shadow:none; }
+.dd-status-tabs button.is-active { background:var(--trmt-blue); box-shadow:none; }
+.modal-hdr { background:var(--trmt-surface-2)!important; }
+#m-fitup-ref .modal-hdr [style*="color:#"] { color:var(--trmt-muted)!important; }
+.modal-overlay { background:rgba(38,36,30,.42)!important; backdrop-filter:none!important; }
+.modal { box-shadow:0 12px 32px rgba(38,36,30,.14)!important; animation:none!important; }
+.live-dot { animation:none; }
+.vc-stripe,.prog-fill { background:var(--trmt-blue)!important; }
+.dock-edit-surface { appearance:none; display:block; width:100%; border:0; padding:0;
+  background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; white-space:pre-wrap; }
+.dock-edit-surface:hover { background:var(--trmt-surface-2); }
+.dock-edit-surface.exp-desc { margin-bottom:13px; }
+.dock-edit-hint { display:block; margin-top:5px; font-size:11px; font-weight:500; color:var(--trmt-blue); }
+.dock-summary-edit { background:transparent; color:var(--trmt-blue); border:0; padding:5px 0; font-size:12px; cursor:pointer; }
+.cell-edit[role="button"]:focus-visible,.remark-cell[role="button"]:focus-visible { outline:2px solid var(--trmt-blue); outline-offset:2px; }
+@media(pointer:coarse){
+  .modal-x,.edit-btn,.attach-btn,.btn-edit,.exp-btn,.dd-date-add,.dd-summary-edit,
+  .tracking-sub-btn,.dd-date-nav,.dd-status-tabs button { min-height:44px; min-width:44px; }
+  .dock-summary-edit { min-height:44px; }
 }
