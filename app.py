@@ -1016,6 +1016,72 @@ def delete_discussion(did):
     db.commit()
     return jsonify({"deleted": did})
 
+def _valid_log_date(value):
+    """Daily Log 날짜 검증 — YYYY-MM-DD 실존 날짜만. 아니면 None."""
+    s = str(value or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return None
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return s
+
+@app.route("/api/vessels/<vid>/discussions/move-date", methods=["POST"])
+@viewer_forbidden
+def move_discussions_date(vid):
+    """Daily Log 날짜 일괄 변경 — 선택 날짜(from)의 로그를 한 번에 다른 날짜(to)로 옮긴다.
+
+    🔴 CAS: 클라이언트가 화면에서 본 그 날짜의 로그 id 목록(ids)과 서버의 현재 목록이 정확히 같을 때만 옮긴다.
+    그 사이 다른 사람이 추가/삭제/날짜변경을 했으면 409 로 막아 모르는 로그가 같이 옮겨지지 않게 한다.
+    id·첨부(ref_id)·번호·진행경과는 그대로 두고 date 만 바꾼다. 도착 날짜에 기존 로그가 있으면 합쳐진다."""
+    d = request.get_json(silent=True)
+    if not isinstance(d, dict):
+        return jsonify({"error": "요청 본문은 JSON 객체여야 합니다"}), 400
+    src, dst = _valid_log_date(d.get("from")), _valid_log_date(d.get("to"))
+    if not src or not dst:
+        return jsonify({"error": "날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다"}), 400
+    if src == dst:
+        return jsonify({"error": "바꿀 날짜가 현재 날짜와 같습니다"}), 400
+    ids = d.get("ids")
+    if (not isinstance(ids, list) or not ids
+            or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids)
+            or len(set(ids)) != len(ids)):
+        return jsonify({"error": "ids 는 옮길 로그 id(정수) 목록이어야 합니다"}), 400
+    db = get_db()
+    if db.in_transaction:
+        db.rollback()          # 이 요청에서 연 쓰기는 없다 — 깨끗한 경계에서 시작
+    try:
+        # 🔴 확인(SELECT)과 변경(UPDATE) 사이에 다른 요청이 같은 날짜에 로그를 넣거나 지우지 못하게 쓰기 잠금을 먼저 잡는다.
+        db.execute("BEGIN IMMEDIATE")
+    except sqlite3.OperationalError:
+        return jsonify({"error": "다른 저장이 진행 중입니다 — 잠시 후 다시 시도하세요"}), 409
+    try:
+        if not db.execute("SELECT 1 FROM vessels WHERE id=?", (vid,)).fetchone():
+            db.rollback()
+            return jsonify({"error": "vessel not found"}), 404
+        current = {r["id"] for r in db.execute(
+            "SELECT id FROM discussions WHERE vessel_id=? AND date=?", (vid, src)).fetchall()}
+        if current != set(ids):
+            db.rollback()
+            return jsonify({"error": "그 사이 %s 로그 목록이 바뀌었습니다 — 새로고침 후 다시 시도하세요" % src,
+                            "current_count": len(current)}), 409
+        placeholders = ",".join("?" * len(ids))
+        cur = db.execute(
+            f"UPDATE discussions SET date=?, updated_at=datetime('now') "
+            f"WHERE vessel_id=? AND date=? AND id IN ({placeholders})",
+            [dst, vid, src] + ids)
+        if cur.rowcount != len(ids):
+            db.rollback()
+            return jsonify({"error": "일부 로그가 동시에 바뀌어 옮기지 않았습니다 — 새로고침 후 다시 시도하세요"}), 409
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return jsonify({"moved": len(ids), "from": src, "to": dst,
+                    "discussions": [to_disc(r) for r in db.execute(
+                        "SELECT * FROM discussions WHERE vessel_id=? ORDER BY date,id", (vid,)).fetchall()]})
+
 @app.route("/api/vessels/<vid>/discussions/bulk", methods=["PUT"])
 def bulk_discussions(vid):
     db = get_db()

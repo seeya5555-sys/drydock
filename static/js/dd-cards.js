@@ -181,6 +181,69 @@
     });
   };
 
+  // 선택 날짜의 로그 전체를 다른 날짜로 한 번에 옮긴다(예: 9/28 → 9/30). Open/Close 모두 이동, id·첨부·진행경과 유지.
+  window._ddOpenMoveDate = function(event, date){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    if(typeof isViewer==='function' && isViewer()){ toast('읽기 전용 계정입니다', true); return; }
+    var box=document.getElementById('dd-move-date');
+    if(!box) return;
+    if(!box.hidden){ box.hidden=true; return; }
+    var inp=document.getElementById('dd-move-date-in');
+    var now=new Date(), pad=function(n){return (n<10?'0':'')+n;};
+    var today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
+    inp.value = today!==date ? today : '';
+    box.hidden=false;
+    inp.focus();
+  };
+  window._ddMoveDailyDate = function(event, from){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    if(typeof isViewer==='function' && isViewer()){ toast('읽기 전용 계정입니다', true); return; }
+    if(typeof VID==='undefined' || !VID) return;
+    var vid=VID, to=(document.getElementById('dd-move-date-in')||{}).value||'';
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(to)){ toast('옮길 날짜를 고르세요', true); return; }
+    if(to===from){ toast('현재 날짜와 같습니다', true); return; }
+    var items=(FLEET[vid].discussions||[]).filter(function(d){ return d.date===from; });
+    if(!items.length){ toast('옮길 로그가 없습니다', true); return; }
+    var open=items.filter(function(d){ return d.status!=='Close' && d.status!=='Closed'; }).length;
+    var already=(FLEET[vid].discussions||[]).filter(function(d){ return d.date===to; }).length;
+    var msg=from+' 로그 '+items.length+'건(Open '+open+' / Close '+(items.length-open)+')을 '+to+'(으)로 옮길까요?'+
+      (already?'\n· '+to+'에 이미 '+already+'건이 있어 함께 표시됩니다.':'')+
+      '\n· 번호·진행경과·첨부는 그대로 유지됩니다.';
+    if(!confirm(msg)) return;
+    var ids=items.map(function(d){ return Number(d._id); });
+    var btn=document.getElementById('dd-move-date-go'); if(btn) btn.disabled=true;
+    Promise.resolve(mutateRow('disc-move:'+vid+':'+from, function(){
+      return fetch(API+'/vessels/'+encodeURIComponent(vid)+'/discussions/move-date', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({from:from, to:to, ids:ids})
+      }).then(function(res){
+        return res.json().catch(function(){ return {}; }).then(function(j){
+          if(!res.ok) throw new Error(j.error || ('HTTP '+res.status));
+          return j;
+        });
+      });
+    })).then(function(j){
+      if(!j) return;   // 같은 이동이 이미 진행 중
+      if(!Array.isArray(j.discussions) || typeof j.moved!=='number'){ reloadFromServer(); return; }  // 응답 이상 = 서버 목록 재조회
+      apply(j.discussions);
+      toast(from+' → '+to+' 로그 '+j.moved+'건 이동');
+    }).catch(function(){ if(btn) btn.disabled=false; reloadFromServer(); });
+    function apply(list){
+      FLEET[vid].discussions = list.map(function(r){ return typeof dbD==='function' ? dbD(r) : r; });
+      if(VID===vid){
+        var moved=FLEET[vid].discussions.some(function(d){ return d.date===to; });
+        if(moved){ window._ddPreferredDate = to; window._ddSelectedDate = to; }
+        buildDDF(); window.renderDisc();
+      }
+    }
+    // 결과가 불확실하면(응답 유실·형식 이상·오류) DB 가 정본 — 현재 목록을 다시 받아 화면을 맞춘다.
+    function reloadFromServer(){
+      fetch(API+'/vessels/'+encodeURIComponent(vid)+'/discussions').then(function(res){
+        return res.ok ? res.json() : null;
+      }).then(function(list){ if(Array.isArray(list)) apply(list); }).catch(function(){});
+    }
+  };
+
   // 현재 선택 날짜의 카드만 한 버튼으로 함께 펼치거나 접는다.
   window._ddToggleDailyAll = function(){
     if(typeof VID==='undefined' || !VID) return;
@@ -329,7 +392,14 @@
     var cardList = fil.length ? fil.map(card).join('') : '<div class="dd-empty">선택 날짜에 '+esc(sf)+' 항목이 없습니다</div>';
     var html = '<div class="dd-daily-layout"><aside class="dd-date-sidebar" aria-label="Daily Log 날짜 선택">'+dateNav+'</aside>'+
       '<section class="dd-date-content"><div class="dd-date-content-head"><div><span>선택 날짜</span><h3>'+esc(window._ddSelectedDate)+'</h3><p>남음 '+selectedOpen+'</p></div>'+
-      '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+selectedArg+'\'))">+ Add Log</button></div>'+cardList+'</section></div>';
+      '<div class="dd-date-actions">'+(/^\d{4}-\d{2}-\d{2}$/.test(window._ddSelectedDate||'') && selectedAll.length
+        ? '<button class="dd-date-move" type="button" onclick="_ddOpenMoveDate(event,decodeURIComponent(\''+selectedArg+'\'))">날짜 변경</button>' : '')+
+      '<button class="dd-date-add" type="button" onclick="_ddAddLog(event,decodeURIComponent(\''+selectedArg+'\'))">+ Add Log</button></div></div>'+
+      '<div class="dd-move-date" id="dd-move-date" hidden><span>'+esc(window._ddSelectedDate)+' 로그 '+selectedAll.length+'건 전체를</span>'+
+      '<input type="date" id="dd-move-date-in" aria-label="옮길 날짜">'+
+      '<button type="button" class="dd-date-add" id="dd-move-date-go" onclick="_ddMoveDailyDate(event,decodeURIComponent(\''+selectedArg+'\'))">로 이동</button>'+
+      '<button type="button" class="dd-date-move" onclick="document.getElementById(\'dd-move-date\').hidden=true">취소</button></div>'+
+      cardList+'</section></div>';
     mount('d-body','d-cards', html);
     var activeDate=document.getElementById('dd-date-active');
     if(activeDate) activeDate.scrollIntoView({block:'nearest',inline:'nearest'});

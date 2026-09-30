@@ -393,3 +393,11 @@ body.trmt-dock > header,.docs-section-hdr { background:#26241E!important; }
   .tracking-sub-btn,.dd-date-nav,.dd-status-tabs button { min-height:44px; min-width:44px; }
   .dock-summary-edit { min-height:44px; }
 }
+
+/* Daily Log 날짜 일괄 변경 (2026-09-30) */
+.dd-date-actions{ display:flex; gap:6px; align-items:center; }
+.dd-date-move{ appearance:none; border:1px solid var(--trmt-line-strong); border-radius:6px; background:var(--trmt-surface); color:var(--trmt-text); padding:7px 11px; font:700 11px/1.2 inherit; cursor:pointer; white-space:nowrap; }
+.dd-date-move:hover{ background:var(--trmt-surface-2); }
+.dd-move-date{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; padding:10px 12px; border:1px solid var(--trmt-line-strong); border-radius:8px; background:var(--trmt-surface-2); color:var(--trmt-text); font-size:12px; }
+.dd-move-date[hidden]{ display:none; }
+.dd-move-date input[type=date]{ padding:5px 8px; border:1px solid var(--trmt-line-strong); border-radius:6px; font:inherit; }
