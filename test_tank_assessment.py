@@ -20,7 +20,7 @@ class TankAssessmentContractTests(unittest.TestCase):
 
     def test_client_does_not_save_assessment_through_layout_put(self):
         match = re.search(
-            r'async function setTankAssessment\(field, checked\) \{(?P<body>.*?)\n\}',
+            r"async function setTankAssessment\(field, checked, part=''\) \{(?P<body>.*?)\n\}",
             self.frontend,
             re.S,
         )

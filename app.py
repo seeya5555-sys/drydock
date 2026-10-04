@@ -1965,6 +1965,8 @@ def save_tank_assessment(vid, tank_id):
     if not tank_id or len(tank_id) > 100 or any(ord(ch) < 32 for ch in tank_id):
         return jsonify({'error': 'Invalid tank id'}), 400
     data = request.get_json(force=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Assessment must be an object'}), 400
     steel_none = data.get('steel_none')
     inspection_pending = data.get('inspection_pending')
     if not isinstance(steel_none, bool) or not isinstance(inspection_pending, bool):
