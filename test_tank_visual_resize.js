@@ -168,7 +168,7 @@ run('_tankAssessments={}');
   assert.match(elements['m-tank-summary'].innerHTML, /Wing 강재수리 없음/);
   assert.match(elements['m-tank-summary'].innerHTML, /DBT 검사예정/);
   assert.match(elements['tank-svg-wrap'].innerHTML, /Wing: 검사예정/);
-  assert.match(elements['tank-svg-wrap'].innerHTML, /DBT: 미지정/);
+  assert.match(elements['tank-svg-wrap'].innerHTML, /DBT: 작업 필요/);
   run("FLEET.test.steel=[{position_tank:'WBT 5S',location_detail:'DBT'}]");
   assert.strictEqual(run("_componentRepairItems('WBT 5S','Wing').length"),0);
   assert.strictEqual(run("_componentRepairItems('WBT 5S','DBT').length"),1);

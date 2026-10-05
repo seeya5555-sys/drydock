@@ -4355,8 +4355,8 @@ function _svgFromLayout(layout, clickFn, colFn, editOptions={}) {
     const assessmentEl = t.cl && !editable && showAssessment
       ? parts.map((part,index)=> {
           const st=part ? _assessmentState(t.id,part,editOptions.assessments||{}) : state;
-          const text=part ? `${part}: ${st.inspection_pending?'검사예정':st.steel_none?'강재 수리 없음':'미지정'}` : assessment;
-          const color=part ? (st.inspection_pending?'#2563eb':st.steel_none?'#16a34a':'#64748b') : assessmentColor;
+          const text=part ? `${part}: ${st.inspection_pending?'검사예정':st.steel_none?'강재 수리 없음':'작업 필요'}` : assessment;
+          const color=part ? (st.inspection_pending?'#2563eb':st.steel_none?'#16a34a':'#dc2626') : assessmentColor;
           return `<text x="${cx+w/2}" y="${ty+(part ? index*11 : 12)}" font-family="IBM Plex Sans,Arial" font-size="8"
             font-weight="800" fill="${color}" text-anchor="middle" dominant-baseline="central">${text}</text>`;
         }).join('') + (parts.length===2 && h>=64 && !parts.every(part=>_assessmentState(t.id,part,editOptions.assessments||{}).steel_none) ? `<text x="${cx+w/2}" y="${ty+24}" font-size="8" font-weight="800" fill="#dc2626" text-anchor="middle">${c.weightKg.toFixed(1)} kg</text>` : '')
